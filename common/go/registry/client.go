@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -18,46 +19,50 @@ const (
 	CmdNodeEvent = uint32(0x000F0005)
 )
 
-// Client Registry TCP 客户端
+// Client Registry TCP 客户端，支持多节点连接池
 type Client struct {
-	addr      string
-	conn      *net.TCPClient
-	seqID     uint32
-	seqMu     sync.Mutex
+	pool    *net.UpstreamPool
+	seqID   uint32
+	seqMu   sync.Mutex
+	pending sync.Map // seq_id -> chan *net.Packet
 
-	onEvent   func(*pb.NodeEvent)
-	watchers  sync.Map // service_type -> cancel chan
+	onEvent    func(*pb.NodeEvent)
+	watchTypes sync.Map // service_type -> struct{}{}
 }
 
 // NewClient 创建 Registry 客户端
-func NewClient(addr string) *Client {
-	return &Client{addr: addr}
+// addrs: Registry 节点地址列表，如 ["127.0.0.1:2379", "127.0.0.1:2380"]
+func NewClient(addrs []string) *Client {
+	c := &Client{}
+	c.pool = net.NewUpstreamPool(c.handlePacket)
+	c.pool.SetOnNodeEvent(func(addr string, healthy bool) {
+		if healthy {
+			// 节点恢复后，重新发送所有 Watch 请求
+			c.watchTypes.Range(func(key, _ interface{}) bool {
+				c.sendWatch(key.(string))
+				return true
+			})
+		}
+	})
+	for _, addr := range addrs {
+		c.pool.AddNode(addr)
+	}
+	return c
 }
 
-// Connect 连接到 Registry 服务
+// Connect 启动连接池
 func (c *Client) Connect() error {
-	client := net.NewTCPClient(c.addr, func(conn *net.TCPConn, pkt *net.Packet) {
-		c.handlePacket(conn, pkt)
-	}, func(conn *net.TCPConn) {
-		c.conn = nil
-	})
-	if err := client.Connect(); err != nil {
-		return err
-	}
-	c.conn = client
+	c.pool.Start()
 	return nil
 }
 
 // Close 断开连接
 func (c *Client) Close() {
-	c.watchers.Range(func(key, value interface{}) bool {
-		close(value.(chan struct{}))
+	c.pool.Stop()
+	c.pending.Range(func(key, value interface{}) bool {
+		close(value.(chan *net.Packet))
 		return true
 	})
-	c.watchers = sync.Map{}
-	if c.conn != nil {
-		c.conn.Close()
-	}
 }
 
 // Register 注册节点
@@ -66,7 +71,15 @@ func (c *Client) Register(node *pb.NodeInfo) (*pb.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.call(CmdRegister, data)
+	pkt, err := c.call(context.Background(), CmdRegister, data)
+	if err != nil {
+		return nil, err
+	}
+	var res pb.Result
+	if err := proto.Unmarshal(pkt.Payload, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
 }
 
 // Heartbeat 发送心跳
@@ -76,7 +89,15 @@ func (c *Client) Heartbeat(nodeID string) (*pb.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.call(CmdHeartbeat, data)
+	pkt, err := c.call(context.Background(), CmdHeartbeat, data)
+	if err != nil {
+		return nil, err
+	}
+	var res pb.Result
+	if err := proto.Unmarshal(pkt.Payload, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
 }
 
 // Discover 发现服务节点
@@ -86,59 +107,53 @@ func (c *Client) Discover(serviceType string) (*pb.NodeList, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := c.call(CmdDiscover, data)
+	pkt, err := c.call(context.Background(), CmdDiscover, data)
 	if err != nil {
 		return nil, err
 	}
 	var list pb.NodeList
-	if err := proto.Unmarshal([]byte(res.Msg), &list); err != nil {
-		// 这里假设 Result.Msg 中放的是序列化数据，实际上 proto 定义里 Result 的 Msg 是 string
-		// 更好的做法是在 common.go 中定义通用 wrapper，这里为了演示先用 string 承载 bytes（会有问题）
-		// 实际上应该用 bytes 字段或者直接返回 payload。
-		// 修正：call 方法应该返回 payload，而不是 Result。
-		_ = err
+	if err := proto.Unmarshal(pkt.Payload, &list); err != nil {
+		return nil, err
 	}
-	_ = list
-	return nil, fmt.Errorf("not fully implemented")
+	return &list, nil
 }
 
 // Watch 监听服务节点变更
 func (c *Client) Watch(serviceType string, onEvent func(*pb.NodeEvent)) error {
+	c.onEvent = onEvent
+	c.watchTypes.Store(serviceType, struct{}{})
+	return c.sendWatch(serviceType)
+}
+
+func (c *Client) sendWatch(serviceType string) error {
 	req := &pb.ServiceType{ServiceType: serviceType}
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return err
 	}
-
-	seq := c.nextSeqID()
 	pkt := &net.Packet{
 		Header: net.Header{
 			Magic:  net.MagicValue,
 			CmdID:  CmdWatch,
-			SeqID:  seq,
-			Flags:  uint32(net.FlagRPCReq),
+			SeqID:  0,
+			Flags:  uint32(net.FlagRPCFF),
 			Length: uint32(net.HeaderSize + len(data)),
 		},
 		Payload: data,
 	}
-
-	cancel := make(chan struct{})
-	c.watchers.Store(serviceType, cancel)
-	c.onEvent = onEvent
-
-	if !c.conn.Conn().SendPacket(pkt) {
+	if !c.pool.SendPacket(pkt) {
 		return fmt.Errorf("send watch request failed")
 	}
 	return nil
 }
 
-// call 同步调用（简化版，实际应使用 chan + timeout 做异步等待）
-func (c *Client) call(cmdID uint32, payload []byte) (*pb.Result, error) {
-	if c.conn == nil || c.conn.Conn() == nil {
-		return nil, fmt.Errorf("not connected")
-	}
-
+// call 同步 RPC 调用（Req-Res 配对）
+func (c *Client) call(ctx context.Context, cmdID uint32, payload []byte) (*net.Packet, error) {
 	seq := c.nextSeqID()
+	ch := make(chan *net.Packet, 1)
+	c.pending.Store(seq, ch)
+	defer c.pending.Delete(seq)
+
 	pkt := &net.Packet{
 		Header: net.Header{
 			Magic:  net.MagicValue,
@@ -150,14 +165,19 @@ func (c *Client) call(cmdID uint32, payload []byte) (*pb.Result, error) {
 		Payload: payload,
 	}
 
-	if !c.conn.Conn().SendPacket(pkt) {
-		return nil, fmt.Errorf("send failed")
+	if !c.pool.SendPacket(pkt) {
+		return nil, fmt.Errorf("no healthy registry node available")
 	}
 
-	// TODO: 使用 req-res 配对机制等待响应（应在 rpc 层实现）
-	// 这里为了骨架代码的完整性，暂时返回占位结果
-	time.Sleep(10 * time.Millisecond)
-	return &pb.Result{Ok: true, Code: 0}, nil
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	select {
+	case res := <-ch:
+		return res, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func (c *Client) nextSeqID() uint32 {
@@ -167,14 +187,24 @@ func (c *Client) nextSeqID() uint32 {
 	return c.seqID
 }
 
-func (c *Client) handlePacket(conn *net.TCPConn, pkt *net.Packet) {
-	switch pkt.CmdID {
-	case CmdNodeEvent:
+func (c *Client) handlePacket(_ *net.TCPConn, pkt *net.Packet) {
+	if pkt.CmdID == CmdNodeEvent {
 		var ev pb.NodeEvent
 		if err := proto.Unmarshal(pkt.Payload, &ev); err == nil && c.onEvent != nil {
 			c.onEvent(&ev)
 		}
-	default:
-		// 其他响应由 RPC 层处理
+		return
+	}
+
+	// RPC 响应分发
+	if pkt.SeqID == 0 {
+		return
+	}
+	if ch, ok := c.pending.Load(pkt.SeqID); ok {
+		select {
+		case ch.(chan *net.Packet) <- pkt:
+		default:
+		}
+		c.pending.Delete(pkt.SeqID)
 	}
 }

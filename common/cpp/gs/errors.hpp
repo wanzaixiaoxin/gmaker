@@ -7,76 +7,82 @@
 
 namespace gs {
 namespace errors {
+inline constexpr int32_t RATE_LIMITED = 4; // Common
+inline constexpr int32_t NOT_FOUND = 5; // Common
 inline constexpr int32_t OK = 0; // Common
 inline constexpr int32_t UNKNOWN_ERROR = 1; // Common
 inline constexpr int32_t INVALID_PARAM = 2; // Common
+inline constexpr int32_t CIRCUIT_OPEN = 8; // Common
 inline constexpr int32_t TIMEOUT = 3; // Common
-inline constexpr int32_t RATE_LIMITED = 4; // Common
-inline constexpr int32_t NOT_FOUND = 5; // Common
 inline constexpr int32_t INTERNAL_ERROR = 6; // Common
-inline constexpr int32_t ACCOUNT_EXISTS = 103; // Auth
-inline constexpr int32_t ACCOUNT_NOT_FOUND = 104; // Auth
-inline constexpr int32_t PASSWORD_WRONG = 105; // Auth
+inline constexpr int32_t REPLAY_DETECTED = 7; // Common
 inline constexpr int32_t AUTH_FAILED = 100; // Auth
 inline constexpr int32_t TOKEN_EXPIRED = 101; // Auth
 inline constexpr int32_t TOKEN_INVALID = 102; // Auth
+inline constexpr int32_t ACCOUNT_EXISTS = 103; // Auth
+inline constexpr int32_t ACCOUNT_NOT_FOUND = 104; // Auth
+inline constexpr int32_t PASSWORD_WRONG = 105; // Auth
+inline constexpr int32_t HEARTBEAT_TIMEOUT = 203; // Registry
 inline constexpr int32_t NODE_NOT_FOUND = 200; // Registry
 inline constexpr int32_t SERVICE_UNAVAILABLE = 201; // Registry
 inline constexpr int32_t REGISTER_FAILED = 202; // Registry
-inline constexpr int32_t HEARTBEAT_TIMEOUT = 203; // Registry
+inline constexpr int32_t CACHE_MISS = 303; // Dbproxy
 inline constexpr int32_t DB_CONN_FAILED = 300; // Dbproxy
 inline constexpr int32_t REDIS_ERROR = 301; // Dbproxy
 inline constexpr int32_t MYSQL_ERROR = 302; // Dbproxy
-inline constexpr int32_t CACHE_MISS = 303; // Dbproxy
-inline constexpr int32_t NOT_ENOUGH_COIN = 402; // Biz
-inline constexpr int32_t NOT_ENOUGH_DIAMOND = 403; // Biz
 inline constexpr int32_t PLAYER_NOT_FOUND = 400; // Biz
 inline constexpr int32_t ITEM_NOT_FOUND = 401; // Biz
-inline constexpr int32_t SYNC_ERROR = 504; // Realtime
-inline constexpr int32_t ROOM_NOT_FOUND = 500; // Realtime
+inline constexpr int32_t NOT_ENOUGH_COIN = 402; // Biz
+inline constexpr int32_t NOT_ENOUGH_DIAMOND = 403; // Biz
 inline constexpr int32_t ROOM_FULL = 501; // Realtime
 inline constexpr int32_t ALREADY_IN_ROOM = 502; // Realtime
 inline constexpr int32_t NOT_IN_ROOM = 503; // Realtime
+inline constexpr int32_t SYNC_ERROR = 504; // Realtime
+inline constexpr int32_t ROOM_NOT_FOUND = 500; // Realtime
 inline constexpr int32_t PACKET_TOO_LARGE = 900; // Gateway
 inline constexpr int32_t INVALID_MAGIC = 901; // Gateway
 inline constexpr int32_t UNKNOWN_CMD_ID = 902; // Gateway
 inline constexpr int32_t CONN_KICKED = 903; // Gateway
+inline constexpr int32_t HANDSHAKE_FAILED = 904; // Gateway
 
 inline const std::unordered_map<int32_t, std::string> kCodeNameMap = {
+    { RATE_LIMITED, "RATE_LIMITED" },
+    { NOT_FOUND, "NOT_FOUND" },
     { OK, "OK" },
     { UNKNOWN_ERROR, "UNKNOWN_ERROR" },
     { INVALID_PARAM, "INVALID_PARAM" },
+    { CIRCUIT_OPEN, "CIRCUIT_OPEN" },
     { TIMEOUT, "TIMEOUT" },
-    { RATE_LIMITED, "RATE_LIMITED" },
-    { NOT_FOUND, "NOT_FOUND" },
     { INTERNAL_ERROR, "INTERNAL_ERROR" },
-    { ACCOUNT_EXISTS, "ACCOUNT_EXISTS" },
-    { ACCOUNT_NOT_FOUND, "ACCOUNT_NOT_FOUND" },
-    { PASSWORD_WRONG, "PASSWORD_WRONG" },
+    { REPLAY_DETECTED, "REPLAY_DETECTED" },
     { AUTH_FAILED, "AUTH_FAILED" },
     { TOKEN_EXPIRED, "TOKEN_EXPIRED" },
     { TOKEN_INVALID, "TOKEN_INVALID" },
+    { ACCOUNT_EXISTS, "ACCOUNT_EXISTS" },
+    { ACCOUNT_NOT_FOUND, "ACCOUNT_NOT_FOUND" },
+    { PASSWORD_WRONG, "PASSWORD_WRONG" },
+    { HEARTBEAT_TIMEOUT, "HEARTBEAT_TIMEOUT" },
     { NODE_NOT_FOUND, "NODE_NOT_FOUND" },
     { SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE" },
     { REGISTER_FAILED, "REGISTER_FAILED" },
-    { HEARTBEAT_TIMEOUT, "HEARTBEAT_TIMEOUT" },
+    { CACHE_MISS, "CACHE_MISS" },
     { DB_CONN_FAILED, "DB_CONN_FAILED" },
     { REDIS_ERROR, "REDIS_ERROR" },
     { MYSQL_ERROR, "MYSQL_ERROR" },
-    { CACHE_MISS, "CACHE_MISS" },
-    { NOT_ENOUGH_COIN, "NOT_ENOUGH_COIN" },
-    { NOT_ENOUGH_DIAMOND, "NOT_ENOUGH_DIAMOND" },
     { PLAYER_NOT_FOUND, "PLAYER_NOT_FOUND" },
     { ITEM_NOT_FOUND, "ITEM_NOT_FOUND" },
-    { SYNC_ERROR, "SYNC_ERROR" },
-    { ROOM_NOT_FOUND, "ROOM_NOT_FOUND" },
+    { NOT_ENOUGH_COIN, "NOT_ENOUGH_COIN" },
+    { NOT_ENOUGH_DIAMOND, "NOT_ENOUGH_DIAMOND" },
     { ROOM_FULL, "ROOM_FULL" },
     { ALREADY_IN_ROOM, "ALREADY_IN_ROOM" },
     { NOT_IN_ROOM, "NOT_IN_ROOM" },
+    { SYNC_ERROR, "SYNC_ERROR" },
+    { ROOM_NOT_FOUND, "ROOM_NOT_FOUND" },
     { PACKET_TOO_LARGE, "PACKET_TOO_LARGE" },
     { INVALID_MAGIC, "INVALID_MAGIC" },
     { UNKNOWN_CMD_ID, "UNKNOWN_CMD_ID" },
     { CONN_KICKED, "CONN_KICKED" },
+    { HANDSHAKE_FAILED, "HANDSHAKE_FAILED" },
 };
 
 inline std::string CodeName(int32_t code) {

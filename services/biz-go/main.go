@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -14,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gmaker/game-server/common/go/idgen"
 	"github.com/gmaker/game-server/common/go/net"
 	"github.com/gmaker/game-server/common/go/registry"
 	"github.com/gmaker/game-server/common/go/rpc"
@@ -45,14 +47,21 @@ const (
 
 func main() {
 	var (
-		listenAddr   = flag.String("listen", ":8082", "Biz listen address")
-		registryAddr = flag.String("registry", "127.0.0.1:2379", "Registry address")
-		dbproxyAddr  = flag.String("dbproxy", "127.0.0.1:3307", "DBProxy address")
+		listenAddr    = flag.String("listen", ":8082", "Biz listen address")
+		registryAddrs = flag.String("registry", "127.0.0.1:2379", "Registry addresses, comma separated")
+		dbproxyAddrs  = flag.String("dbproxy", "127.0.0.1:3307", "DBProxy addresses, comma separated")
+		nodeID        = flag.Int64("node-id", 1, "Snowflake node ID")
 	)
 	flag.Parse()
 
-	// 注册到 Registry
-	regClient := registry.NewClient(*registryAddr)
+	// 初始化 Snowflake ID 生成器
+	idGen, err := idgen.NewSnowflake(*nodeID)
+	if err != nil {
+		log.Fatalf("init snowflake failed: %v", err)
+	}
+
+	// 注册到 Registry（多节点）
+	regClient := registry.NewClient(strings.Split(*registryAddrs, ","))
 	if err := regClient.Connect(); err != nil {
 		log.Fatalf("connect registry failed: %v", err)
 	}
@@ -60,9 +69,9 @@ func main() {
 
 	node := &pb.NodeInfo{
 		ServiceType: "biz",
-		NodeId:      "biz-001",
+		NodeId:      fmt.Sprintf("biz-%d", *nodeID),
 		Host:        "127.0.0.1",
-		Port:        8082,
+		Port:        parsePort(*listenAddr),
 		RegisterAt:  uint64(time.Now().Unix()),
 	}
 	if _, err := regClient.Register(node); err != nil {
@@ -70,8 +79,8 @@ func main() {
 	}
 	log.Println("Biz registered to registry")
 
-	// 连接 DBProxy
-	dbClient := NewDBProxyClient(*dbproxyAddr)
+	// 连接 DBProxy（多节点）
+	dbClient := NewDBProxyClient(strings.Split(*dbproxyAddrs, ","), idGen)
 	if err := dbClient.Connect(); err != nil {
 		log.Fatalf("connect dbproxy failed: %v", err)
 	}
@@ -258,35 +267,33 @@ func generateToken(playerID uint64) string {
 // ==================== DBProxy 客户端封装 ====================
 
 type DBProxyClient struct {
-	addr   string
-	tcp    *net.TCPClient
+	addrs  []string
+	pool   *net.UpstreamPool
 	rpc    *rpc.Client
+	idGen  *idgen.Snowflake
 }
 
-func NewDBProxyClient(addr string) *DBProxyClient {
-	return &DBProxyClient{addr: addr}
+func NewDBProxyClient(addrs []string, idGen *idgen.Snowflake) *DBProxyClient {
+	return &DBProxyClient{addrs: addrs, idGen: idGen}
 }
 
 func (c *DBProxyClient) Connect() error {
-	c.tcp = net.NewTCPClient(c.addr,
-		func(conn *net.TCPConn, pkt *net.Packet) {
-			if c.rpc != nil {
-				c.rpc.OnPacket(pkt)
-			}
-		},
-		func(conn *net.TCPConn) {
-			log.Println("DBProxy connection closed")
-		})
-	if err := c.tcp.Connect(); err != nil {
-		return err
+	c.pool = net.NewUpstreamPool(func(_ *net.TCPConn, pkt *net.Packet) {
+		if c.rpc != nil {
+			c.rpc.OnPacket(pkt)
+		}
+	})
+	for _, addr := range c.addrs {
+		c.pool.AddNode(addr)
 	}
-	c.rpc = rpc.NewClient(c.tcp.Conn())
+	c.pool.Start()
+	c.rpc = rpc.NewClientWithPool(c.pool)
 	return nil
 }
 
 func (c *DBProxyClient) Close() {
-	if c.tcp != nil {
-		c.tcp.Close()
+	if c.pool != nil {
+		c.pool.Stop()
 	}
 }
 
@@ -309,7 +316,7 @@ func (c *DBProxyClient) QueryPlayerByAccount(ctx context.Context, account string
 	if !res.Ok || len(res.Rows) == 0 {
 		return nil, fmt.Errorf("player not found")
 	}
-	return parsePlayerRow(string(res.Rows[0]))
+	return parsePlayerRow(res.Rows[0])
 }
 
 func (c *DBProxyClient) QueryPlayerByID(ctx context.Context, playerID uint64) (*bizpb.PlayerBase, error) {
@@ -327,12 +334,16 @@ func (c *DBProxyClient) QueryPlayerByID(ctx context.Context, playerID uint64) (*
 	if !res.Ok || len(res.Rows) == 0 {
 		return nil, fmt.Errorf("player not found")
 	}
-	return parsePlayerRow(string(res.Rows[0]))
+	return parsePlayerRow(res.Rows[0])
 }
 
 func (c *DBProxyClient) CreatePlayer(ctx context.Context, account, password string) (*bizpb.PlayerBase, error) {
 	now := uint64(time.Now().Unix())
-	playerID := uint64(now)*1000000 + uint64(now%1000000)
+	playerIDRaw, err := c.idGen.NextID()
+	if err != nil {
+		return nil, fmt.Errorf("generate player id failed: %w", err)
+	}
+	playerID := uint64(playerIDRaw)
 	sqlStr := "INSERT INTO players (player_id, account, password, nickname, level, exp, coin, diamond, create_at, login_at) VALUES (?, ?, ?, ?, 1, 0, 0, 0, ?, ?)"
 	req := &dbproxypb.MySQLExecReq{
 		Uid:  playerID,
@@ -443,17 +454,20 @@ func ensurePlayerTable(db *DBProxyClient) error {
 	return nil
 }
 
-func parsePlayerRow(row string) (*bizpb.PlayerBase, error) {
-	// DBProxy 返回的是 map[string]string 的 fmt.Sprintf 结果
-	// 格式类似: map[coin:0 create_at:123 diamond:0 exp:0 level:1 login_at:123 nickname:test player_id:123]
-	m := make(map[string]string)
-	row = strings.TrimPrefix(row, "map[")
-	row = strings.TrimSuffix(row, "]")
-	for _, pair := range strings.Fields(row) {
-		kv := strings.SplitN(pair, ":", 2)
-		if len(kv) == 2 {
-			m[kv[0]] = kv[1]
+func parsePort(addr string) uint32 {
+	parts := strings.Split(addr, ":")
+	if len(parts) >= 2 {
+		if p, err := strconv.ParseUint(parts[len(parts)-1], 10, 32); err == nil {
+			return uint32(p)
 		}
+	}
+	return 0
+}
+
+func parsePlayerRow(rowBytes []byte) (*bizpb.PlayerBase, error) {
+	m := make(map[string]string)
+	if err := json.Unmarshal(rowBytes, &m); err != nil {
+		return nil, err
 	}
 	pid, _ := strconv.ParseUint(m["player_id"], 10, 64)
 	lvl, _ := strconv.ParseUint(m["level"], 10, 64)

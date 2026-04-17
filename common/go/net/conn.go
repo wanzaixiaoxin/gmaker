@@ -5,21 +5,24 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+
+	"github.com/gmaker/game-server/common/go/crypto"
 )
 
 var globalConnID uint64
 
 // TCPConn 封装底层 net.Conn，提供框架统一的读写能力
 type TCPConn struct {
-	id      uint64
-	raw     net.Conn
-	reader  *bufio.Reader
-	writeCh chan []byte
-	closeCh chan struct{}
-	closed  int32
-	onData  func(*TCPConn, *Packet)
-	onClose func(*TCPConn)
-	wg      sync.WaitGroup
+	id         uint64
+	raw        net.Conn
+	reader     *bufio.Reader
+	writeCh    chan []byte
+	closeCh    chan struct{}
+	closed     int32
+	onData     func(*TCPConn, *Packet)
+	onClose    func(*TCPConn)
+	wg         sync.WaitGroup
+	sessionKey []byte // 若非空则启用 AES-GCM 加密
 }
 
 // NewTCPConn 创建封装连接
@@ -62,8 +65,17 @@ func (c *TCPConn) Send(data []byte) bool {
 	}
 }
 
-// SendPacket 发送一个 Packet
+// SendPacket 发送一个 Packet（若有 sessionKey 则自动加密）
 func (c *TCPConn) SendPacket(p *Packet) bool {
+	if len(c.sessionKey) > 0 && len(p.Payload) > 0 {
+		enc, err := crypto.EncryptPacketPayload(c.sessionKey, p.Payload)
+		if err != nil {
+			return false
+		}
+		p.Payload = enc
+		p.Flags |= uint32(FlagEncrypt)
+	}
+	p.Length = HeaderSize + uint32(len(p.Payload))
 	return c.Send(p.Encode())
 }
 
@@ -102,6 +114,15 @@ func (c *TCPConn) readLoop() {
 		pkt := &Packet{
 			Header:  *h,
 			Payload: payload,
+		}
+		if len(c.sessionKey) > 0 && (pkt.Flags&uint32(FlagEncrypt)) != 0 {
+			dec, err := crypto.DecryptPacketPayload(c.sessionKey, pkt.Payload)
+			if err != nil {
+				c.Close()
+				return
+			}
+			pkt.Payload = dec
+			pkt.Flags &= ^uint32(FlagEncrypt)
 		}
 		if c.onData != nil {
 			c.onData(c, pkt)

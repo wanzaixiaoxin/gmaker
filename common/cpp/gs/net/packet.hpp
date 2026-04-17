@@ -68,6 +68,16 @@ inline uint16_t ReadU16BE(const uint8_t* p) {
     return (static_cast<uint16_t>(p[0]) << 8) |
             static_cast<uint16_t>(p[1]);
 }
+inline uint64_t ReadU64BE(const uint8_t* p) {
+    return (static_cast<uint64_t>(p[0]) << 56) |
+           (static_cast<uint64_t>(p[1]) << 48) |
+           (static_cast<uint64_t>(p[2]) << 40) |
+           (static_cast<uint64_t>(p[3]) << 32) |
+           (static_cast<uint64_t>(p[4]) << 24) |
+           (static_cast<uint64_t>(p[5]) << 16) |
+           (static_cast<uint64_t>(p[6]) << 8)  |
+            static_cast<uint64_t>(p[7]);
+}
 
 // 编码 Packet 为字节流
 inline std::vector<uint8_t> EncodePacket(const Packet& pkt) {

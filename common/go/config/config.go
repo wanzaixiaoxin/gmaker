@@ -108,17 +108,28 @@ func (l *Loader) GetBool(key string) bool {
 }
 
 // ServeReloadHTTP 启动 HTTP /admin/reload 服务（端口隔离）
-func (l *Loader) ServeReloadHTTP(addr string) {
+// adminToken: Bearer Token，为空时不校验（仅用于开发环境）
+func (l *Loader) ServeReloadHTTP(addr string, adminToken string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/admin/reload", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		// Bearer Token 校验
+		if adminToken != "" {
+			auth := r.Header.Get("Authorization")
+			if auth != "Bearer "+adminToken {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
 		if err := l.Reload(); err != nil {
+			log.Printf("[config] reload failed from %s: %v", r.RemoteAddr, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		log.Printf("[config] reload success from %s", r.RemoteAddr)
 		w.Write([]byte("reload ok"))
 	})
 	go func() {

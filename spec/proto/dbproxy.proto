@@ -47,6 +47,15 @@ message RedisPipelineRes {
     repeated bytes results = 2; // 简单字符串序列化结果
 }
 
+message MySQLColumn {
+    string name  = 1;
+    string value = 2; // 统一以字符串形式传输，调用方按需解析
+}
+
+message MySQLRow {
+    repeated MySQLColumn columns = 1;
+}
+
 message MySQLQueryReq {
     uint64 uid = 1;
     string sql = 2;
@@ -55,7 +64,7 @@ message MySQLQueryReq {
 
 message MySQLQueryRes {
     bool ok = 1;
-    repeated bytes rows = 2; // JSON 序列化后的行数据
+    repeated MySQLRow rows = 2; // 结构化行数据
     string error = 3;
 }
 

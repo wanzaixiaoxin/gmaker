@@ -9,25 +9,22 @@ import (
 	"github.com/gmaker/game-server/common/go/net"
 )
 
-// Client RPC 客户端（基于已有的 TCPConn）
+// Client RPC 客户端，支持单连接和连接池两种模式
 type Client struct {
-	conn    *net.TCPConn
+	sender  net.PacketSender
 	pending sync.Map // seq_id -> chan *net.Packet
 	seqMu   sync.Mutex
 	seqID   uint32
 }
 
-// NewClient 创建 RPC 客户端
+// NewClient 创建单连接 RPC 客户端（向后兼容）
 func NewClient(conn *net.TCPConn) *Client {
-	c := &Client{conn: conn}
-	// 接管 conn 的数据回调，用于分发响应
-	// 注意：这里假设外部不再直接设置 OnData
-	return c
+	return &Client{sender: conn}
 }
 
-// SetConn 设置底层连接（通常在重连后调用）
-func (c *Client) SetConn(conn *net.TCPConn) {
-	c.conn = conn
+// NewClientWithPool 创建基于连接池的 RPC 客户端
+func NewClientWithPool(pool net.PacketSender) *Client {
+	return &Client{sender: pool}
 }
 
 // OnPacket 处理收到的数据包，根据 SeqID 分发给等待的 Call
@@ -46,8 +43,8 @@ func (c *Client) OnPacket(pkt *net.Packet) {
 
 // Call 同步 RPC 调用
 func (c *Client) Call(ctx context.Context, cmdID uint32, payload []byte) (*net.Packet, error) {
-	if c.conn == nil {
-		return nil, fmt.Errorf("no connection")
+	if c.sender == nil {
+		return nil, fmt.Errorf("no sender configured")
 	}
 
 	seq := c.nextSeqID()
@@ -66,7 +63,7 @@ func (c *Client) Call(ctx context.Context, cmdID uint32, payload []byte) (*net.P
 		Payload: payload,
 	}
 
-	if !c.conn.SendPacket(pkt) {
+	if !c.sender.SendPacket(pkt) {
 		return nil, fmt.Errorf("send failed")
 	}
 
@@ -87,8 +84,8 @@ func (c *Client) CallWithTimeout(cmdID uint32, payload []byte, timeout time.Dura
 
 // FireForget 单向发送，不等待响应
 func (c *Client) FireForget(cmdID uint32, payload []byte) error {
-	if c.conn == nil {
-		return fmt.Errorf("no connection")
+	if c.sender == nil {
+		return fmt.Errorf("no sender configured")
 	}
 	pkt := &net.Packet{
 		Header: net.Header{
@@ -100,7 +97,7 @@ func (c *Client) FireForget(cmdID uint32, payload []byte) error {
 		},
 		Payload: payload,
 	}
-	if !c.conn.SendPacket(pkt) {
+	if !c.sender.SendPacket(pkt) {
 		return fmt.Errorf("send failed")
 	}
 	return nil

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -183,8 +184,8 @@ func (s *Server) handleMySQLQuery(conn *net.TCPConn, pkt *net.Packet) {
 			for i, col := range cols {
 				rowMap[col] = fmt.Sprintf("%v", vals[i])
 			}
-			// 简单用 fmt 拼接，生产环境应使用 json.Marshal
-			res.Rows = append(res.Rows, []byte(fmt.Sprintf("%v", rowMap)))
+			rowBytes, _ := json.Marshal(rowMap)
+			res.Rows = append(res.Rows, rowBytes)
 		}
 	}
 	s.sendProto(conn, pkt.SeqID, CmdMySQLQueryRes, res)
