@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  redis-node-1:
+    image: redis:7-alpine
+    container_name: redis-node-1
+    ports:
+      - "6371:6371"
+      - "16371:16371"
+    volumes:
+      - ./config/redis-1.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./data/node-1:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - redis-cluster
+
+  redis-node-2:
+    image: redis:7-alpine
+    container_name: redis-node-2
+    ports:
+      - "6372:6372"
+      - "16372:16372"
+    volumes:
+      - ./config/redis-2.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./data/node-2:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - redis-cluster
+
+  redis-node-3:
+    image: redis:7-alpine
+    container_name: redis-node-3
+    ports:
+      - "6373:6373"
+      - "16373:16373"
+    volumes:
+      - ./config/redis-3.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./data/node-3:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - redis-cluster
+
+  redis-node-4:
+    image: redis:7-alpine
+    container_name: redis-node-4
+    ports:
+      - "6374:6374"
+      - "16374:16374"
+    volumes:
+      - ./config/redis-4.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./data/node-4:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - redis-cluster
+
+  redis-node-5:
+    image: redis:7-alpine
+    container_name: redis-node-5
+    ports:
+      - "6375:6375"
+      - "16375:16375"
+    volumes:
+      - ./config/redis-5.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./data/node-5:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - redis-cluster
+
+  redis-node-6:
+    image: redis:7-alpine
+    container_name: redis-node-6
+    ports:
+      - "6376:6376"
+      - "16376:16376"
+    volumes:
+      - ./config/redis-6.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./data/node-6:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - redis-cluster
+
+networks:
+  redis-cluster:
+    driver: bridge

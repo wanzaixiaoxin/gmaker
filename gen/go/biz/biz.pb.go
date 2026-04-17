@@ -383,6 +383,124 @@ func (x *GetBagRes) GetItems() []*Item {
 	return nil
 }
 
+type UpdatePlayerReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	PlayerId uint64 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Nickname string `protobuf:"bytes,2,opt,name=nickname,proto3" json:"nickname,omitempty"` // 空表示不修改
+	Coin     uint64 `protobuf:"varint,3,opt,name=coin,proto3" json:"coin,omitempty"`        // 全量覆盖值
+	Diamond  uint64 `protobuf:"varint,4,opt,name=diamond,proto3" json:"diamond,omitempty"`  // 全量覆盖值
+}
+
+func (x *UpdatePlayerReq) Reset() {
+	*x = UpdatePlayerReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_biz_proto_msgTypes[6]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UpdatePlayerReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePlayerReq) ProtoMessage() {}
+
+func (x *UpdatePlayerReq) ProtoReflect() protoreflect.Message {
+	mi := &file_biz_proto_msgTypes[6]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePlayerReq.ProtoReflect.Descriptor instead.
+func (*UpdatePlayerReq) Descriptor() ([]byte, []int) {
+	return file_biz_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *UpdatePlayerReq) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *UpdatePlayerReq) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *UpdatePlayerReq) GetCoin() uint64 {
+	if x != nil {
+		return x.Coin
+	}
+	return 0
+}
+
+func (x *UpdatePlayerReq) GetDiamond() uint64 {
+	if x != nil {
+		return x.Diamond
+	}
+	return 0
+}
+
+type UpdatePlayerRes struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Result *common.Result `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+}
+
+func (x *UpdatePlayerRes) Reset() {
+	*x = UpdatePlayerRes{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_biz_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *UpdatePlayerRes) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePlayerRes) ProtoMessage() {}
+
+func (x *UpdatePlayerRes) ProtoReflect() protoreflect.Message {
+	mi := &file_biz_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePlayerRes.ProtoReflect.Descriptor instead.
+func (*UpdatePlayerRes) Descriptor() ([]byte, []int) {
+	return file_biz_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *UpdatePlayerRes) GetResult() *common.Result {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
 type Ping struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -394,7 +512,7 @@ type Ping struct {
 func (x *Ping) Reset() {
 	*x = Ping{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_biz_proto_msgTypes[6]
+		mi := &file_biz_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -407,7 +525,7 @@ func (x *Ping) String() string {
 func (*Ping) ProtoMessage() {}
 
 func (x *Ping) ProtoReflect() protoreflect.Message {
-	mi := &file_biz_proto_msgTypes[6]
+	mi := &file_biz_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -420,7 +538,7 @@ func (x *Ping) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ping.ProtoReflect.Descriptor instead.
 func (*Ping) Descriptor() ([]byte, []int) {
-	return file_biz_proto_rawDescGZIP(), []int{6}
+	return file_biz_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Ping) GetClientTime() uint64 {
@@ -442,7 +560,7 @@ type Pong struct {
 func (x *Pong) Reset() {
 	*x = Pong{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_biz_proto_msgTypes[7]
+		mi := &file_biz_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -455,7 +573,7 @@ func (x *Pong) String() string {
 func (*Pong) ProtoMessage() {}
 
 func (x *Pong) ProtoReflect() protoreflect.Message {
-	mi := &file_biz_proto_msgTypes[7]
+	mi := &file_biz_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -468,7 +586,7 @@ func (x *Pong) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pong.ProtoReflect.Descriptor instead.
 func (*Pong) Descriptor() ([]byte, []int) {
-	return file_biz_proto_rawDescGZIP(), []int{7}
+	return file_biz_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Pong) GetClientTime() uint64 {
@@ -523,17 +641,29 @@ var file_biz_proto_rawDesc = []byte{
 	0x32, 0x0e, 0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74,
 	0x52, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x12, 0x1f, 0x0a, 0x05, 0x69, 0x74, 0x65, 0x6d,
 	0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x09, 0x2e, 0x62, 0x69, 0x7a, 0x2e, 0x49, 0x74,
-	0x65, 0x6d, 0x52, 0x05, 0x69, 0x74, 0x65, 0x6d, 0x73, 0x22, 0x27, 0x0a, 0x04, 0x50, 0x69, 0x6e,
-	0x67, 0x12, 0x1f, 0x0a, 0x0b, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x5f, 0x74, 0x69, 0x6d, 0x65,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0a, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x54, 0x69,
-	0x6d, 0x65, 0x22, 0x48, 0x0a, 0x04, 0x50, 0x6f, 0x6e, 0x67, 0x12, 0x1f, 0x0a, 0x0b, 0x63, 0x6c,
-	0x69, 0x65, 0x6e, 0x74, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52,
-	0x0a, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x54, 0x69, 0x6d, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x73,
-	0x65, 0x72, 0x76, 0x65, 0x72, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04,
-	0x52, 0x0a, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x54, 0x69, 0x6d, 0x65, 0x42, 0x2a, 0x5a, 0x28,
-	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x6d, 0x61, 0x6b, 0x65,
-	0x72, 0x2f, 0x67, 0x61, 0x6d, 0x65, 0x2d, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x2f, 0x67, 0x65,
-	0x6e, 0x2f, 0x67, 0x6f, 0x2f, 0x62, 0x69, 0x7a, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x65, 0x6d, 0x52, 0x05, 0x69, 0x74, 0x65, 0x6d, 0x73, 0x22, 0x78, 0x0a, 0x0f, 0x55, 0x70, 0x64,
+	0x61, 0x74, 0x65, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x52, 0x65, 0x71, 0x12, 0x1b, 0x0a, 0x09,
+	0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52,
+	0x08, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x49, 0x64, 0x12, 0x1a, 0x0a, 0x08, 0x6e, 0x69, 0x63,
+	0x6b, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6e, 0x69, 0x63,
+	0x6b, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x63, 0x6f, 0x69, 0x6e, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x04, 0x52, 0x04, 0x63, 0x6f, 0x69, 0x6e, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x69, 0x61,
+	0x6d, 0x6f, 0x6e, 0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x04, 0x52, 0x07, 0x64, 0x69, 0x61, 0x6d,
+	0x6f, 0x6e, 0x64, 0x22, 0x39, 0x0a, 0x0f, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x50, 0x6c, 0x61,
+	0x79, 0x65, 0x72, 0x52, 0x65, 0x73, 0x12, 0x26, 0x0a, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e,
+	0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x52, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x22, 0x27,
+	0x0a, 0x04, 0x50, 0x69, 0x6e, 0x67, 0x12, 0x1f, 0x0a, 0x0b, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74,
+	0x5f, 0x74, 0x69, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0a, 0x63, 0x6c, 0x69,
+	0x65, 0x6e, 0x74, 0x54, 0x69, 0x6d, 0x65, 0x22, 0x48, 0x0a, 0x04, 0x50, 0x6f, 0x6e, 0x67, 0x12,
+	0x1f, 0x0a, 0x0b, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x04, 0x52, 0x0a, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x54, 0x69, 0x6d, 0x65,
+	0x12, 0x1f, 0x0a, 0x0b, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0a, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x54, 0x69, 0x6d,
+	0x65, 0x42, 0x2a, 0x5a, 0x28, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
+	0x67, 0x6d, 0x61, 0x6b, 0x65, 0x72, 0x2f, 0x67, 0x61, 0x6d, 0x65, 0x2d, 0x73, 0x65, 0x72, 0x76,
+	0x65, 0x72, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x67, 0x6f, 0x2f, 0x62, 0x69, 0x7a, 0x62, 0x06, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -548,28 +678,31 @@ func file_biz_proto_rawDescGZIP() []byte {
 	return file_biz_proto_rawDescData
 }
 
-var file_biz_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_biz_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_biz_proto_goTypes = []interface{}{
-	(*PlayerBase)(nil),    // 0: biz.PlayerBase
-	(*GetPlayerReq)(nil),  // 1: biz.GetPlayerReq
-	(*GetPlayerRes)(nil),  // 2: biz.GetPlayerRes
-	(*Item)(nil),          // 3: biz.Item
-	(*GetBagReq)(nil),     // 4: biz.GetBagReq
-	(*GetBagRes)(nil),     // 5: biz.GetBagRes
-	(*Ping)(nil),          // 6: biz.Ping
-	(*Pong)(nil),          // 7: biz.Pong
-	(*common.Result)(nil), // 8: common.Result
+	(*PlayerBase)(nil),      // 0: biz.PlayerBase
+	(*GetPlayerReq)(nil),    // 1: biz.GetPlayerReq
+	(*GetPlayerRes)(nil),    // 2: biz.GetPlayerRes
+	(*Item)(nil),            // 3: biz.Item
+	(*GetBagReq)(nil),       // 4: biz.GetBagReq
+	(*GetBagRes)(nil),       // 5: biz.GetBagRes
+	(*UpdatePlayerReq)(nil), // 6: biz.UpdatePlayerReq
+	(*UpdatePlayerRes)(nil), // 7: biz.UpdatePlayerRes
+	(*Ping)(nil),            // 8: biz.Ping
+	(*Pong)(nil),            // 9: biz.Pong
+	(*common.Result)(nil),   // 10: common.Result
 }
 var file_biz_proto_depIdxs = []int32{
-	8, // 0: biz.GetPlayerRes.result:type_name -> common.Result
-	0, // 1: biz.GetPlayerRes.player:type_name -> biz.PlayerBase
-	8, // 2: biz.GetBagRes.result:type_name -> common.Result
-	3, // 3: biz.GetBagRes.items:type_name -> biz.Item
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	10, // 0: biz.GetPlayerRes.result:type_name -> common.Result
+	0,  // 1: biz.GetPlayerRes.player:type_name -> biz.PlayerBase
+	10, // 2: biz.GetBagRes.result:type_name -> common.Result
+	3,  // 3: biz.GetBagRes.items:type_name -> biz.Item
+	10, // 4: biz.UpdatePlayerRes.result:type_name -> common.Result
+	5,  // [5:5] is the sub-list for method output_type
+	5,  // [5:5] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_biz_proto_init() }
@@ -651,7 +784,7 @@ func file_biz_proto_init() {
 			}
 		}
 		file_biz_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Ping); i {
+			switch v := v.(*UpdatePlayerReq); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -663,6 +796,30 @@ func file_biz_proto_init() {
 			}
 		}
 		file_biz_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*UpdatePlayerRes); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_biz_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Ping); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_biz_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Pong); i {
 			case 0:
 				return &v.state
@@ -681,7 +838,7 @@ func file_biz_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_biz_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

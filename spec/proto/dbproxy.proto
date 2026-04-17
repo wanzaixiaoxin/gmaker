@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package dbproxy;
+option go_package = "github.com/gmaker/game-server/gen/go/dbproxy";
+
+message RedisGetReq {
+    string key = 1;
+}
+
+message RedisGetRes {
+    bool   ok    = 1;
+    string value = 2;
+}
+
+message RedisSetReq {
+    string key = 1;
+    string value = 2;
+    uint64 ttl_sec = 3; // 0 表示无过期时间
+}
+
+message RedisSetRes {
+    bool ok = 1;
+}
+
+message RedisDelReq {
+    repeated string keys = 1;
+}
+
+message RedisDelRes {
+    bool ok = 1;
+    int64 count = 2;
+}
+
+message RedisPipelineCmd {
+    string op  = 1; // GET/SET/DEL
+    string key = 2;
+    string value = 3;
+    uint64 ttl_sec = 4;
+}
+
+message RedisPipelineReq {
+    repeated RedisPipelineCmd cmds = 1;
+}
+
+message RedisPipelineRes {
+    bool ok = 1;
+    repeated bytes results = 2; // 简单字符串序列化结果
+}
+
+message MySQLQueryReq {
+    uint64 uid = 1;
+    string sql = 2;
+    repeated string args = 3;
+}
+
+message MySQLQueryRes {
+    bool ok = 1;
+    repeated bytes rows = 2; // JSON 序列化后的行数据
+    string error = 3;
+}
+
+message MySQLExecReq {
+    uint64 uid = 1;
+    string sql = 2;
+    repeated string args = 3;
+}
+
+message MySQLExecRes {
+    bool ok = 1;
+    int64 last_insert_id = 2;
+    int64 rows_affected = 3;
+    string error = 4;
+}

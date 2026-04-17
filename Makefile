@@ -26,14 +26,15 @@ build: build-go build-cpp
 
 build-go:
 	@echo "Building Go services..."
-	cd services/registry-go && go build -o ../../bin/registry-go.exe ./main.go
+	cd services/registry-go && go mod tidy && go build -o ../../bin/registry-go.exe ./main.go
+	cd services/dbproxy-go && go mod tidy && go build -o ../../bin/dbproxy-go.exe ./main.go
 	cd services/biz-go && go mod tidy && go build -o ../../bin/biz-go.exe ./main.go
 	@echo "Go build done."
 
 build-cpp:
 	@echo "Building C++ services..."
 	@mkdir -p build
-	cd build && cmake .. && cmake --build . --config Release
+	cd build && cmake --build . --config Release
 	@echo "C++ build done."
 
 # ==================== 测试 ====================

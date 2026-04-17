@@ -43,6 +43,19 @@ message GetBagRes {
     repeated Item items  = 2;
 }
 
+// ==================== 更新玩家数据 ====================
+
+message UpdatePlayerReq {
+    uint64 player_id = 1;
+    string nickname  = 2; // 空表示不修改
+    uint64 coin      = 3; // 全量覆盖值
+    uint64 diamond   = 4; // 全量覆盖值
+}
+
+message UpdatePlayerRes {
+    common.Result result = 1;
+}
+
 // ==================== 心跳保活（业务层） ====================
 
 message Ping {
