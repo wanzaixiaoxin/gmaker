@@ -33,12 +33,19 @@ struct UpstreamNode {
 class UpstreamPool {
 public:
     using DataCallback = std::function<void(TCPConn*, Packet&)>;
+    using NodeEventCallback = std::function<void(const std::string& addr, bool healthy)>;
 
     explicit UpstreamPool(DataCallback on_data);
     ~UpstreamPool();
 
     // 添加上游节点（Start 前调用）
     void AddNode(const std::string& host, uint16_t port);
+
+    // 移除上游节点
+    void RemoveNode(const std::string& host, uint16_t port);
+
+    // 设置节点健康状态变更回调
+    void SetOnNodeEvent(NodeEventCallback cb);
 
     // 启动后台重连/健康检查线程
     bool Start();
@@ -64,11 +71,13 @@ public:
 private:
     void ReconnectLoop();
     bool TryConnect(UpstreamNode* node);
+    std::string NodeAddr(const UpstreamNode* node) const;
 
     std::vector<std::unique_ptr<UpstreamNode>> nodes_;
     mutable std::mutex nodes_mtx_;
 
     DataCallback on_data_;
+    NodeEventCallback on_node_event_;
 
     std::atomic<bool> running_{false};
     std::thread reconnect_thread_;

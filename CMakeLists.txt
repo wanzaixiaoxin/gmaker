@@ -28,6 +28,10 @@ set(CPP_RPC_SOURCES
     common/cpp/gs/rpc/client.cpp
 )
 
+set(CPP_PROTO_SOURCES
+    gen/cpp/registry.pb.cc
+)
+
 set(CPP_REGISTRY_SOURCES
     common/cpp/gs/registry/client.cpp
 )
@@ -56,6 +60,7 @@ add_executable(gateway-cpp
     ${CPP_NET_SOURCES}
     ${CPP_RPC_SOURCES}
     ${CPP_REGISTRY_SOURCES}
+    ${CPP_PROTO_SOURCES}
     ${CPP_CONFIG_SOURCES}
     ${CPP_CRYPTO_SOURCES}
     ${CPP_LIMITER_SOURCES}
@@ -69,6 +74,7 @@ target_include_directories(gateway-cpp PRIVATE
 )
 
 target_link_libraries(gateway-cpp toml11::toml11)
+# TODO: install protobuf and uncomment: target_link_libraries(gateway-cpp protobuf::libprotobuf)
 if(WIN32)
     target_link_libraries(gateway-cpp ws2_32 bcrypt)
 endif()
@@ -79,6 +85,7 @@ add_executable(realtime-cpp
     ${CPP_NET_SOURCES}
     ${CPP_RPC_SOURCES}
     ${CPP_REGISTRY_SOURCES}
+    ${CPP_PROTO_SOURCES}
     ${CPP_CONFIG_SOURCES}
     ${CPP_CRYPTO_SOURCES}
     ${CPP_LIMITER_SOURCES}
@@ -92,6 +99,7 @@ target_include_directories(realtime-cpp PRIVATE
 )
 
 target_link_libraries(realtime-cpp toml11::toml11)
+# TODO: install protobuf and uncomment: target_link_libraries(realtime-cpp protobuf::libprotobuf)
 if(WIN32)
     target_link_libraries(realtime-cpp ws2_32 bcrypt)
 endif()

@@ -80,15 +80,18 @@ func main() {
 	log.Println("Biz registered to registry")
 
 	// 连接 DBProxy（多节点）
-	dbClient := NewDBProxyClient(strings.Split(*dbproxyAddrs, ","), idGen)
+	dbClient := NewDBProxyClient(strings.Split(*dbproxyAddrs, ","))
 	if err := dbClient.Connect(); err != nil {
 		log.Fatalf("connect dbproxy failed: %v", err)
 	}
 	defer dbClient.Close()
 	log.Println("Biz connected to dbproxy")
 
+	// 业务服务层（与 DBProxy 客户端解耦）
+	playerSvc := NewPlayerService(dbClient, idGen)
+
 	// 确保 player 表存在
-	if err := ensurePlayerTable(dbClient); err != nil {
+	if err := ensurePlayerTable(playerSvc); err != nil {
 		log.Fatalf("ensure player table failed: %v", err)
 	}
 
@@ -96,7 +99,7 @@ func main() {
 	cfg := net.ServerConfig{
 		Addr: *listenAddr,
 		OnData: func(conn *net.TCPConn, pkt *net.Packet) {
-			handleBizPacket(conn, pkt, dbClient)
+			handleBizPacket(conn, pkt, playerSvc)
 		},
 		OnClose: func(conn *net.TCPConn) {
 			log.Printf("Biz connection closed: %s", conn.ID())
@@ -116,14 +119,14 @@ func main() {
 	srv.Stop()
 }
 
-func handleBizPacket(conn *net.TCPConn, pkt *net.Packet, db *DBProxyClient) {
+func handleBizPacket(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
 	switch pkt.CmdID {
 	case CmdLoginReq:
-		handleLogin(conn, pkt, db)
+		handleLogin(conn, pkt, svc)
 	case CmdGetPlayerReq:
-		handleGetPlayer(conn, pkt, db)
+		handleGetPlayer(conn, pkt, svc)
 	case CmdUpdatePlayerReq:
-		handleUpdatePlayer(conn, pkt, db)
+		handleUpdatePlayer(conn, pkt, svc)
 	case CmdPing:
 		handlePing(conn, pkt)
 	default:
@@ -131,7 +134,7 @@ func handleBizPacket(conn *net.TCPConn, pkt *net.Packet, db *DBProxyClient) {
 	}
 }
 
-func handleLogin(conn *net.TCPConn, pkt *net.Packet, db *DBProxyClient) {
+func handleLogin(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
 	var req loginpb.LoginReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendLoginRes(conn, pkt.SeqID, 1, "", 0, 0)
@@ -142,10 +145,10 @@ func handleLogin(conn *net.TCPConn, pkt *net.Packet, db *DBProxyClient) {
 	defer cancel()
 
 	// 查询账号
-	player, err := db.QueryPlayerByAccount(ctx, req.Account)
+	player, err := svc.QueryPlayerByAccount(ctx, req.Account)
 	if err != nil {
 		// 账号不存在则创建
-		player, err = db.CreatePlayer(ctx, req.Account, hashPassword(req.Password))
+		player, err = svc.CreatePlayer(ctx, req.Account, hashPassword(req.Password))
 		if err != nil {
 			log.Printf("create player failed: %v", err)
 			sendLoginRes(conn, pkt.SeqID, 1, "", 0, 0)
@@ -158,14 +161,14 @@ func handleLogin(conn *net.TCPConn, pkt *net.Packet, db *DBProxyClient) {
 	expireAt := uint64(time.Now().Add(24 * time.Hour).Unix())
 
 	// 缓存 token 到 Redis
-	if err := db.SetToken(ctx, player.PlayerId, token, 24*3600); err != nil {
+	if err := svc.SetToken(ctx, player.PlayerId, token, 24*3600); err != nil {
 		log.Printf("set token failed: %v", err)
 	}
 
 	sendLoginRes(conn, pkt.SeqID, 0, token, player.PlayerId, expireAt)
 }
 
-func handleGetPlayer(conn *net.TCPConn, pkt *net.Packet, db *DBProxyClient) {
+func handleGetPlayer(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
 	var req bizpb.GetPlayerReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendGetPlayerRes(conn, pkt.SeqID, 1, nil)
@@ -175,7 +178,7 @@ func handleGetPlayer(conn *net.TCPConn, pkt *net.Packet, db *DBProxyClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	player, err := db.QueryPlayerByID(ctx, req.PlayerId)
+	player, err := svc.QueryPlayerByID(ctx, req.PlayerId)
 	if err != nil {
 		sendGetPlayerRes(conn, pkt.SeqID, 1, nil)
 		return
@@ -183,7 +186,7 @@ func handleGetPlayer(conn *net.TCPConn, pkt *net.Packet, db *DBProxyClient) {
 	sendGetPlayerRes(conn, pkt.SeqID, 0, player)
 }
 
-func handleUpdatePlayer(conn *net.TCPConn, pkt *net.Packet, db *DBProxyClient) {
+func handleUpdatePlayer(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
 	var req bizpb.UpdatePlayerReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendUpdatePlayerRes(conn, pkt.SeqID, 1)
@@ -193,7 +196,7 @@ func handleUpdatePlayer(conn *net.TCPConn, pkt *net.Packet, db *DBProxyClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if err := db.UpdatePlayer(ctx, req.PlayerId, req.Nickname, req.Coin, req.Diamond); err != nil {
+	if err := svc.UpdatePlayer(ctx, req.PlayerId, req.Nickname, req.Coin, req.Diamond); err != nil {
 		log.Printf("update player failed: %v", err)
 		sendUpdatePlayerRes(conn, pkt.SeqID, 1)
 		return
@@ -264,17 +267,16 @@ func generateToken(playerID uint64) string {
 	return hex.EncodeToString(h[:16])
 }
 
-// ==================== DBProxy 客户端封装 ====================
+// ==================== DBProxy 通用客户端（零业务耦合） ====================
 
 type DBProxyClient struct {
-	addrs  []string
-	pool   *net.UpstreamPool
-	rpc    *rpc.Client
-	idGen  *idgen.Snowflake
+	addrs []string
+	pool  *net.UpstreamPool
+	rpc   *rpc.Client
 }
 
-func NewDBProxyClient(addrs []string, idGen *idgen.Snowflake) *DBProxyClient {
-	return &DBProxyClient{addrs: addrs, idGen: idGen}
+func NewDBProxyClient(addrs []string) *DBProxyClient {
+	return &DBProxyClient{addrs: addrs}
 }
 
 func (c *DBProxyClient) Connect() error {
@@ -297,15 +299,27 @@ func (c *DBProxyClient) Close() {
 	}
 }
 
+// Call 通用 RPC 调用，业务层通过此接口访问 DBProxy
 func (c *DBProxyClient) Call(ctx context.Context, cmdID uint32, payload []byte) (*net.Packet, error) {
 	return c.rpc.Call(ctx, cmdID, payload)
 }
 
-func (c *DBProxyClient) QueryPlayerByAccount(ctx context.Context, account string) (*bizpb.PlayerBase, error) {
+// ==================== PlayerService 业务层（与 DBProxy 解耦） ====================
+
+type PlayerService struct {
+	db    *DBProxyClient
+	idGen *idgen.Snowflake
+}
+
+func NewPlayerService(db *DBProxyClient, idGen *idgen.Snowflake) *PlayerService {
+	return &PlayerService{db: db, idGen: idGen}
+}
+
+func (s *PlayerService) QueryPlayerByAccount(ctx context.Context, account string) (*bizpb.PlayerBase, error) {
 	sqlStr := "SELECT player_id, nickname, level, exp, coin, diamond, create_at, login_at FROM players WHERE account = ?"
 	req := &dbproxypb.MySQLQueryReq{Uid: 1, Sql: sqlStr, Args: []string{account}}
 	data, _ := proto.Marshal(req)
-	resPkt, err := c.Call(ctx, CmdMySQLQuery, data)
+	resPkt, err := s.db.Call(ctx, CmdMySQLQuery, data)
 	if err != nil {
 		return nil, err
 	}
@@ -319,11 +333,11 @@ func (c *DBProxyClient) QueryPlayerByAccount(ctx context.Context, account string
 	return parsePlayerRow(res.Rows[0])
 }
 
-func (c *DBProxyClient) QueryPlayerByID(ctx context.Context, playerID uint64) (*bizpb.PlayerBase, error) {
+func (s *PlayerService) QueryPlayerByID(ctx context.Context, playerID uint64) (*bizpb.PlayerBase, error) {
 	sqlStr := "SELECT player_id, nickname, level, exp, coin, diamond, create_at, login_at FROM players WHERE player_id = ?"
 	req := &dbproxypb.MySQLQueryReq{Uid: playerID, Sql: sqlStr, Args: []string{strconv.FormatUint(playerID, 10)}}
 	data, _ := proto.Marshal(req)
-	resPkt, err := c.Call(ctx, CmdMySQLQuery, data)
+	resPkt, err := s.db.Call(ctx, CmdMySQLQuery, data)
 	if err != nil {
 		return nil, err
 	}
@@ -337,9 +351,9 @@ func (c *DBProxyClient) QueryPlayerByID(ctx context.Context, playerID uint64) (*
 	return parsePlayerRow(res.Rows[0])
 }
 
-func (c *DBProxyClient) CreatePlayer(ctx context.Context, account, password string) (*bizpb.PlayerBase, error) {
+func (s *PlayerService) CreatePlayer(ctx context.Context, account, password string) (*bizpb.PlayerBase, error) {
 	now := uint64(time.Now().Unix())
-	playerIDRaw, err := c.idGen.NextID()
+	playerIDRaw, err := s.idGen.NextID()
 	if err != nil {
 		return nil, fmt.Errorf("generate player id failed: %w", err)
 	}
@@ -351,7 +365,7 @@ func (c *DBProxyClient) CreatePlayer(ctx context.Context, account, password stri
 		Args: []string{strconv.FormatUint(playerID, 10), account, password, account, strconv.FormatUint(now, 10), strconv.FormatUint(now, 10)},
 	}
 	data, _ := proto.Marshal(req)
-	resPkt, err := c.Call(ctx, CmdMySQLExec, data)
+	resPkt, err := s.db.Call(ctx, CmdMySQLExec, data)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +388,7 @@ func (c *DBProxyClient) CreatePlayer(ctx context.Context, account, password stri
 	}, nil
 }
 
-func (c *DBProxyClient) UpdatePlayer(ctx context.Context, playerID uint64, nickname string, coin uint64, diamond uint64) error {
+func (s *PlayerService) UpdatePlayer(ctx context.Context, playerID uint64, nickname string, coin uint64, diamond uint64) error {
 	parts := []string{}
 	args := []string{}
 	if nickname != "" {
@@ -393,7 +407,7 @@ func (c *DBProxyClient) UpdatePlayer(ctx context.Context, playerID uint64, nickn
 
 	req := &dbproxypb.MySQLExecReq{Uid: playerID, Sql: sqlStr, Args: args}
 	data, _ := proto.Marshal(req)
-	resPkt, err := c.Call(ctx, CmdMySQLExec, data)
+	resPkt, err := s.db.Call(ctx, CmdMySQLExec, data)
 	if err != nil {
 		return err
 	}
@@ -407,11 +421,11 @@ func (c *DBProxyClient) UpdatePlayer(ctx context.Context, playerID uint64, nickn
 	return nil
 }
 
-func (c *DBProxyClient) SetToken(ctx context.Context, playerID uint64, token string, ttlSec uint64) error {
+func (s *PlayerService) SetToken(ctx context.Context, playerID uint64, token string, ttlSec uint64) error {
 	key := fmt.Sprintf("token:%d", playerID)
 	req := &dbproxypb.RedisSetReq{Key: key, Value: token, TtlSec: ttlSec}
 	data, _ := proto.Marshal(req)
-	resPkt, err := c.Call(ctx, CmdRedisSet, data)
+	resPkt, err := s.db.Call(ctx, CmdRedisSet, data)
 	if err != nil {
 		return err
 	}
@@ -422,7 +436,7 @@ func (c *DBProxyClient) SetToken(ctx context.Context, playerID uint64, token str
 	return nil
 }
 
-func ensurePlayerTable(db *DBProxyClient) error {
+func ensurePlayerTable(svc *PlayerService) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -440,7 +454,7 @@ func ensurePlayerTable(db *DBProxyClient) error {
 	)`
 	req := &dbproxypb.MySQLExecReq{Uid: 1, Sql: sqlStr}
 	data, _ := proto.Marshal(req)
-	resPkt, err := db.Call(ctx, CmdMySQLExec, data)
+	resPkt, err := svc.db.Call(ctx, CmdMySQLExec, data)
 	if err != nil {
 		return err
 	}

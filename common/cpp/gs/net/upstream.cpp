@@ -12,11 +12,34 @@ UpstreamPool::~UpstreamPool() {
 
 void UpstreamPool::AddNode(const std::string& host, uint16_t port) {
     std::lock_guard<std::mutex> lk(nodes_mtx_);
+    // 检查是否已存在
+    for (const auto& node : nodes_) {
+        if (node->host == host && node->port == port) {
+            return;
+        }
+    }
     auto node = std::make_unique<UpstreamNode>();
     node->host = host;
     node->port = port;
     node->client = std::make_unique<TCPClient>(host, port);
     nodes_.push_back(std::move(node));
+}
+
+void UpstreamPool::RemoveNode(const std::string& host, uint16_t port) {
+    std::lock_guard<std::mutex> lk(nodes_mtx_);
+    for (auto it = nodes_.begin(); it != nodes_.end(); ++it) {
+        if ((*it)->host == host && (*it)->port == port) {
+            if ((*it)->client) {
+                (*it)->client->Close();
+            }
+            nodes_.erase(it);
+            return;
+        }
+    }
+}
+
+void UpstreamPool::SetOnNodeEvent(NodeEventCallback cb) {
+    on_node_event_ = std::move(cb);
 }
 
 bool UpstreamPool::Start() {
@@ -143,16 +166,26 @@ bool UpstreamPool::TryConnect(UpstreamNode* node) {
         // 设置关闭回调：节点断开时标记为不健康
         node->client->SetCallbacks(
             on_data_,
-            [node](TCPConn*) {
+            [this, node](TCPConn*) {
                 node->healthy.store(false);
                 std::cerr << "UpstreamPool: disconnected from " << node->host << ":" << node->port << std::endl;
+                if (on_node_event_) {
+                    on_node_event_(NodeAddr(node), false);
+                }
             }
         );
+        if (on_node_event_) {
+            on_node_event_(NodeAddr(node), true);
+        }
     } else {
         node->healthy.store(false);
     }
     node->connecting.store(false);
     return ok;
+}
+
+std::string UpstreamPool::NodeAddr(const UpstreamNode* node) const {
+    return node->host + ":" + std::to_string(node->port);
 }
 
 } // namespace net

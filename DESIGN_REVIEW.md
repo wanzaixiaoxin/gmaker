@@ -4,7 +4,7 @@
 >
 > 版本：v1.0  
 > 审查范围：Phase 1 ~ Phase 3  
-> 状态：进行中（随代码迭代同步更新）
+> 状态：P0 优化项已全部完成，待继续 MVP Phase 4
 
 ---
 
@@ -415,7 +415,13 @@
 
 7. **错误处理必须融入语言原生机制**：Go 侧错误必须实现 `error` 接口，C++ 侧错误必须支持异常或 `std::expected`（C++23），不能只暴露 int32 错误码。
 
----
+8. **所有服务设计都不能是单体的**：任何服务（包括自己）都可能运行多个实例；任何上游依赖都必须通过 Registry 动态发现；单连接直连模型在任何场景下都不可接受。
+
+9. **公共服务代码不得与业务逻辑耦合（新增）**：
+   - **数据库代理（DBProxy）**、**日志统计服（LogStats）**、**配置中心（Config）** 等公共服务只提供**通用接口**，不得包含任何业务相关的 SQL、表名、字段名、业务校验逻辑
+   - 业务侧通过独立的 **Service 层**（如 `PlayerService`）封装业务逻辑，Service 层调用公共服务的通用接口
+   - 表结构、SQL 语句、业务字段映射属于业务配置，不应硬编码在通用客户端中
+   - **原则**：如果替换一个业务模块（如从 player 系统换成 guild 系统），不应该修改 DBProxy Client 的任何代码
 
 ---
 
@@ -438,12 +444,12 @@
 
 | 调用方 | 被调用方 | 是否多连接 | 是否走Registry发现 | 是否有负载均衡 | 是否有故障转移 | 偏离等级 |
 |--------|----------|-----------|-------------------|--------------|--------------|---------|
-| Gateway (C++) | Biz | ✅ 已修复（UpstreamPool） | ❌ 硬编码/命令行 | ✅ 轮询 | ✅ 自动重连 | 🟡 |
-| Biz-go | Registry | ❌ `NewClient(*registryAddr)` 单点 | ❌ 命令行硬编码 | ❌ 无 | ❌ 无 | 🔴 |
-| Biz-go | DBProxy | ❌ `NewDBProxyClient(*dbproxyAddr)` 单点 | ❌ 命令行硬编码 | ❌ 无 | ❌ 无 | 🔴 |
-| Registry-go Client (Go) | Registry Server | ❌ 一个 `TCPClient` | ❌ 硬编码 | ❌ 无 | ❌ 无 | 🔴 |
-| RPC Client (Go) | 任意上游 | ❌ 一个 `TCPConn` | ❌ 由调用方传入 | ❌ 无 | ❌ 无 | 🔴 |
-| Gateway (C++) | Biz 节点来源 | - | ❌ 启动时硬编码，未从Registry发现 | - | - | 🔴 |
+| Gateway (C++) | Biz | ✅ 已修复（UpstreamPool） | ✅ Registry Watch 动态发现 | ✅ 轮询 | ✅ 自动重连 | 🟢 |
+| Biz-go | Registry | ✅ `NewClient([]string)` 多节点 + UpstreamPool | ✅ 命令行支持多地址 | ✅ 轮询 | ✅ 自动重连 | 🟢 |
+| Biz-go | DBProxy | ✅ `NewDBProxyClient([]string)` 多节点 + UpstreamPool | ✅ 命令行支持多地址 | ✅ 轮询 | ✅ 自动重连 | 🟢 |
+| Registry-go Client (Go) | Registry Server | ✅ `UpstreamPool` 多连接 | ✅ 命令行支持多地址 | ✅ 轮询 | ✅ 自动重连 | 🟢 |
+| RPC Client (Go) | 任意上游 | ✅ `PacketSender` 接口抽象，支持单连接和连接池 | ✅ 由调用方决定 | ✅ 取决于底层 Sender | ✅ 取决于底层 Sender | 🟢 |
+| Gateway (C++) | Biz 节点来源 | - | ✅ Registry Watch 动态发现，fallback 硬编码 | - | - | 🟢 |
 
 ### 10.3 逐项分析
 
@@ -550,7 +556,7 @@ type Client struct {
 | **P0** | MySQL 结果序列化改用 protobuf | 🔴 | Phase 2 补完 | ✅ 已完成（JSON 过渡方案，proto 已更新待重新生成） |
 | **P0** | Biz 服替换 Snowflake ID 生成 | 🔴 | Phase 2 补完 | ✅ 已完成 |
 | **P0** | **Go 侧 Registry/DBProxy/RPC Client 全部改为多连接** | 🔴 | Phase 1 补完 | ✅ 已完成（Go UpstreamPool + 连接池模式） |
-| **P0** | **Gateway 从 Registry 动态发现 Biz 节点** | 🔴 | Phase 1 补完 | ⏳ 阻塞：C++ protobuf 未完全集成，需先补完 C++ Registry Client |
+| **P0** | **Gateway 从 Registry 动态发现 Biz 节点** | 🔴 | Phase 1 补完 | ✅ 已完成（C++ RegistryClient + UpstreamPool + Watch 回调动态增删节点） |
 | **P1** | Gateway 加密握手增加版本号+防重放 | 🔴 | Phase 3 补完 | ✅ 已完成（v1 协议：version + timestamp + nonce） |
 | **P1** | 错误码增加 Go error 类型包装 | 🟡 | Phase 3 补完 | ✅ 已完成（`errors.Error` 结构体 + `Wrap`/`Is` 等） |
 | **P1** | config /admin/reload 增加认证 | 🟡 | Phase 3 补完 | ✅ 已完成（Bearer Token + 审计日志） |
@@ -591,3 +597,4 @@ type Client struct {
 |------|------|----------|------|
 | 2026-04-17 | v1.0 | 首次审查，覆盖 Phase 1~3，识别 15 项偏离，制定补救优先级矩阵，新增 7 条设计原则 | - |
 | 2026-04-17 | v1.1 | 新增"单体设计审查"章节；识别 5 项单点连接偏离；Gateway 单点 Biz 已修复（UpstreamPool）；设计原则新增第 8 条；补救矩阵增加 2 个 P0 项 | - |
+| 2026-04-18 | v1.2 | 所有 P0 优化项完成：C++ RegistryClient 重写（UpstreamPool + protobuf + Watch），Gateway 动态 Biz 发现，Go 侧全量多节点改造完成，单体设计偏离全部修复 | - |

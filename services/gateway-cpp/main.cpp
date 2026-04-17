@@ -12,6 +12,7 @@
 #include "gs/net/packet.hpp"
 #include "gs/crypto/session.hpp"
 #include "gs/replay/replay.hpp"
+#include "gs/registry/client.hpp"
 #include "gs/errors.hpp"
 
 using namespace gs::net;
@@ -27,21 +28,65 @@ struct BizNodeConfig {
 
 class Gateway {
 public:
-    bool Start(uint16_t listen_port, const std::vector<BizNodeConfig>& biz_nodes,
+    bool Start(uint16_t listen_port,
+               const std::vector<std::pair<std::string, uint16_t>>& registry_addrs,
+               const std::vector<BizNodeConfig>& fallback_biz_nodes,
                const std::vector<uint8_t>& master_key) {
-        if (biz_nodes.empty()) {
-            std::cerr << "No biz nodes configured" << std::endl;
-            return false;
-        }
         master_key_ = master_key;
 
         // 初始化 UpstreamPool
         biz_pool_ = std::make_unique<UpstreamPool>(
             [this](TCPConn* c, Packet& p) { OnBizPacket(c, p); }
         );
-        for (const auto& node : biz_nodes) {
-            biz_pool_->AddNode(node.host, node.port);
+
+        // 连接 Registry（多节点）
+        if (!registry_addrs.empty()) {
+            reg_client_ = std::make_unique<gs::registry::RegistryClient>(registry_addrs);
+            if (!reg_client_->Connect()) {
+                std::cerr << "Failed to connect to registry, using fallback biz nodes" << std::endl;
+            } else {
+                std::cout << "Connected to registry, discovering biz nodes..." << std::endl;
+
+                // 初始发现
+                ::registry::NodeList list;
+                if (reg_client_->Discover("biz", &list)) {
+                    for (int i = 0; i < list.nodes_size(); ++i) {
+                        const auto& node = list.nodes(i);
+                        biz_pool_->AddNode(node.host(), static_cast<uint16_t>(node.port()));
+                        std::cout << "Registry discovered biz node: " << node.host()
+                                  << ":" << node.port() << std::endl;
+                    }
+                }
+
+                // 监听动态变更
+                reg_client_->Watch("biz", [this](const ::registry::NodeEvent& ev) {
+                    if (!ev.has_node()) return;
+                    const auto& node = ev.node();
+                    std::string addr = node.host() + ":" + std::to_string(node.port());
+                    if (ev.type() == ::registry::NodeEvent::JOIN ||
+                        ev.type() == ::registry::NodeEvent::UPDATE) {
+                        biz_pool_->AddNode(node.host(), static_cast<uint16_t>(node.port()));
+                        std::cout << "Registry event: biz node JOIN/UPDATE " << addr << std::endl;
+                    } else if (ev.type() == ::registry::NodeEvent::LEAVE) {
+                        biz_pool_->RemoveNode(node.host(), static_cast<uint16_t>(node.port()));
+                        std::cout << "Registry event: biz node LEAVE " << addr << std::endl;
+                    }
+                });
+            }
         }
+
+        // 如果没有从 Registry 发现任何节点，使用 fallback
+        if (biz_pool_->TotalCount() == 0) {
+            if (fallback_biz_nodes.empty()) {
+                std::cerr << "No biz nodes configured and no registry discovery" << std::endl;
+                return false;
+            }
+            for (const auto& node : fallback_biz_nodes) {
+                biz_pool_->AddNode(node.host, node.port);
+            }
+            std::cout << "Using fallback biz nodes" << std::endl;
+        }
+
         if (!biz_pool_->Start()) {
             std::cerr << "Failed to start biz upstream pool" << std::endl;
             return false;
@@ -69,6 +114,7 @@ public:
     void Stop() {
         if (server_) server_->Stop();
         if (biz_pool_) biz_pool_->Stop();
+        if (reg_client_) reg_client_->Close();
     }
 
     void Wait() {
@@ -232,6 +278,7 @@ private:
 
     std::unique_ptr<TCPServer> server_;
     std::unique_ptr<UpstreamPool> biz_pool_;
+    std::unique_ptr<gs::registry::RegistryClient> reg_client_;
     std::mutex sessions_mtx_;
     std::unordered_map<uint64_t, TCPConn*> clients_;
     std::unordered_map<uint64_t, std::vector<uint8_t>> sessions_;
@@ -243,6 +290,23 @@ private:
     bool stop_flag_ = false;
 };
 
+static std::vector<std::pair<std::string, uint16_t>> ParseAddrList(const std::string& arg) {
+    std::vector<std::pair<std::string, uint16_t>> out;
+    size_t pos = 0;
+    while (pos < arg.size()) {
+        size_t comma = arg.find(',', pos);
+        if (comma == std::string::npos) comma = arg.size();
+        std::string pair = arg.substr(pos, comma - pos);
+        size_t colon = pair.find(':');
+        if (colon != std::string::npos) {
+            out.push_back({pair.substr(0, colon),
+                static_cast<uint16_t>(std::atoi(pair.substr(colon + 1).c_str()))});
+        }
+        pos = comma + 1;
+    }
+    return out;
+}
+
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
     WSADATA wsaData;
@@ -253,35 +317,35 @@ int main(int argc, char* argv[]) {
 #endif
     uint16_t gateway_port = 8081;
 
-    // 默认连接两个 Biz 节点（生产环境应从 Registry 发现或配置文件读取）
-    std::vector<BizNodeConfig> biz_nodes = {
+    // Registry 地址（多节点）
+    std::vector<std::pair<std::string, uint16_t>> registry_addrs = {
+        {"127.0.0.1", 2379},
+    };
+
+    // Fallback Biz 节点（当 Registry 不可用时使用）
+    std::vector<BizNodeConfig> fallback_biz_nodes = {
         {"127.0.0.1", 8082},
         {"127.0.0.1", 8083},
     };
 
     if (argc > 1) gateway_port = static_cast<uint16_t>(std::atoi(argv[1]));
-    // 支持命令行传入 biz 节点，格式: host1:port1,host2:port2
+    // 支持命令行传入 registry 地址，格式: host1:port1,host2:port2
     if (argc > 2) {
-        biz_nodes.clear();
-        std::string arg = argv[2];
-        size_t pos = 0;
-        while (pos < arg.size()) {
-            size_t comma = arg.find(',', pos);
-            if (comma == std::string::npos) comma = arg.size();
-            std::string pair = arg.substr(pos, comma - pos);
-            size_t colon = pair.find(':');
-            if (colon != std::string::npos) {
-                biz_nodes.push_back({pair.substr(0, colon),
-                    static_cast<uint16_t>(std::atoi(pair.substr(colon + 1).c_str()))});
-            }
-            pos = comma + 1;
+        registry_addrs = ParseAddrList(argv[2]);
+    }
+    // 支持命令行传入 fallback biz 节点，格式: host1:port1,host2:port2
+    if (argc > 3) {
+        fallback_biz_nodes.clear();
+        auto addrs = ParseAddrList(argv[3]);
+        for (const auto& [host, port] : addrs) {
+            fallback_biz_nodes.push_back({host, port});
         }
     }
 
     std::vector<uint8_t> master_key(32, 0);
 
     Gateway gw;
-    if (!gw.Start(gateway_port, biz_nodes, master_key)) {
+    if (!gw.Start(gateway_port, registry_addrs, fallback_biz_nodes, master_key)) {
         return 1;
     }
     gw.Wait();
