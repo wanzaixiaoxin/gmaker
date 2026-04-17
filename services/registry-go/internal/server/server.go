@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"time"
 
 	"github.com/gmaker/game-server/common/go/net"
 	pb "github.com/gmaker/game-server/gen/go/registry"
-	"github.com/gmaker/game-server/services/registry-go/internal/store"
+	"registry-go/internal/store"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -45,7 +44,7 @@ func New(addr string, store store.Store) *Server {
 
 func (s *Server) Start() error {
 	cfg := net.ServerConfig{
-		Addr: addr,
+		Addr: s.addr,
 		OnData: func(conn *net.TCPConn, pkt *net.Packet) {
 			s.handlePacket(conn, pkt)
 		},

@@ -15,8 +15,8 @@ proto:
 	@mkdir -p $(GEN_GO_DIR) $(GEN_CPP_DIR)
 	protoc \
 		--proto_path=$(PROTO_DIR) \
-		--go_out=$(GEN_GO_DIR) --go_opt=paths=source_relative \
-		--go-grpc_out=$(GEN_GO_DIR) --go-grpc_opt=paths=source_relative \
+		--go_out=. --go_opt=module=github.com/gmaker/game-server \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/gmaker/game-server \
 		--cpp_out=$(GEN_CPP_DIR) \
 		$(PROTO_DIR)/*.proto
 	@echo "Protobuf generation done."
@@ -26,7 +26,8 @@ build: build-go build-cpp
 
 build-go:
 	@echo "Building Go services..."
-	cd services/registry-go && go build -o ../../bin/registry-go ./main.go
+	cd services/registry-go && go build -o ../../bin/registry-go.exe ./main.go
+	cd services/biz-go && go mod tidy && go build -o ../../bin/biz-go.exe ./main.go
 	@echo "Go build done."
 
 build-cpp:

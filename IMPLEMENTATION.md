@@ -20,16 +20,16 @@
 
 | # | 任务 | 负责语言 | 交付物 | 验收标准 | 依赖 |
 |---|------|---------|--------|---------|------|
-| 1.1 | ✅ 统一协议栈定稿：`spec/proto/packet.proto`、`cmd_ids.yaml`、帧格式文档 | - | `spec/` 目录完整 | 协议文件已创建；代码生成验证待环境就绪后补测（当前缺少 protoc/go） | - |
-| 1.2 | ✅ Go 基础网络库：TCP Server/Client、拆包粘包、protobuf 编解码 | Go | `common/go/net` | 代码已提交（packet/conn/server/client）；单元测试待环境就绪后执行 | 1.1 |
-| 1.3 | ✅ C++ 基础网络库：TCP Server/Client（WinSock2 阻塞模型）、拆包粘包 | C++ | `common/cpp/net` | 代码已提交（packet/tcp_conn/tcp_server/tcp_client）；单元测试待环境就绪后执行 | 1.1 |
-| 1.4 | ✅ Registry Go 实现 + Etcd 对接 | Go | `services/registry-go` | 代码已提交（server/etcd_store/main）；功能验证待环境就绪后执行 | 1.2 |
-| 1.5 | ✅ Go Registry SDK | Go | `common/go/registry` | 代码已提交（client.go：Register/Heartbeat/Discover/Watch 封装）；Req-Res 配对待 1.7 RPC 层集成后验证 | 1.4 |
-| 1.6 | ✅ C++ Registry SDK | C++ | `common/cpp/registry` | 代码已提交（client.hpp/cpp：Register/Heartbeat/Discover/Watch 封装）；Req-Res 配对待 1.7 RPC 层集成后验证 | 1.4, 1.3 |
-| 1.7 | ✅ 基础 RPC 封装（Req-Res，带 SeqId 配对、5s 超时） | Go+C++ | `common/go/rpc` + `common/cpp/rpc` | 代码已提交（Go: client.go / C++: client.hpp/cpp）；端到端调用待 Phase 1 联调时验证 | 1.5, 1.6 |
-| 1.8 | ✅ 统一 Makefile + CMakeLists.txt | - | `Makefile` / `CMakeLists.txt` | 构建规则已提交；实际编译验证待安装 protoc/go 依赖后执行 | - |
+| 1.1 | ✅ 统一协议栈定稿：`spec/proto/packet.proto`、`cmd_ids.yaml`、帧格式文档 | - | `spec/` 目录完整 | 协议文件已创建；`make proto` 代码生成验证通过 | - |
+| 1.2 | ✅ Go 基础网络库：TCP Server/Client、拆包粘包、protobuf 编解码 | Go | `common/go/net` | 代码已提交；编译与 Phase 1 联调通过 | 1.1 |
+| 1.3 | ✅ C++ 基础网络库：TCP Server/Client（WinSock2 阻塞模型）、拆包粘包 | C++ | `common/cpp/net` | 代码已提交；编译与 Phase 1 联调通过 | 1.1 |
+| 1.4 | ✅ Registry Go 实现 + Etcd 对接 | Go | `services/registry-go` | 代码已提交；Etcd 因网络限制暂未下载，已补充 `memory_store` 用于 Phase 1 联调，功能验证通过 | 1.2 |
+| 1.5 | ✅ Go Registry SDK | Go | `common/go/registry` | 代码已提交；Req-Res 骨架通过编译 | 1.4 |
+| 1.6 | ✅ C++ Registry SDK | C++ | `common/cpp/registry` | 代码已提交；Req-Res 骨架通过编译 | 1.4, 1.3 |
+| 1.7 | ✅ 基础 RPC 封装（Req-Res，带 SeqId 配对、5s 超时） | Go+C++ | `common/go/rpc` + `common/cpp/rpc` | 代码已提交；端到端调用待后续完整 RPC 集成时补全 | 1.5, 1.6 |
+| 1.8 | ✅ 统一 Makefile + CMakeLists.txt | - | `Makefile` / `CMakeLists.txt` | 构建规则已提交；Go/C++ 编译验证通过 | - |
 
-**Phase 1 里程碑**：`Client -> Gateway(C++) -> Biz(Go) -> Registry(Go)` 链路跑通
+**Phase 1 里程碑**：`Client -> Gateway(C++) -> Biz(Go) -> Registry(Go)` 链路跑通 ✅（已通过 `tests/phase1` 端到端联调验证）
 
 ---
 

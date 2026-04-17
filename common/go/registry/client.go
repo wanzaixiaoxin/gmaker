@@ -91,11 +91,12 @@ func (c *Client) Discover(serviceType string) (*pb.NodeList, error) {
 		return nil, err
 	}
 	var list pb.NodeList
-	if err := proto.Unmarshal(res.Msg, &list); err != nil {
+	if err := proto.Unmarshal([]byte(res.Msg), &list); err != nil {
 		// 这里假设 Result.Msg 中放的是序列化数据，实际上 proto 定义里 Result 的 Msg 是 string
 		// 更好的做法是在 common.go 中定义通用 wrapper，这里为了演示先用 string 承载 bytes（会有问题）
 		// 实际上应该用 bytes 字段或者直接返回 payload。
 		// 修正：call 方法应该返回 payload，而不是 Result。
+		_ = err
 	}
 	_ = list
 	return nil, fmt.Errorf("not fully implemented")

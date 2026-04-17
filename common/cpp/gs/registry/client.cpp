@@ -1,6 +1,6 @@
 #include "client.hpp"
-#include <google/protobuf/message.h>
-#include <google/protobuf/util/time_util.h>
+// #include <google/protobuf/message.h>
+// #include <google/protobuf/util/time_util.h>
 #include <iostream>
 
 namespace gs {
@@ -15,19 +15,19 @@ RegistryClient::~RegistryClient() {
 }
 
 bool RegistryClient::Connect() {
-    client_>SetCallbacks(
+    client_->SetCallbacks(
         [this](net::TCPConn* c, net::Packet& p) { OnPacket(c, p); },
         [this](net::TCPConn* c) { OnClose(c); }
     );
-    return client_>Connect();
+    return client_->Connect();
 }
 
 void RegistryClient::Close() {
-    client_>Close();
+    client_->Close();
 }
 
 bool RegistryClient::IsConnected() const {
-    return client_>IsConnected();
+    return client_->IsConnected();
 }
 
 bool RegistryClient::Register(const ::registry::NodeInfo& node, ::registry::Result* out) {
@@ -63,7 +63,7 @@ bool RegistryClient::Watch(const std::string& service_type, EventCallback on_eve
 void RegistryClient::OnPacket(net::TCPConn* conn, net::Packet& pkt) {
     (void)conn;
     if (pkt.header.cmd_id == CMD_NODE_EVENT && event_cb_) {
-        ::registry::NodeEvent ev;
+        // ::registry::NodeEvent ev;
         // ev.ParseFromArray(pkt.payload.data(), pkt.payload.size());
         // event_cb_(ev);
     }

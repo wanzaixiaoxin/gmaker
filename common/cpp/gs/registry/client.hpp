@@ -25,7 +25,7 @@ constexpr uint32_t CMD_DISCOVER  = 0x000F0003;
 constexpr uint32_t CMD_WATCH     = 0x000F0004;
 constexpr uint32_t CMD_NODE_EVENT = 0x000F0005;
 
-using EventCallback = std::function<void(const registry::NodeEvent&)>;
+using EventCallback = std::function<void(const ::registry::NodeEvent&)>;
 
 class RegistryClient {
 public:
@@ -37,13 +37,13 @@ public:
     bool IsConnected() const;
 
     // 注册节点（Req-Res 配对待 RPC 层完成后精确实现）
-    bool Register(const registry::NodeInfo& node, registry::Result* out);
+    bool Register(const ::registry::NodeInfo& node, ::registry::Result* out);
 
     // 心跳
-    bool Heartbeat(const std::string& node_id, registry::Result* out);
+    bool Heartbeat(const std::string& node_id, ::registry::Result* out);
 
     // 发现节点
-    bool Discover(const std::string& service_type, registry::NodeList* out);
+    bool Discover(const std::string& service_type, ::registry::NodeList* out);
 
     // 监听节点变更（建立 Watch 长连接）
     bool Watch(const std::string& service_type, EventCallback on_event);
