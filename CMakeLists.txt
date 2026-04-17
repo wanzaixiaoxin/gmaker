@@ -35,6 +35,11 @@ set(CPP_CONFIG_SOURCES
     common/cpp/gs/config/config.cpp
 )
 
+set(CPP_CRYPTO_SOURCES
+    common/cpp/gs/crypto/aes_gcm.cpp
+    common/cpp/gs/crypto/hmac.cpp
+)
+
 # ==================== 网关服务 ====================
 add_executable(gateway-cpp
     services/gateway-cpp/main.cpp
@@ -42,6 +47,7 @@ add_executable(gateway-cpp
     ${CPP_RPC_SOURCES}
     ${CPP_REGISTRY_SOURCES}
     ${CPP_CONFIG_SOURCES}
+    ${CPP_CRYPTO_SOURCES}
 )
 
 target_include_directories(gateway-cpp PRIVATE
@@ -52,7 +58,7 @@ target_include_directories(gateway-cpp PRIVATE
 
 target_link_libraries(gateway-cpp toml11::toml11)
 if(WIN32)
-    target_link_libraries(gateway-cpp ws2_32)
+    target_link_libraries(gateway-cpp ws2_32 bcrypt)
 endif()
 
 # ==================== 实时服 ====================
@@ -62,6 +68,7 @@ add_executable(realtime-cpp
     ${CPP_RPC_SOURCES}
     ${CPP_REGISTRY_SOURCES}
     ${CPP_CONFIG_SOURCES}
+    ${CPP_CRYPTO_SOURCES}
 )
 
 target_include_directories(realtime-cpp PRIVATE
@@ -72,7 +79,21 @@ target_include_directories(realtime-cpp PRIVATE
 
 target_link_libraries(realtime-cpp toml11::toml11)
 if(WIN32)
-    target_link_libraries(realtime-cpp ws2_32)
+    target_link_libraries(realtime-cpp ws2_32 bcrypt)
+endif()
+
+# ==================== 测试可执行文件 ====================
+add_executable(test-crypto
+    common/cpp/gs/crypto/test.cpp
+    common/cpp/gs/crypto/aes_gcm.cpp
+    common/cpp/gs/crypto/hmac.cpp
+)
+target_include_directories(test-crypto PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp
+)
+if(WIN32)
+    target_link_libraries(test-crypto bcrypt)
 endif()
 
 # TODO: 后续添加 protobuf 库、asio/libuv、gtest 等依赖

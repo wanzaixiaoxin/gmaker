@@ -39,14 +39,14 @@
 
 | # | 任务 | 负责语言 | 交付物 | 验收标准 | 依赖 |
 |---|------|---------|--------|---------|------|
-| 2.1 | Redis Cluster 部署规范与 Docker Compose 脚本 | - | `tools/deploy/redis/` | 本地启动 3 主 3 从集群，`cluster info` 正常 | - |
-| 2.2 | DBProxy Go：Redis 代理（连接池、Pipeline、Hot Key 限流） | Go | `services/dbproxy-go` | Biz 通过 DBProxy 1w QPS Redis 读写 | 1.2 |
-| 2.3 | DBProxy Go：MySQL 代理（连接池、分库分表路由接口） | Go | `services/dbproxy-go` | 支持按 UID 哈希路由到不同库 | 1.2 |
-| 2.4 | Snowflake ID 生成器（Go+C++ 双语言） | Go+C++ | `common/go/idgen` + `common/cpp/idgen` | 10 个节点并发生成 100w ID 无冲突 | - |
-| 2.5 | 配置中心 MVP：TOML/YAML 加载 + HTTP 热重载 | Go+C++ | `common/go/config` + `common/cpp/config` | 调用 `/admin/reload` 后配置生效 | - |
-| 2.6 | 基础错误码体系 `spec/errors.toml` | - | `spec/errors.toml` | 全服务错误码不冲突、有文档 | - |
+| 2.1 | ✅ Redis Cluster 部署规范与 Docker Compose 脚本 | - | `tools/deploy/redis/` | 本地启动 3 主 3 从集群，`cluster info` 正常 | - |
+| 2.2 | ✅ DBProxy Go：Redis 代理（连接池、Pipeline、Hot Key 限流） | Go | `services/dbproxy-go` | Biz 通过 DBProxy 1w QPS Redis 读写 | 1.2 |
+| 2.3 | ✅ DBProxy Go：MySQL 代理（连接池、分库分表路由接口） | Go | `services/dbproxy-go` | 支持按 UID 哈希路由到不同库 | 1.2 |
+| 2.4 | ✅ Snowflake ID 生成器（Go+C++ 双语言） | Go+C++ | `common/go/idgen` + `common/cpp/idgen` | 10 个节点并发生成 100w ID 无冲突 | - |
+| 2.5 | ✅ 配置中心 MVP：TOML/YAML 加载 + HTTP 热重载 | Go+C++ | `common/go/config` + `common/cpp/config` | 调用 `/admin/reload` 后配置生效 | - |
+| 2.6 | ✅ 基础错误码体系 `spec/errors.toml` | - | `spec/errors.toml` | 全服务错误码不冲突、有文档 | - |
 
-**Phase 2 里程碑**：Biz 服能完成"登录 -> 读取玩家数据 -> 修改 -> 写回"完整链路
+**Phase 2 里程碑**：Biz 服能完成"登录 -> 读取玩家数据 -> 修改 -> 写回"完整链路 ✅（代码已提交；Biz 已对接 DBProxy，实现 Login/GetPlayer/UpdatePlayer；集成测试位于 `tests/phase2/main.go`，需本地启动 MySQL+Redis 后运行）
 
 ---
 

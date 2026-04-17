@@ -34,7 +34,11 @@ build-go:
 build-cpp:
 	@echo "Building C++ services..."
 	@mkdir -p build
+ifeq ($(OS),Windows_NT)
+	cmd /C "cd /d build && cmake --build . --config Release"
+else
 	cd build && cmake --build . --config Release
+endif
 	@echo "C++ build done."
 
 # ==================== 测试 ====================
