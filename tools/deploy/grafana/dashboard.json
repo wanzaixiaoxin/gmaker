@@ -1,0 +1,112 @@
+{
+  "dashboard": {
+    "title": "Game Server MVP",
+    "tags": ["gmaker", "mvp"],
+    "timezone": "browser",
+    "schemaVersion": 36,
+    "refresh": "5s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Gateway QPS",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(gateway_requests_total[1m])",
+            "legendFormat": "QPS"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Biz QPS",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(biz_requests_total[1m])",
+            "legendFormat": "QPS"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Online Connections",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "gateway_connections",
+            "legendFormat": "Gateway"
+          },
+          {
+            "expr": "biz_connections",
+            "legendFormat": "Biz"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "Gateway Latency P99",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, rate(gateway_request_duration_ms_bucket[1m]))",
+            "legendFormat": "P99"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(gateway_request_duration_ms_bucket[1m]))",
+            "legendFormat": "P95"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Biz Latency P99",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, rate(biz_request_duration_ms_bucket[1m]))",
+            "legendFormat": "P99"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(biz_request_duration_ms_bucket[1m]))",
+            "legendFormat": "P95"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 6,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(gateway_requests_total[1m]) - rate(gateway_success_total[1m])",
+            "legendFormat": "Gateway"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "Biz Nodes Healthy",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "biz_upstream_healthy",
+            "legendFormat": "Healthy"
+          },
+          {
+            "expr": "biz_upstream_total",
+            "legendFormat": "Total"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      }
+    ]
+  },
+  "overwrite": true
+}

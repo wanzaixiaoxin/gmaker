@@ -22,6 +22,7 @@ set(CPP_NET_SOURCES
     common/cpp/gs/net/tcp_server.cpp
     common/cpp/gs/net/tcp_client.cpp
     common/cpp/gs/net/upstream.cpp
+    common/cpp/gs/net/coalescer.cpp
 )
 
 set(CPP_RPC_SOURCES
@@ -54,6 +55,16 @@ set(CPP_REPLAY_SOURCES
     common/cpp/gs/replay/replay.cpp
 )
 
+set(CPP_METRICS_SOURCES
+    common/cpp/gs/metrics/metrics.cpp
+)
+
+set(CPP_REALTIME_SOURCES
+    common/cpp/gs/realtime/room.cpp
+    common/cpp/gs/realtime/compute_thread.cpp
+    common/cpp/gs/realtime/aoi.cpp
+)
+
 # ==================== 网关服务 ====================
 add_executable(gateway-cpp
     services/gateway-cpp/main.cpp
@@ -65,6 +76,7 @@ add_executable(gateway-cpp
     ${CPP_CRYPTO_SOURCES}
     ${CPP_LIMITER_SOURCES}
     ${CPP_REPLAY_SOURCES}
+    ${CPP_METRICS_SOURCES}
 )
 
 target_include_directories(gateway-cpp PRIVATE
@@ -90,6 +102,8 @@ add_executable(realtime-cpp
     ${CPP_CRYPTO_SOURCES}
     ${CPP_LIMITER_SOURCES}
     ${CPP_REPLAY_SOURCES}
+    ${CPP_METRICS_SOURCES}
+    ${CPP_REALTIME_SOURCES}
 )
 
 target_include_directories(realtime-cpp PRIVATE

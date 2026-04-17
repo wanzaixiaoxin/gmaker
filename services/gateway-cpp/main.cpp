@@ -10,9 +10,11 @@
 #include "gs/net/tcp_server.hpp"
 #include "gs/net/upstream.hpp"
 #include "gs/net/packet.hpp"
+#include "gs/net/coalescer.hpp"
 #include "gs/crypto/session.hpp"
 #include "gs/replay/replay.hpp"
 #include "gs/registry/client.hpp"
+#include "gs/metrics/metrics.hpp"
 #include "gs/errors.hpp"
 
 using namespace gs::net;
@@ -31,8 +33,19 @@ public:
     bool Start(uint16_t listen_port,
                const std::vector<std::pair<std::string, uint16_t>>& registry_addrs,
                const std::vector<BizNodeConfig>& fallback_biz_nodes,
-               const std::vector<uint8_t>& master_key) {
+               const std::vector<uint8_t>& master_key,
+               const std::string& metrics_addr = ":9081") {
         master_key_ = master_key;
+
+        // 启动 metrics HTTP 服务
+        gs::metrics::ServeDefaultHTTP(metrics_addr);
+        req_counter_ = gs::metrics::DefaultCounter("gateway_requests_total");
+        req_latency_ = gs::metrics::DefaultHistogram("gateway_request_duration_ms", {1, 5, 10, 25, 50, 100, 250, 500, 1000});
+        conn_gauge_  = gs::metrics::DefaultGauge("gateway_connections");
+
+        // 初始化写聚合器（Write Coalescing）
+        coalescer_ = std::make_unique<WriteCoalescer>(16); // 16ms 聚合窗口
+        coalescer_->Start();
 
         // 初始化 UpstreamPool
         biz_pool_ = std::make_unique<UpstreamPool>(
@@ -113,6 +126,7 @@ public:
 
     void Stop() {
         if (server_) server_->Stop();
+        if (coalescer_) coalescer_->Stop();
         if (biz_pool_) biz_pool_->Stop();
         if (reg_client_) reg_client_->Close();
     }
@@ -133,12 +147,19 @@ private:
     void OnClientConnect(TCPConn* conn) {
         std::lock_guard<std::mutex> lk(sessions_mtx_);
         clients_[conn->ID()] = conn;
+        conn_gauge_->Inc();
         std::cout << "Client connected: " << conn->ID() << std::endl;
     }
 
     void OnClientPacket(TCPConn* conn, Packet& pkt) {
+        auto start = std::chrono::steady_clock::now();
+        req_counter_->Inc();
+
         if (pkt.header.cmd_id == CMD_HANDSHAKE) {
             HandleHandshake(conn, pkt);
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - start).count();
+            req_latency_->Observe(static_cast<double>(ms));
             return;
         }
 
@@ -177,26 +198,53 @@ private:
             std::cerr << "No healthy biz node available to forward packet" << std::endl;
             // TODO: 向客户端返回 SERVICE_UNAVAILABLE 错误包
         }
+
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start).count();
+        req_latency_->Observe(static_cast<double>(ms));
     }
 
     void OnBizPacket(TCPConn* conn, Packet& pkt) {
         (void)conn;
-        // 广播给所有客户端，需要加密的则加密
-        std::lock_guard<std::mutex> lk(sessions_mtx_);
-        for (auto& [id, client] : clients_) {
-            auto it = sessions_.find(id);
-            if (it != sessions_.end()) {
+        // 使用 WriteCoalescer 聚合广播：收集所有目标连接后批量发送
+        std::vector<TCPConn*> targets_plain;
+        std::vector<uint64_t> targets_encrypted_ids;
+        std::vector<TCPConn*> targets_encrypted_conns;
+        {
+            std::lock_guard<std::mutex> lk(sessions_mtx_);
+            for (auto& [id, client] : clients_) {
+                auto it = sessions_.find(id);
+                if (it != sessions_.end()) {
+                    targets_encrypted_ids.push_back(id);
+                    targets_encrypted_conns.push_back(client);
+                } else {
+                    targets_plain.push_back(client);
+                }
+            }
+        }
+
+        // 明文连接直接通过 coalescer 广播
+        if (!targets_plain.empty()) {
+            coalescer_->Broadcast(targets_plain, pkt);
+        }
+
+        // 加密连接：各自加密后通过 coalescer 发送
+        if (!targets_encrypted_conns.empty()) {
+            std::lock_guard<std::mutex> lk(sessions_mtx_);
+            for (size_t i = 0; i < targets_encrypted_conns.size(); ++i) {
+                uint64_t id = targets_encrypted_ids[i];
+                TCPConn* client = targets_encrypted_conns[i];
+                auto it = sessions_.find(id);
+                if (it == sessions_.end()) continue;
                 try {
                     Packet encrypted_pkt = pkt;
                     encrypted_pkt.payload = EncryptPacketPayload(it->second, pkt.payload);
                     encrypted_pkt.header.flags |= static_cast<uint32_t>(Flag::ENCRYPT);
                     encrypted_pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(encrypted_pkt.payload.size());
-                    client->SendPacket(encrypted_pkt);
+                    coalescer_->Enqueue(client, encrypted_pkt);
                 } catch (const std::exception& e) {
                     std::cerr << "Encrypt failed for client " << id << ": " << e.what() << std::endl;
                 }
-            } else {
-                client->SendPacket(pkt);
             }
         }
     }
@@ -205,6 +253,7 @@ private:
         std::lock_guard<std::mutex> lk(sessions_mtx_);
         clients_.erase(conn->ID());
         sessions_.erase(conn->ID());
+        conn_gauge_->Dec();
         std::cout << "Client disconnected: " << conn->ID() << std::endl;
     }
 
@@ -278,12 +327,18 @@ private:
 
     std::unique_ptr<TCPServer> server_;
     std::unique_ptr<UpstreamPool> biz_pool_;
+    std::unique_ptr<WriteCoalescer> coalescer_;
     std::unique_ptr<gs::registry::RegistryClient> reg_client_;
     std::mutex sessions_mtx_;
     std::unordered_map<uint64_t, TCPConn*> clients_;
     std::unordered_map<uint64_t, std::vector<uint8_t>> sessions_;
     std::vector<uint8_t> master_key_;
     gs::replay::Checker replay_checker_{std::chrono::seconds(300)};
+
+    // metrics
+    gs::metrics::Counter*   req_counter_ = nullptr;
+    gs::metrics::Histogram* req_latency_ = nullptr;
+    gs::metrics::Gauge*     conn_gauge_  = nullptr;
 
     std::mutex stop_mtx_;
     std::condition_variable stop_cv_;

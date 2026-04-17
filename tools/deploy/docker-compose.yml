@@ -1,0 +1,174 @@
+version: "3.8"
+
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.9
+    command:
+      - /usr/local/bin/etcd
+      - --name=s1
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --initial-cluster=s1=http://etcd:2380
+      - --initial-cluster-token=gmaker-etcd
+      - --initial-cluster-state=new
+    ports:
+      - "2379:2379"
+    volumes:
+      - etcd-data:/etcd-data
+    networks:
+      - gmaker
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: game
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - gmaker
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - gmaker
+
+  registry-go:
+    build:
+      context: ../..
+      dockerfile: services/registry-go/Dockerfile
+    depends_on:
+      - etcd
+    environment:
+      - REGISTRY_ETCD_ENDPOINTS=etcd:2379
+      - REGISTRY_LISTEN=:2379
+    ports:
+      - "2380:2379"
+    networks:
+      - gmaker
+    command: ["/app/registry-go", "-listen=:2379", "-etcd=etcd:2379"]
+
+  dbproxy-go:
+    build:
+      context: ../..
+      dockerfile: services/dbproxy-go/Dockerfile
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      - DBPROXY_MYSQL_DSN=root:root123@tcp(mysql:3306)/game
+      - DBPROXY_REDIS_ADDR=redis:6379
+    ports:
+      - "3307:3307"
+    networks:
+      - gmaker
+    command: ["/app/dbproxy-go", "-listen=:3307", "-mysql=root:root123@tcp(mysql:3306)/game", "-redis=redis:6379"]
+
+  biz-go-1:
+    build:
+      context: ../..
+      dockerfile: services/biz-go/Dockerfile
+    depends_on:
+      - registry-go
+      - dbproxy-go
+    environment:
+      - BIZ_NODE_ID=1
+    ports:
+      - "8082:8082"
+      - "9082:9082"
+    networks:
+      - gmaker
+    command: ["/app/biz-go", "-listen=:8082", "-registry=registry-go:2379", "-dbproxy=dbproxy-go:3307", "-node-id=1", "-metrics=:9082"]
+
+  biz-go-2:
+    build:
+      context: ../..
+      dockerfile: services/biz-go/Dockerfile
+    depends_on:
+      - registry-go
+      - dbproxy-go
+    environment:
+      - BIZ_NODE_ID=2
+    ports:
+      - "8083:8083"
+      - "9083:9083"
+    networks:
+      - gmaker
+    command: ["/app/biz-go", "-listen=:8083", "-registry=registry-go:2379", "-dbproxy=dbproxy-go:3307", "-node-id=2", "-metrics=:9083"]
+
+  gateway-cpp:
+    build:
+      context: ../..
+      dockerfile: services/gateway-cpp/Dockerfile
+    depends_on:
+      - registry-go
+      - biz-go-1
+      - biz-go-2
+    ports:
+      - "8081:8081"
+      - "9081:9081"
+    networks:
+      - gmaker
+    command: ["/app/gateway-cpp", "8081", "registry-go:2379", "biz-go-1:8082,biz-go-2:8083"]
+
+  realtime-cpp:
+    build:
+      context: ../..
+      dockerfile: services/realtime-cpp/Dockerfile
+    depends_on:
+      - registry-go
+      - gateway-cpp
+    ports:
+      - "8084:8084"
+      - "9090:9090"
+    networks:
+      - gmaker
+    command: ["/app/realtime-cpp", "8084", "registry-go:2379", "gateway-cpp:8081"]
+
+  logstats-go:
+    build:
+      context: ../..
+      dockerfile: services/logstats-go/Dockerfile
+    ports:
+      - "8085:8085"
+      - "8086:8086"
+    networks:
+      - gmaker
+    command: ["/app/logstats-go", "-listen=:8085", "-http=:8086"]
+
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    volumes:
+      - ./grafana/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9091:9090"
+    networks:
+      - gmaker
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    volumes:
+      - ./grafana/dashboard.json:/var/lib/grafana/dashboards/dashboard.json:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - gmaker
+
+volumes:
+  etcd-data:
+  mysql-data:
+  grafana-data:
+
+networks:
+  gmaker:
+    driver: bridge

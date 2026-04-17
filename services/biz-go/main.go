@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"strconv"
@@ -16,9 +15,12 @@ import (
 	"time"
 
 	"github.com/gmaker/game-server/common/go/idgen"
+	"github.com/gmaker/game-server/common/go/logger"
+	"github.com/gmaker/game-server/common/go/metrics"
 	"github.com/gmaker/game-server/common/go/net"
 	"github.com/gmaker/game-server/common/go/registry"
 	"github.com/gmaker/game-server/common/go/rpc"
+	"github.com/gmaker/game-server/common/go/trace"
 	bizpb "github.com/gmaker/game-server/gen/go/biz"
 	commonpb "github.com/gmaker/game-server/gen/go/common"
 	dbproxypb "github.com/gmaker/game-server/gen/go/dbproxy"
@@ -51,8 +53,19 @@ func main() {
 		registryAddrs = flag.String("registry", "127.0.0.1:2379", "Registry addresses, comma separated")
 		dbproxyAddrs  = flag.String("dbproxy", "127.0.0.1:3307", "DBProxy addresses, comma separated")
 		nodeID        = flag.Int64("node-id", 1, "Snowflake node ID")
+		metricsAddr   = flag.String("metrics", ":9082", "Metrics HTTP address")
 	)
 	flag.Parse()
+
+	// 初始化结构化日志
+	log := logger.NewWithService("biz", fmt.Sprintf("biz-%d", *nodeID))
+	logger.SetDefault(log)
+
+	// 启动 Prometheus metrics HTTP 服务
+	metrics.ServeDefaultHTTP(*metricsAddr)
+	reqCounter := metrics.DefaultCounter("biz_requests_total")
+	reqLatency := metrics.DefaultHistogram("biz_request_duration_ms", []int64{1, 5, 10, 25, 50, 100, 250, 500, 1000})
+	connGauge := metrics.DefaultGauge("biz_connections")
 
 	// 初始化 Snowflake ID 生成器
 	idGen, err := idgen.NewSnowflake(*nodeID)
@@ -77,7 +90,7 @@ func main() {
 	if _, err := regClient.Register(node); err != nil {
 		log.Fatalf("register failed: %v", err)
 	}
-	log.Println("Biz registered to registry")
+	log.Info("Biz registered to registry")
 
 	// 连接 DBProxy（多节点）
 	dbClient := NewDBProxyClient(strings.Split(*dbproxyAddrs, ","))
@@ -85,10 +98,10 @@ func main() {
 		log.Fatalf("connect dbproxy failed: %v", err)
 	}
 	defer dbClient.Close()
-	log.Println("Biz connected to dbproxy")
+	log.Info("Biz connected to dbproxy")
 
 	// 业务服务层（与 DBProxy 客户端解耦）
-	playerSvc := NewPlayerService(dbClient, idGen)
+	playerSvc := NewPlayerService(dbClient, idGen, log)
 
 	// 确保 player 表存在
 	if err := ensurePlayerTable(playerSvc); err != nil {
@@ -99,49 +112,61 @@ func main() {
 	cfg := net.ServerConfig{
 		Addr: *listenAddr,
 		OnData: func(conn *net.TCPConn, pkt *net.Packet) {
+			start := time.Now()
+			connGauge.Inc()
+			reqCounter.Inc()
 			handleBizPacket(conn, pkt, playerSvc)
+			reqLatency.Observe(float64(time.Since(start).Milliseconds()))
+			connGauge.Dec()
 		},
 		OnClose: func(conn *net.TCPConn) {
-			log.Printf("Biz connection closed: %s", conn.ID())
+			log.Infof("Biz connection closed: %s", conn.ID())
 		},
 	}
 	srv := net.NewTCPServer(cfg)
 	if err := srv.Start(); err != nil {
 		log.Fatalf("start biz server failed: %v", err)
 	}
-	log.Printf("Biz server started on %s", *listenAddr)
+	log.Infof("Biz server started on %s", *listenAddr)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("shutting down biz server...")
+	log.Info("shutting down biz server...")
 	srv.Stop()
 }
 
 func handleBizPacket(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
+	ctx, traceID := trace.Ensure(context.Background())
+	_ = ctx
+	log := svc.log.WithTrace(traceID)
 	switch pkt.CmdID {
 	case CmdLoginReq:
-		handleLogin(conn, pkt, svc)
+		log.Infof("[%s] login req", traceID)
+		handleLogin(conn, pkt, svc, traceID)
 	case CmdGetPlayerReq:
-		handleGetPlayer(conn, pkt, svc)
+		log.Infof("[%s] get_player req", traceID)
+		handleGetPlayer(conn, pkt, svc, traceID)
 	case CmdUpdatePlayerReq:
-		handleUpdatePlayer(conn, pkt, svc)
+		log.Infof("[%s] update_player req", traceID)
+		handleUpdatePlayer(conn, pkt, svc, traceID)
 	case CmdPing:
 		handlePing(conn, pkt)
 	default:
-		log.Printf("unknown cmd_id: 0x%08X", pkt.CmdID)
+		log.Warnf("unknown cmd_id: 0x%08X", pkt.CmdID)
 	}
 }
 
-func handleLogin(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
+func handleLogin(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService, traceID string) {
 	var req loginpb.LoginReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendLoginRes(conn, pkt.SeqID, 1, "", 0, 0)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx := trace.WithContext(context.Background(), traceID)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	// 查询账号
@@ -150,7 +175,7 @@ func handleLogin(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
 		// 账号不存在则创建
 		player, err = svc.CreatePlayer(ctx, req.Account, hashPassword(req.Password))
 		if err != nil {
-			log.Printf("create player failed: %v", err)
+			svc.log.WithTrace(traceID).Errorf("create player failed: %v", err)
 			sendLoginRes(conn, pkt.SeqID, 1, "", 0, 0)
 			return
 		}
@@ -162,20 +187,21 @@ func handleLogin(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
 
 	// 缓存 token 到 Redis
 	if err := svc.SetToken(ctx, player.PlayerId, token, 24*3600); err != nil {
-		log.Printf("set token failed: %v", err)
+		svc.log.WithTrace(traceID).Errorf("set token failed: %v", err)
 	}
 
 	sendLoginRes(conn, pkt.SeqID, 0, token, player.PlayerId, expireAt)
 }
 
-func handleGetPlayer(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
+func handleGetPlayer(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService, traceID string) {
 	var req bizpb.GetPlayerReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendGetPlayerRes(conn, pkt.SeqID, 1, nil)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx := trace.WithContext(context.Background(), traceID)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	player, err := svc.QueryPlayerByID(ctx, req.PlayerId)
@@ -186,18 +212,19 @@ func handleGetPlayer(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
 	sendGetPlayerRes(conn, pkt.SeqID, 0, player)
 }
 
-func handleUpdatePlayer(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
+func handleUpdatePlayer(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService, traceID string) {
 	var req bizpb.UpdatePlayerReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendUpdatePlayerRes(conn, pkt.SeqID, 1)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx := trace.WithContext(context.Background(), traceID)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	if err := svc.UpdatePlayer(ctx, req.PlayerId, req.Nickname, req.Coin, req.Diamond); err != nil {
-		log.Printf("update player failed: %v", err)
+		svc.log.WithTrace(traceID).Errorf("update player failed: %v", err)
 		sendUpdatePlayerRes(conn, pkt.SeqID, 1)
 		return
 	}
@@ -241,7 +268,7 @@ func sendUpdatePlayerRes(conn *net.TCPConn, seqID uint32, code uint32) {
 func sendProto(conn *net.TCPConn, seqID uint32, cmdID uint32, msg proto.Message) {
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		log.Printf("marshal error: %v", err)
+		logger.Errorf("marshal error: %v", err)
 		return
 	}
 	pkt := &net.Packet{
@@ -309,10 +336,11 @@ func (c *DBProxyClient) Call(ctx context.Context, cmdID uint32, payload []byte) 
 type PlayerService struct {
 	db    *DBProxyClient
 	idGen *idgen.Snowflake
+	log   *logger.Logger
 }
 
-func NewPlayerService(db *DBProxyClient, idGen *idgen.Snowflake) *PlayerService {
-	return &PlayerService{db: db, idGen: idGen}
+func NewPlayerService(db *DBProxyClient, idGen *idgen.Snowflake, log *logger.Logger) *PlayerService {
+	return &PlayerService{db: db, idGen: idGen, log: log}
 }
 
 func (s *PlayerService) QueryPlayerByAccount(ctx context.Context, account string) (*bizpb.PlayerBase, error) {
