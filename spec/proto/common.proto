@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package common;
+option go_package = "github.com/gmaker/game-server/gen/go/common";
+
+// 通用结果包装，适用于简单返回。
+message Result {
+    bool   ok   = 1;
+    uint32 code = 2;  // 0 表示成功，非零见 spec/errors.toml
+    string msg  = 3;
+}
+
+// 分页请求基础字段
+message PageReq {
+    uint32 page  = 1;  // 从 1 开始
+    uint32 limit = 2;  // 默认 20，最大 100
+}
+
+// 分页响应基础字段
+message PageRes {
+    uint32 page       = 1;
+    uint32 limit      = 2;
+    uint32 total      = 3;
+    uint32 total_page = 4;
+}
+
+// 空请求/空响应占位
+message Empty {}

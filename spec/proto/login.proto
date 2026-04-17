@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package login;
+option go_package = "github.com/gmaker/game-server/gen/go/login";
+
+import "common.proto";
+
+// ==================== 登录请求/响应 ====================
+
+message LoginReq {
+    string account  = 1;  // 账号
+    string password = 2;  // 密码（客户端已做基础哈希）
+    string platform = 3;  // 平台标识：ios / android / pc / web
+    string version  = 4;  // 客户端版本号
+}
+
+message LoginRes {
+    common.Result result = 1;
+    string token         = 2;  // JWT 或自定义 Session Token
+    uint64 player_id     = 3;
+    uint64 expire_at     = 4;  // Token 过期时间戳
+}
+
+// ==================== 注册请求/响应 ====================
+
+message RegisterReq {
+    string account  = 1;
+    string password = 2;
+    string platform = 3;
+}
+
+message RegisterRes {
+    common.Result result = 1;
+    uint64 player_id     = 2;
+}
+
+// ==================== Token 校验（内部服务间调用） ====================
+
+message VerifyTokenReq {
+    string token = 1;
+}
+
+message VerifyTokenRes {
+    common.Result result = 1;
+    uint64 player_id     = 2;
+    uint64 expire_at     = 3;
+}

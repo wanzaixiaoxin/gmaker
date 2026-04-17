@@ -1,0 +1,33 @@
+# RPC 行为契约
+# 定义框架内部 RPC 的通用行为模式与超时策略
+
+patterns:
+  req_res:
+    description: "同步请求-响应模式"
+    timeout_ms: 5000
+    max_retry: 3
+    retry_interval_ms: 100
+    use_seq_id: true
+
+  fire_forget:
+    description: "单向发送，不等待响应"
+    timeout_ms: 0
+    max_retry: 1
+    use_seq_id: false
+
+  broadcast:
+    description: "广播到多个节点或玩家"
+    timeout_ms: 3000
+    max_retry: 1
+    use_seq_id: false
+
+transport:
+  codec: protobuf3
+  frame_header_bytes: 18
+  max_payload_bytes: 16777216  # 16MB
+
+discovery:
+  provider: registry_etcd
+  heartbeat_interval_sec: 5
+  heartbeat_ttl_sec: 15
+  refresh_interval_sec: 10

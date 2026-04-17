@@ -1,0 +1,58 @@
+# 全局错误码定义
+# 范围划分：
+#   0    : 成功
+#   1~99 : 通用错误
+#   100~199 : 认证/登录相关
+#   200~299 : 注册中心/服务发现
+#   300~399 : 数据库/缓存
+#   400~499 : 业务逻辑
+#   500~599 : 实时服
+#   900~999 : 网关/网络
+
+[common]
+OK              = 0
+UNKNOWN_ERROR   = 1
+INVALID_PARAM   = 2
+TIMEOUT         = 3
+RATE_LIMITED    = 4
+NOT_FOUND       = 5
+INTERNAL_ERROR  = 6
+
+[auth]
+AUTH_FAILED     = 100
+TOKEN_EXPIRED   = 101
+TOKEN_INVALID   = 102
+ACCOUNT_EXISTS  = 103
+ACCOUNT_NOT_FOUND = 104
+PASSWORD_WRONG  = 105
+
+[registry]
+NODE_NOT_FOUND      = 200
+SERVICE_UNAVAILABLE = 201
+REGISTER_FAILED     = 202
+HEARTBEAT_TIMEOUT   = 203
+
+[dbproxy]
+DB_CONN_FAILED  = 300
+REDIS_ERROR     = 301
+MYSQL_ERROR     = 302
+CACHE_MISS      = 303
+
+[biz]
+PLAYER_NOT_FOUND = 400
+ITEM_NOT_FOUND   = 401
+NOT_ENOUGH_COIN  = 402
+NOT_ENOUGH_DIAMOND = 403
+
+[realtime]
+ROOM_NOT_FOUND      = 500
+ROOM_FULL           = 501
+ALREADY_IN_ROOM     = 502
+NOT_IN_ROOM         = 503
+SYNC_ERROR          = 504
+
+[gateway]
+PACKET_TOO_LARGE    = 900
+INVALID_MAGIC       = 901
+UNKNOWN_CMD_ID      = 902
+CONN_KICKED         = 903

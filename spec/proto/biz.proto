@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package biz;
+option go_package = "github.com/gmaker/game-server/gen/go/biz";
+
+import "common.proto";
+
+// ==================== 玩家基础数据 ====================
+
+message PlayerBase {
+    uint64 player_id = 1;
+    string nickname  = 2;
+    uint32 level     = 3;
+    uint64 exp       = 4;
+    uint64 coin      = 5;
+    uint64 diamond   = 6;
+    uint64 create_at = 7;
+    uint64 login_at  = 8;
+}
+
+message GetPlayerReq {
+    uint64 player_id = 1;
+}
+
+message GetPlayerRes {
+    common.Result result = 1;
+    PlayerBase    player = 2;
+}
+
+// ==================== 背包物品 ====================
+
+message Item {
+    uint32 item_id  = 1;
+    uint64 count    = 2;
+}
+
+message GetBagReq {
+    uint64 player_id = 1;
+}
+
+message GetBagRes {
+    common.Result result = 1;
+    repeated Item items  = 2;
+}
+
+// ==================== 心跳保活（业务层） ====================
+
+message Ping {
+    uint64 client_time = 1;
+}
+
+message Pong {
+    uint64 client_time = 1;
+    uint64 server_time = 2;
+}
