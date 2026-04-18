@@ -164,13 +164,21 @@ bool UpstreamPool::TryConnect(UpstreamNode* node) {
         std::cout << "UpstreamPool: connected to " << node->host << ":" << node->port << std::endl;
 
         // 设置关闭回调：节点断开时标记为不健康
+        // 使用 addr 字符串作为查找键，避免 lambda 捕获裸指针导致 node 被 RemoveNode 销毁后 UAF
+        std::string addr = NodeAddr(node);
         node->client->SetCallbacks(
             on_data_,
-            [this, node](TCPConn*) {
-                node->healthy.store(false);
-                std::cerr << "UpstreamPool: disconnected from " << node->host << ":" << node->port << std::endl;
-                if (on_node_event_) {
-                    on_node_event_(NodeAddr(node), false);
+            [this, addr](TCPConn*) {
+                std::lock_guard<std::mutex> lk(nodes_mtx_);
+                for (auto& n : nodes_) {
+                    if (NodeAddr(n.get()) == addr) {
+                        n->healthy.store(false);
+                        std::cerr << "UpstreamPool: disconnected from " << addr << std::endl;
+                        if (on_node_event_) {
+                            on_node_event_(addr, false);
+                        }
+                        return;
+                    }
                 }
             }
         );

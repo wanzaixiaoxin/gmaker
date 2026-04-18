@@ -6,7 +6,7 @@ import (
 )
 
 func TestCircuitBreakerStateTransition(t *testing.T) {
-	cb := NewCircuitBreaker(3, 2, 100*time.Millisecond)
+	cb := NewCircuitBreaker(3, 2, 1, 100*time.Millisecond)
 
 	if cb.CurrentState() != StateClosed {
 		t.Fatalf("expected initial state Closed, got %v", cb.CurrentState())
@@ -44,7 +44,7 @@ func TestCircuitBreakerStateTransition(t *testing.T) {
 }
 
 func TestCircuitBreakerHalfOpenFail(t *testing.T) {
-	cb := NewCircuitBreaker(2, 2, 100*time.Millisecond)
+	cb := NewCircuitBreaker(2, 2, 1, 100*time.Millisecond)
 	cb.RecordFailure()
 	cb.RecordFailure()
 	if cb.CurrentState() != StateOpen {

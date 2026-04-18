@@ -65,7 +65,7 @@ void WriteCoalescer::DoFlush() {
     }
 
     for (auto& [conn, buf] : merged) {
-        if (buf.empty()) continue;
+        if (buf.empty() || !conn || conn->IsClosed()) continue;
         conn->Send(buf);
     }
 }

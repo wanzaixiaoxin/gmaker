@@ -9,6 +9,11 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <cerrno>
+
+using SOCKET = int;
+constexpr int INVALID_SOCKET = -1;
+constexpr int SOCKET_ERROR = -1;
 #endif
 
 #include <cstdint>
@@ -19,6 +24,7 @@
 #include <queue>
 #include <condition_variable>
 #include "packet.hpp"
+#include "../crypto/session.hpp"
 
 namespace gs {
 namespace net {
@@ -40,6 +46,9 @@ public:
     void SetCallbacks(DataCallback on_data, CloseCallback on_close);
     void Start();
 
+    // 设置会话密钥，启用 AES-GCM 加密通信
+    void SetSessionKey(const std::vector<uint8_t>& key);
+
     bool Send(const std::vector<uint8_t>& data);
     bool SendPacket(const Packet& pkt);
 
@@ -49,6 +58,7 @@ public:
 private:
     void ReadLoop();
     void WriteLoop();
+    void MonitorLoop();
     bool ReadN(uint8_t* buf, size_t n);
 
     SocketType socket_;
@@ -60,10 +70,13 @@ private:
 
     std::thread read_thread_;
     std::thread write_thread_;
+    std::thread monitor_thread_;
 
     std::mutex write_mtx_;
     std::condition_variable write_cv_;
     std::queue<std::vector<uint8_t>> write_queue_;
+
+    std::vector<uint8_t> session_key_; // 若非空则启用 AES-GCM 加密
 };
 
 } // namespace net

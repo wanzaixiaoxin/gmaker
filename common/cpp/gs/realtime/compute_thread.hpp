@@ -38,7 +38,7 @@ public:
     // 投递消息（线程安全，可从 IO Thread 调用）
     void PushMessage(uint32_t room_id, MessagePtr msg);
 
-    // 创建 Room（必须在 Start 前调用）
+    // 创建 Room（必须在 Start 前调用，Start 后调用会返回 false）
     bool CreateRoom(const RoomConfig& cfg);
 
     // 设置广播回调（Compute Thread 产出消息 -> 外部投递到 Gateway）
@@ -52,13 +52,14 @@ private:
 
     std::thread thread_;
     std::atomic<bool> running_{false};
+    std::atomic<bool> started_{false};
 
     // 消息队列（外部 -> Compute Thread）
     std::mutex msg_mtx_;
     std::condition_variable msg_cv_;
     std::queue<Envelope> msg_queue_;
 
-    // Room 管理
+    // Room 管理（Start 前由外部线程写入，Start 后仅由 RunLoop 读取）
     std::unordered_map<uint32_t, std::unique_ptr<Room>> rooms_;
 
     OutputCallback output_cb_;

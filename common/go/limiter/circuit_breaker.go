@@ -19,22 +19,28 @@ const (
 type CircuitBreaker struct {
 	mu sync.RWMutex
 
-	failureThreshold int           // 触发熔断的连续错误次数
-	successThreshold int           // 半开状态下恢复所需的连续成功次数
-	timeout          time.Duration // 熔断持续时间
+	failureThreshold    int           // 触发熔断的连续错误次数
+	successThreshold    int           // 半开状态下恢复所需的连续成功次数
+	halfOpenMaxRequests int           // 半开状态下允许的最大并发探测数
+	timeout             time.Duration // 熔断持续时间
 
-	state       atomic.Int32
-	failures    atomic.Int32
-	successes   atomic.Int32
-	lastFailure time.Time
+	state        atomic.Int32
+	failures     atomic.Int32
+	successes    atomic.Int32
+	halfOpenReqs atomic.Int32 // 半开状态下当前在执行的请求数
+	lastFailure  time.Time
 }
 
 // NewCircuitBreaker 创建熔断器
-func NewCircuitBreaker(failureThreshold, successThreshold int, timeout time.Duration) *CircuitBreaker {
+func NewCircuitBreaker(failureThreshold, successThreshold, halfOpenMaxRequests int, timeout time.Duration) *CircuitBreaker {
+	if halfOpenMaxRequests <= 0 {
+		halfOpenMaxRequests = 1
+	}
 	cb := &CircuitBreaker{
-		failureThreshold: failureThreshold,
-		successThreshold: successThreshold,
-		timeout:          timeout,
+		failureThreshold:    failureThreshold,
+		successThreshold:    successThreshold,
+		halfOpenMaxRequests: halfOpenMaxRequests,
+		timeout:             timeout,
 	}
 	cb.state.Store(int32(StateClosed))
 	return cb
@@ -64,7 +70,11 @@ func (cb *CircuitBreaker) Allow() bool {
 		}
 		return false
 	}
-	// HalfOpen: allow probe requests (single thread for simplicity)
+	// HalfOpen: 限制并发探测数
+	if int(cb.halfOpenReqs.Add(1)) > cb.halfOpenMaxRequests {
+		cb.halfOpenReqs.Add(-1)
+		return false
+	}
 	return true
 }
 
@@ -72,6 +82,7 @@ func (cb *CircuitBreaker) Allow() bool {
 func (cb *CircuitBreaker) RecordSuccess() {
 	st := cb.CurrentState()
 	if st == StateHalfOpen {
+		cb.halfOpenReqs.Add(-1)
 		if cb.successes.Add(1) >= int32(cb.successThreshold) {
 			cb.state.Store(int32(StateClosed))
 			cb.failures.Store(0)
@@ -86,6 +97,7 @@ func (cb *CircuitBreaker) RecordSuccess() {
 func (cb *CircuitBreaker) RecordFailure() {
 	st := cb.CurrentState()
 	if st == StateHalfOpen {
+		cb.halfOpenReqs.Add(-1)
 		cb.transitionToOpen()
 		return
 	}

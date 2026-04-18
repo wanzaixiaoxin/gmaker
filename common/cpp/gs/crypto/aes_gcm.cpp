@@ -16,43 +16,86 @@
 namespace gs {
 namespace crypto {
 
+namespace {
+
+// RAII 包装器，确保 BCrypt 句柄在任何退出路径都被释放
+class BCryptAlgHandle {
+public:
+    explicit BCryptAlgHandle(BCRYPT_ALG_HANDLE h = nullptr) : h_(h) {}
+    ~BCryptAlgHandle() { if (h_) BCryptCloseAlgorithmProvider(h_, 0); }
+    BCryptAlgHandle(const BCryptAlgHandle&) = delete;
+    BCryptAlgHandle& operator=(const BCryptAlgHandle&) = delete;
+    BCryptAlgHandle(BCryptAlgHandle&& other) noexcept : h_(other.h_) { other.h_ = nullptr; }
+    BCryptAlgHandle& operator=(BCryptAlgHandle&& other) noexcept {
+        if (this != &other) {
+            if (h_) BCryptCloseAlgorithmProvider(h_, 0);
+            h_ = other.h_;
+            other.h_ = nullptr;
+        }
+        return *this;
+    }
+    BCRYPT_ALG_HANDLE get() const { return h_; }
+    explicit operator bool() const { return h_ != nullptr; }
+private:
+    BCRYPT_ALG_HANDLE h_;
+};
+
+class BCryptKeyHandle {
+public:
+    explicit BCryptKeyHandle(BCRYPT_KEY_HANDLE h = nullptr) : h_(h) {}
+    ~BCryptKeyHandle() { if (h_) BCryptDestroyKey(h_); }
+    BCryptKeyHandle(const BCryptKeyHandle&) = delete;
+    BCryptKeyHandle& operator=(const BCryptKeyHandle&) = delete;
+    BCryptKeyHandle(BCryptKeyHandle&& other) noexcept : h_(other.h_) { other.h_ = nullptr; }
+    BCryptKeyHandle& operator=(BCryptKeyHandle&& other) noexcept {
+        if (this != &other) {
+            if (h_) BCryptDestroyKey(h_);
+            h_ = other.h_;
+            other.h_ = nullptr;
+        }
+        return *this;
+    }
+    BCRYPT_KEY_HANDLE get() const { return h_; }
+    explicit operator bool() const { return h_ != nullptr; }
+private:
+    BCRYPT_KEY_HANDLE h_;
+};
+
+} // namespace
+
 std::vector<uint8_t> AESGCMEncrypt(const std::vector<uint8_t>& key,
                                    const std::vector<uint8_t>& plaintext) {
     if (key.size() != 32) {
         throw std::invalid_argument("key must be 32 bytes for AES-256");
     }
 
-    BCRYPT_ALG_HANDLE hAlg = nullptr;
-    if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_AES_GCM_ALGORITHM, nullptr, 0))) {
+    BCRYPT_ALG_HANDLE hAlgRaw = nullptr;
+    if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(&hAlgRaw, BCRYPT_AES_GCM_ALGORITHM, nullptr, 0))) {
         throw std::runtime_error("BCryptOpenAlgorithmProvider failed");
     }
+    BCryptAlgHandle hAlg(hAlgRaw);
 
     DWORD cbResult = 0;
     DWORD cbKeyObject = 0;
-    if (!NT_SUCCESS(BCryptGetProperty(hAlg, BCRYPT_OBJECT_LENGTH, (PBYTE)&cbKeyObject, sizeof(DWORD), &cbResult, 0))) {
-        BCryptCloseAlgorithmProvider(hAlg, 0);
+    if (!NT_SUCCESS(BCryptGetProperty(hAlg.get(), BCRYPT_OBJECT_LENGTH,
+                                      (PBYTE)&cbKeyObject, sizeof(DWORD), &cbResult, 0))) {
         throw std::runtime_error("BCryptGetProperty OBJECT_LENGTH failed");
     }
 
-    DWORD cbBlockLen = 0;
-    if (!NT_SUCCESS(BCryptGetProperty(hAlg, BCRYPT_BLOCK_LENGTH, (PBYTE)&cbBlockLen, sizeof(DWORD), &cbResult, 0))) {
-        BCryptCloseAlgorithmProvider(hAlg, 0);
-        throw std::runtime_error("BCryptGetProperty BLOCK_LENGTH failed");
-    }
-
     std::vector<uint8_t> keyObject(cbKeyObject);
-    BCRYPT_KEY_HANDLE hKey = nullptr;
-    if (!NT_SUCCESS(BCryptGenerateSymmetricKey(hAlg, &hKey, keyObject.data(), cbKeyObject, (PUCHAR)key.data(), (ULONG)key.size(), 0))) {
-        BCryptCloseAlgorithmProvider(hAlg, 0);
+    BCRYPT_KEY_HANDLE hKeyRaw = nullptr;
+    if (!NT_SUCCESS(BCryptGenerateSymmetricKey(hAlg.get(), &hKeyRaw,
+                                               keyObject.data(), cbKeyObject,
+                                               (PUCHAR)key.data(), (ULONG)key.size(), 0))) {
         throw std::runtime_error("BCryptGenerateSymmetricKey failed");
     }
+    BCryptKeyHandle hKey(hKeyRaw);
 
     // nonce (IV)
     constexpr size_t kNonceSize = 12;
     std::vector<uint8_t> nonce(kNonceSize);
-    if (!NT_SUCCESS(BCryptGenRandom(nullptr, nonce.data(), (ULONG)nonce.size(), BCRYPT_USE_SYSTEM_PREFERRED_RNG))) {
-        BCryptDestroyKey(hKey);
-        BCryptCloseAlgorithmProvider(hAlg, 0);
+    if (!NT_SUCCESS(BCryptGenRandom(nullptr, nonce.data(), (ULONG)nonce.size(),
+                                    BCRYPT_USE_SYSTEM_PREFERRED_RNG))) {
         throw std::runtime_error("BCryptGenRandom failed");
     }
 
@@ -65,28 +108,28 @@ std::vector<uint8_t> AESGCMEncrypt(const std::vector<uint8_t>& key,
     authInfo.pbTag = nullptr;
     authInfo.cbTag = 0;
 
+    // 先查询所需输出大小
     ULONG cbCipherText = 0;
-    std::vector<uint8_t> ciphertext(plaintext.size() + kTagSize);
-    if (!NT_SUCCESS(BCryptEncrypt(hKey, (PUCHAR)plaintext.data(), (ULONG)plaintext.size(), &authInfo,
-                                   nullptr, 0, ciphertext.data(), (ULONG)ciphertext.size(), &cbCipherText, 0))) {
-        BCryptDestroyKey(hKey);
-        BCryptCloseAlgorithmProvider(hAlg, 0);
-        throw std::runtime_error("BCryptEncrypt (size) failed");
+    if (!NT_SUCCESS(BCryptEncrypt(hKey.get(), (PUCHAR)plaintext.data(), (ULONG)plaintext.size(),
+                                   &authInfo, nullptr, 0, nullptr, 0, &cbCipherText, 0))) {
+        throw std::runtime_error("BCryptEncrypt (size query) failed");
     }
 
+    // 分配密文缓冲区（含 tag 空间）
+    std::vector<uint8_t> ciphertext(cbCipherText);
+
+    // 设置 tag 输出位置
     authInfo.pbTag = ciphertext.data() + plaintext.size();
     authInfo.cbTag = kTagSize;
-    if (!NT_SUCCESS(BCryptEncrypt(hKey, (PUCHAR)plaintext.data(), (ULONG)plaintext.size(), &authInfo,
-                                   nullptr, 0, ciphertext.data(), (ULONG)ciphertext.size(), &cbCipherText, 0))) {
-        BCryptDestroyKey(hKey);
-        BCryptCloseAlgorithmProvider(hAlg, 0);
+
+    ULONG cbResult2 = 0;
+    if (!NT_SUCCESS(BCryptEncrypt(hKey.get(), (PUCHAR)plaintext.data(), (ULONG)plaintext.size(),
+                                   &authInfo, nullptr, 0, ciphertext.data(),
+                                   (ULONG)ciphertext.size(), &cbResult2, 0))) {
         throw std::runtime_error("BCryptEncrypt failed");
     }
 
-    BCryptDestroyKey(hKey);
-    BCryptCloseAlgorithmProvider(hAlg, 0);
-
-    // format: nonce || ciphertext || tag
+    // 输出格式: nonce || ciphertext(with tag appended)
     std::vector<uint8_t> result;
     result.reserve(nonce.size() + ciphertext.size());
     result.insert(result.end(), nonce.begin(), nonce.end());
@@ -110,24 +153,27 @@ std::vector<uint8_t> AESGCMDecrypt(const std::vector<uint8_t>& key,
     std::vector<uint8_t> ciphertext(data.begin() + kNonceSize, data.end());
     size_t plaintextSize = ciphertext.size() - kTagSize;
 
-    BCRYPT_ALG_HANDLE hAlg = nullptr;
-    if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_AES_GCM_ALGORITHM, nullptr, 0))) {
+    BCRYPT_ALG_HANDLE hAlgRaw = nullptr;
+    if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(&hAlgRaw, BCRYPT_AES_GCM_ALGORITHM, nullptr, 0))) {
         throw std::runtime_error("BCryptOpenAlgorithmProvider failed");
     }
+    BCryptAlgHandle hAlg(hAlgRaw);
 
     DWORD cbResult = 0;
     DWORD cbKeyObject = 0;
-    if (!NT_SUCCESS(BCryptGetProperty(hAlg, BCRYPT_OBJECT_LENGTH, (PBYTE)&cbKeyObject, sizeof(DWORD), &cbResult, 0))) {
-        BCryptCloseAlgorithmProvider(hAlg, 0);
+    if (!NT_SUCCESS(BCryptGetProperty(hAlg.get(), BCRYPT_OBJECT_LENGTH,
+                                      (PBYTE)&cbKeyObject, sizeof(DWORD), &cbResult, 0))) {
         throw std::runtime_error("BCryptGetProperty OBJECT_LENGTH failed");
     }
 
     std::vector<uint8_t> keyObject(cbKeyObject);
-    BCRYPT_KEY_HANDLE hKey = nullptr;
-    if (!NT_SUCCESS(BCryptGenerateSymmetricKey(hAlg, &hKey, keyObject.data(), cbKeyObject, (PUCHAR)key.data(), (ULONG)key.size(), 0))) {
-        BCryptCloseAlgorithmProvider(hAlg, 0);
+    BCRYPT_KEY_HANDLE hKeyRaw = nullptr;
+    if (!NT_SUCCESS(BCryptGenerateSymmetricKey(hAlg.get(), &hKeyRaw,
+                                               keyObject.data(), cbKeyObject,
+                                               (PUCHAR)key.data(), (ULONG)key.size(), 0))) {
         throw std::runtime_error("BCryptGenerateSymmetricKey failed");
     }
+    BCryptKeyHandle hKey(hKeyRaw);
 
     BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO authInfo;
     BCRYPT_INIT_AUTH_MODE_INFO(authInfo);
@@ -138,11 +184,9 @@ std::vector<uint8_t> AESGCMDecrypt(const std::vector<uint8_t>& key,
 
     std::vector<uint8_t> plaintext(plaintextSize);
     ULONG cbPlaintext = 0;
-    NTSTATUS status = BCryptDecrypt(hKey, ciphertext.data(), (ULONG)plaintextSize, &authInfo,
-                                    nullptr, 0, plaintext.data(), (ULONG)plaintext.size(), &cbPlaintext, 0);
-
-    BCryptDestroyKey(hKey);
-    BCryptCloseAlgorithmProvider(hAlg, 0);
+    NTSTATUS status = BCryptDecrypt(hKey.get(), ciphertext.data(), (ULONG)plaintextSize,
+                                    &authInfo, nullptr, 0, plaintext.data(),
+                                    (ULONG)plaintext.size(), &cbPlaintext, 0);
 
     if (!NT_SUCCESS(status)) {
         throw std::runtime_error("BCryptDecrypt failed (invalid ciphertext or tag)");
@@ -213,6 +257,7 @@ std::vector<uint8_t> AESGCMEncrypt(const std::vector<uint8_t>& key,
     }
     EVP_CIPHER_CTX_free(ctx);
 
+    // 输出格式: nonce || ciphertext || tag
     std::vector<uint8_t> result;
     result.reserve(nonce.size() + ciphertext.size() + tag.size());
     result.insert(result.end(), nonce.begin(), nonce.end());

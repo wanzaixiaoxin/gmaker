@@ -35,9 +35,11 @@ func (c *Client) OnPacket(pkt *net.Packet) {
 	if ch, ok := c.pending.Load(pkt.SeqID); ok {
 		select {
 		case ch.(chan *net.Packet) <- pkt:
+			c.pending.Delete(pkt.SeqID)
 		default:
+			// 通道满时不删除 entry，让 Call() 的 defer 或超时逻辑清理，
+			// 避免响应被丢弃后 Call() 永远阻塞到 context 超时
 		}
-		c.pending.Delete(pkt.SeqID)
 	}
 }
 

@@ -1,11 +1,13 @@
 package config
 
 import (
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -29,7 +31,7 @@ func (l *Loader) SetOnReload(fn func()) {
 	l.onReload = fn
 }
 
-// Load 从文件加载配置
+// Load 从文件加载配置，根据扩展名自动选择 YAML 或 JSON 解析器
 func (l *Loader) Load() error {
 	absPath, err := filepath.Abs(l.path)
 	if err != nil {
@@ -48,8 +50,15 @@ func (l *Loader) Load() error {
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if err := yaml.Unmarshal(bytes, &l.data); err != nil {
-		return err
+
+	if strings.HasSuffix(strings.ToLower(absPath), ".json") {
+		if err := json.Unmarshal(bytes, &l.data); err != nil {
+			return err
+		}
+	} else {
+		if err := yaml.Unmarshal(bytes, &l.data); err != nil {
+			return err
+		}
 	}
 	log.Printf("[config] loaded from %s", absPath)
 	return nil

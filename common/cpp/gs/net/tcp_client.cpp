@@ -26,7 +26,11 @@ bool TCPClient::Connect() {
     ::inet_pton(AF_INET, host_.c_str(), &addr.sin_addr);
 
     if (::connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+#ifdef _WIN32
         closesocket(sock);
+#else
+        ::close(sock);
+#endif
         return false;
     }
 
@@ -48,10 +52,13 @@ void TCPClient::Close() {
 }
 
 void TCPClient::OnConnClose(TCPConn* conn) {
-    conn_ = nullptr;
+    if (conn_ == conn) {
+        conn_ = nullptr;
+    }
     if (user_on_close_) {
         user_on_close_(conn);
     }
+    delete conn;
 }
 
 } // namespace net

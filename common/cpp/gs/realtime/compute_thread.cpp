@@ -15,6 +15,7 @@ ComputeThread::~ComputeThread() {
 
 void ComputeThread::Start() {
     if (running_.exchange(true)) return;
+    started_.store(true);
     thread_ = std::thread([this] { RunLoop(); });
 }
 
@@ -38,6 +39,10 @@ void ComputeThread::PushMessage(uint32_t room_id, MessagePtr msg) {
 }
 
 bool ComputeThread::CreateRoom(const RoomConfig& cfg) {
+    if (started_.load()) {
+        std::cerr << "CreateRoom called after Start, room_id=" << cfg.room_id << std::endl;
+        return false;
+    }
     if (rooms_.find(cfg.room_id) != rooms_.end()) {
         return false;
     }

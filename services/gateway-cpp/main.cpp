@@ -206,20 +206,18 @@ private:
 
     void OnBizPacket(TCPConn* conn, Packet& pkt) {
         (void)conn;
-        // 使用 WriteCoalescer 聚合广播：收集所有目标连接后批量发送
+        // 单次加锁完成所有目标收集和加密发送，避免并发断开导致 UAF
+        std::lock_guard<std::mutex> lk(sessions_mtx_);
+
         std::vector<TCPConn*> targets_plain;
-        std::vector<uint64_t> targets_encrypted_ids;
-        std::vector<TCPConn*> targets_encrypted_conns;
-        {
-            std::lock_guard<std::mutex> lk(sessions_mtx_);
-            for (auto& [id, client] : clients_) {
-                auto it = sessions_.find(id);
-                if (it != sessions_.end()) {
-                    targets_encrypted_ids.push_back(id);
-                    targets_encrypted_conns.push_back(client);
-                } else {
-                    targets_plain.push_back(client);
-                }
+        std::vector<std::pair<TCPConn*, std::vector<uint8_t>>> targets_encrypted;
+
+        for (auto& [id, client] : clients_) {
+            auto it = sessions_.find(id);
+            if (it != sessions_.end()) {
+                targets_encrypted.emplace_back(client, it->second);
+            } else {
+                targets_plain.push_back(client);
             }
         }
 
@@ -229,22 +227,15 @@ private:
         }
 
         // 加密连接：各自加密后通过 coalescer 发送
-        if (!targets_encrypted_conns.empty()) {
-            std::lock_guard<std::mutex> lk(sessions_mtx_);
-            for (size_t i = 0; i < targets_encrypted_conns.size(); ++i) {
-                uint64_t id = targets_encrypted_ids[i];
-                TCPConn* client = targets_encrypted_conns[i];
-                auto it = sessions_.find(id);
-                if (it == sessions_.end()) continue;
-                try {
-                    Packet encrypted_pkt = pkt;
-                    encrypted_pkt.payload = EncryptPacketPayload(it->second, pkt.payload);
-                    encrypted_pkt.header.flags |= static_cast<uint32_t>(Flag::ENCRYPT);
-                    encrypted_pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(encrypted_pkt.payload.size());
-                    coalescer_->Enqueue(client, encrypted_pkt);
-                } catch (const std::exception& e) {
-                    std::cerr << "Encrypt failed for client " << id << ": " << e.what() << std::endl;
-                }
+        for (auto& [client, key] : targets_encrypted) {
+            try {
+                Packet encrypted_pkt = pkt;
+                encrypted_pkt.payload = EncryptPacketPayload(key, pkt.payload);
+                encrypted_pkt.header.flags |= static_cast<uint32_t>(Flag::ENCRYPT);
+                encrypted_pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(encrypted_pkt.payload.size());
+                coalescer_->Enqueue(client, encrypted_pkt);
+            } catch (const std::exception& e) {
+                std::cerr << "Encrypt failed: " << e.what() << std::endl;
             }
         }
     }

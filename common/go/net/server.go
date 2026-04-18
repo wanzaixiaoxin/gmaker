@@ -75,6 +75,18 @@ func (s *TCPServer) acceptLoop() {
 		if err != nil {
 			return
 		}
+		// 连接数上限检查
+		if s.config.MaxConn > 0 {
+			count := 0
+			s.conns.Range(func(_, _ interface{}) bool {
+				count++
+				return true
+			})
+			if count >= s.config.MaxConn {
+				conn.Close()
+				continue
+			}
+		}
 		s.wg.Add(1)
 		go s.handleConn(conn)
 	}

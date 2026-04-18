@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/gmaker/game-server/common/go/crypto"
 )
@@ -22,6 +23,7 @@ type TCPConn struct {
 	onData     func(*TCPConn, *Packet)
 	onClose    func(*TCPConn)
 	wg         sync.WaitGroup
+	closeOnce  sync.Once
 	sessionKey []byte // 若非空则启用 AES-GCM 加密
 }
 
@@ -66,29 +68,34 @@ func (c *TCPConn) Send(data []byte) bool {
 }
 
 // SendPacket 发送一个 Packet（若有 sessionKey 则自动加密）
+// 注意：本方法不修改入参 p，调用方可安全复用 Packet 对象
 func (c *TCPConn) SendPacket(p *Packet) bool {
+	encPkt := *p // copy header to avoid mutating caller's packet
 	if len(c.sessionKey) > 0 && len(p.Payload) > 0 {
 		enc, err := crypto.EncryptPacketPayload(c.sessionKey, p.Payload)
 		if err != nil {
 			return false
 		}
-		p.Payload = enc
-		p.Flags |= uint32(FlagEncrypt)
+		encPkt.Payload = enc
+		encPkt.Flags |= uint32(FlagEncrypt)
 	}
-	p.Length = HeaderSize + uint32(len(p.Payload))
-	return c.Send(p.Encode())
+	encPkt.Length = HeaderSize + uint32(len(encPkt.Payload))
+	return c.Send(encPkt.Encode())
 }
 
-// Close 优雅关闭连接
+// Close 优雅关闭连接。可被多次调用，也可被 readLoop/writeLoop 安全调用。
 func (c *TCPConn) Close() {
-	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
+	c.closeOnce.Do(func() {
+		atomic.StoreInt32(&c.closed, 1)
 		close(c.closeCh)
-		c.raw.Close()
+		if c.raw != nil {
+			c.raw.Close()
+		}
 		c.wg.Wait()
 		if c.onClose != nil {
 			c.onClose(c)
 		}
-	}
+	})
 }
 
 func (c *TCPConn) readLoop() {
@@ -100,14 +107,21 @@ func (c *TCPConn) readLoop() {
 		default:
 		}
 
+		// 使用 ReadDeadline 避免 select default 忙等，同时允许及时响应 closeCh
+		c.raw.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 		h, err := DecodeHeader(c.reader)
 		if err != nil {
-			c.Close()
+			c.raw.SetReadDeadline(time.Time{})
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			c.raw.Close()
 			return
 		}
+		c.raw.SetReadDeadline(time.Time{})
 		payload, err := ReadPayload(c.reader, h)
 		if err != nil {
-			c.Close()
+			c.raw.Close()
 			return
 		}
 
@@ -118,7 +132,7 @@ func (c *TCPConn) readLoop() {
 		if len(c.sessionKey) > 0 && (pkt.Flags&uint32(FlagEncrypt)) != 0 {
 			dec, err := crypto.DecryptPacketPayload(c.sessionKey, pkt.Payload)
 			if err != nil {
-				c.Close()
+				c.raw.Close()
 				return
 			}
 			pkt.Payload = dec
@@ -136,7 +150,7 @@ func (c *TCPConn) writeLoop() {
 		select {
 		case data := <-c.writeCh:
 			if _, err := c.raw.Write(data); err != nil {
-				c.Close()
+				c.raw.Close()
 				return
 			}
 		case <-c.closeCh:

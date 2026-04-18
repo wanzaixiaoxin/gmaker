@@ -10,7 +10,8 @@ TCPConn::TCPConn(SocketType sock, uint64_t id)
 }
 
 TCPConn::~TCPConn() {
-    Close();
+    // 确保监控线程先结束（它会负责 join read/write 线程）
+    if (monitor_thread_.joinable()) monitor_thread_.join();
 }
 
 void TCPConn::SetCallbacks(DataCallback on_data, CloseCallback on_close) {
@@ -18,9 +19,14 @@ void TCPConn::SetCallbacks(DataCallback on_data, CloseCallback on_close) {
     on_close_ = on_close;
 }
 
+void TCPConn::SetSessionKey(const std::vector<uint8_t>& key) {
+    session_key_ = key;
+}
+
 void TCPConn::Start() {
     read_thread_ = std::thread(&TCPConn::ReadLoop, this);
     write_thread_ = std::thread(&TCPConn::WriteLoop, this);
+    monitor_thread_ = std::thread(&TCPConn::MonitorLoop, this);
 }
 
 bool TCPConn::Send(const std::vector<uint8_t>& data) {
@@ -34,28 +40,32 @@ bool TCPConn::Send(const std::vector<uint8_t>& data) {
 }
 
 bool TCPConn::SendPacket(const Packet& pkt) {
-    auto data = EncodePacket(pkt);
+    Packet encPkt = pkt; // 拷贝，避免修改调用方数据
+    if (!session_key_.empty() && !pkt.payload.empty()) {
+        try {
+            encPkt.payload = gs::crypto::EncryptPacketPayload(session_key_, pkt.payload);
+            encPkt.header.flags |= static_cast<uint32_t>(Flag::ENCRYPT);
+        } catch (const std::exception&) {
+            return false;
+        }
+    }
+    encPkt.header.length = HEADER_SIZE + static_cast<uint32_t>(encPkt.payload.size());
+    auto data = EncodePacket(encPkt);
     return Send(data);
 }
 
 void TCPConn::Close() {
     if (closed_.exchange(true)) return;
 
-    // wake write thread
+    // 唤醒 write 线程
     write_cv_.notify_all();
 
 #ifdef _WIN32
     closesocket(socket_);
 #else
-    close(socket_);
+    ::close(socket_);
 #endif
-
-    if (read_thread_.joinable()) read_thread_.join();
-    if (write_thread_.joinable()) write_thread_.join();
-
-    if (on_close_) {
-        on_close_(this);
-    }
+    // MonitorLoop 会负责 join 线程并调用 on_close_
 }
 
 bool TCPConn::ReadN(uint8_t* buf, size_t n) {
@@ -67,10 +77,16 @@ bool TCPConn::ReadN(uint8_t* buf, size_t n) {
         } else if (ret == 0) {
             return false; // peer closed
         } else {
+#ifdef _WIN32
             int err = WSAGetLastError();
             if (err != WSAEWOULDBLOCK && err != WSAEINTR) {
                 return false;
             }
+#else
+            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                return false;
+            }
+#endif
         }
     }
     return total == n;
@@ -80,13 +96,11 @@ void TCPConn::ReadLoop() {
     uint8_t header_buf[HEADER_SIZE];
     while (!closed_.load()) {
         if (!ReadN(header_buf, HEADER_SIZE)) {
-            Close();
             return;
         }
 
         Header h = DecodeHeader(header_buf);
         if (h.magic != MAGIC_VALUE || h.length < HEADER_SIZE || h.length > MAX_PACKET_LEN) {
-            Close();
             return;
         }
 
@@ -96,7 +110,15 @@ void TCPConn::ReadLoop() {
         if (payload_len > 0) {
             pkt.payload.resize(payload_len);
             if (!ReadN(pkt.payload.data(), payload_len)) {
-                Close();
+                return;
+            }
+        }
+
+        if (!session_key_.empty() && HasFlag(pkt.header.flags, Flag::ENCRYPT)) {
+            try {
+                pkt.payload = gs::crypto::DecryptPacketPayload(session_key_, pkt.payload);
+                pkt.header.flags &= ~static_cast<uint32_t>(Flag::ENCRYPT);
+            } catch (const std::exception&) {
                 return;
             }
         }
@@ -124,15 +146,37 @@ void TCPConn::WriteLoop() {
                 if (ret > 0) {
                     total += static_cast<size_t>(ret);
                 } else {
+#ifdef _WIN32
                     int err = WSAGetLastError();
                     if (err != WSAEWOULDBLOCK && err != WSAEINTR) {
-                        Close();
+#else
+                    if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+#endif
                         return;
                     }
                 }
             }
             lk.lock();
         }
+    }
+}
+
+void TCPConn::MonitorLoop() {
+    if (read_thread_.joinable()) read_thread_.join();
+    if (write_thread_.joinable()) write_thread_.join();
+
+    // 若尚未关闭（比如对端主动断开导致 ReadLoop 退出），先关闭 socket
+    if (!closed_.exchange(true)) {
+#ifdef _WIN32
+        closesocket(socket_);
+#else
+        ::close(socket_);
+#endif
+    }
+
+    auto cb = std::move(on_close_);
+    if (cb) {
+        cb(this);
     }
 }
 

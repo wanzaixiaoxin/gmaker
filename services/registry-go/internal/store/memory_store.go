@@ -16,6 +16,7 @@ type MemoryStore struct {
 	leases  map[string]int64              // node_id -> leaseID 计数器
 	watches map[string][]chan *pb.NodeEvent // service_type -> event channels
 	seqID   int64
+	closed  bool
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -68,15 +69,22 @@ func (m *MemoryStore) Discover(ctx context.Context, serviceType string) ([]*pb.N
 
 func (m *MemoryStore) Watch(ctx context.Context, serviceType string) (<-chan *pb.NodeEvent, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
+	if m.closed {
+		m.mu.Unlock()
+		return nil, fmt.Errorf("store closed")
+	}
 	ch := make(chan *pb.NodeEvent, 16)
 	m.watches[serviceType] = append(m.watches[serviceType], ch)
+	m.mu.Unlock()
 
 	// 发送当前已有的节点作为初始快照
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		m.mu.RLock()
+		if m.closed {
+			m.mu.RUnlock()
+			return
+		}
 		for _, n := range m.nodes {
 			if n.ServiceType == serviceType {
 				select {
@@ -92,7 +100,10 @@ func (m *MemoryStore) Watch(ctx context.Context, serviceType string) (<-chan *pb
 	go func() {
 		<-ctx.Done()
 		m.mu.Lock()
-		defer m.mu.Unlock()
+		if m.closed {
+			m.mu.Unlock()
+			return
+		}
 		arr := m.watches[serviceType]
 		for i, c := range arr {
 			if c == ch {
@@ -101,13 +112,17 @@ func (m *MemoryStore) Watch(ctx context.Context, serviceType string) (<-chan *pb
 			}
 		}
 		close(ch)
+		m.mu.Unlock()
 	}()
 
 	return ch, nil
 }
 
 func (m *MemoryStore) broadcast(serviceType string, ev *pb.NodeEvent) {
-	for _, ch := range m.watches[serviceType] {
+	m.mu.RLock()
+	arr := m.watches[serviceType]
+	m.mu.RUnlock()
+	for _, ch := range arr {
 		select {
 		case ch <- ev:
 		default:
@@ -118,6 +133,10 @@ func (m *MemoryStore) broadcast(serviceType string, ev *pb.NodeEvent) {
 func (m *MemoryStore) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.closed {
+		return nil
+	}
+	m.closed = true
 	for _, arr := range m.watches {
 		for _, ch := range arr {
 			close(ch)

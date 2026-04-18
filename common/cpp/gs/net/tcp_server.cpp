@@ -41,15 +41,25 @@ bool TCPServer::Start() {
 void TCPServer::Stop() {
     running_ = false;
     if (listen_sock_ != INVALID_SOCKET_HANDLE) {
+#ifdef _WIN32
         closesocket(listen_sock_);
+#else
+        ::close(listen_sock_);
+#endif
         listen_sock_ = INVALID_SOCKET_HANDLE;
     }
 
-    std::lock_guard<std::mutex> lk(conn_mtx_);
-    for (auto& [id, conn] : conns_) {
+    std::vector<TCPConn*> to_close;
+    {
+        std::lock_guard<std::mutex> lk(conn_mtx_);
+        for (auto& [id, conn] : conns_) {
+            to_close.push_back(conn);
+        }
+        conns_.clear(); // 先清空，避免 OnConnClose 再次 erase 导致问题
+    }
+    for (auto* conn : to_close) {
         conn->Close();
     }
-    conns_.clear();
 }
 
 void TCPServer::SetCallbacks(ConnectCallback on_connect,
