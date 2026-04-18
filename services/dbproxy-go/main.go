@@ -8,9 +8,9 @@ import (
 	"strings"
 	"syscall"
 
-	"dbproxy-go/internal/mysql"
-	"dbproxy-go/internal/redis"
-	"dbproxy-go/internal/server"
+	"github.com/gmaker/game-server/services/dbproxy-go/internal/mysql"
+	"github.com/gmaker/game-server/services/dbproxy-go/internal/redis"
+	"github.com/gmaker/game-server/services/dbproxy-go/internal/server"
 )
 
 func main() {

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"dbproxy-go/internal/limiter"
+	"github.com/gmaker/game-server/services/dbproxy-go/internal/limiter"
 )
 
 // Proxy Redis 代理层

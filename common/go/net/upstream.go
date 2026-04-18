@@ -1,7 +1,6 @@
 package net
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"

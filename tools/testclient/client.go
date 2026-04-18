@@ -170,7 +170,7 @@ func (b *Bot) Login(account, password string) error {
 		return fmt.Errorf("unmarshal login res: %w", err)
 	}
 	if res.Result != nil && res.Result.Code != 0 {
-		return fmt.Errorf("login failed: code=%d msg=%s", res.Result.Code, res.Result.Message)
+		return fmt.Errorf("login failed: code=%d msg=%s", res.Result.Code, res.Result.Msg)
 	}
 
 	b.token = res.Token

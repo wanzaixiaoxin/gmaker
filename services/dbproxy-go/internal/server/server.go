@@ -12,8 +12,8 @@ import (
 	pb "github.com/gmaker/game-server/gen/go/dbproxy"
 	"google.golang.org/protobuf/proto"
 
-	"dbproxy-go/internal/mysql"
-	"dbproxy-go/internal/redis"
+	"github.com/gmaker/game-server/services/dbproxy-go/internal/mysql"
+	"github.com/gmaker/game-server/services/dbproxy-go/internal/redis"
 )
 
 // DBProxy 内部命令号

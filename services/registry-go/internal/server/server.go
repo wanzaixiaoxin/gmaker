@@ -8,7 +8,7 @@ import (
 
 	"github.com/gmaker/game-server/common/go/net"
 	pb "github.com/gmaker/game-server/gen/go/registry"
-	"registry-go/internal/store"
+	"github.com/gmaker/game-server/services/registry-go/internal/store"
 	"google.golang.org/protobuf/proto"
 )
 
