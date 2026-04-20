@@ -28,6 +28,147 @@ struct BizNodeConfig {
     uint16_t    port;
 };
 
+// HandshakeMiddleware 处理 Gateway-Client 握手
+class HandshakeMiddleware : public Middleware {
+public:
+    HandshakeMiddleware(const std::vector<uint8_t>& master_key,
+                        gs::replay::Checker* replay_checker)
+        : master_key_(master_key), replay_checker_(replay_checker) {}
+
+    bool OnPacket(TCPConn* conn, Packet& pkt) override {
+        if (pkt.header.cmd_id != CMD_HANDSHAKE) {
+            return true; // 非握手包，透传
+        }
+        HandleHandshake(conn, pkt);
+        return false; // 握手包已处理，不继续传递
+    }
+
+    bool IsHandshaked(uint64_t conn_id) const {
+        std::lock_guard<std::mutex> lk(mtx_);
+        return sessions_.find(conn_id) != sessions_.end();
+    }
+
+    std::vector<uint8_t> GetSessionKey(uint64_t conn_id) const {
+        std::lock_guard<std::mutex> lk(mtx_);
+        auto it = sessions_.find(conn_id);
+        if (it != sessions_.end()) return it->second;
+        return {};
+    }
+
+    void RemoveSession(uint64_t conn_id) {
+        std::lock_guard<std::mutex> lk(mtx_);
+        sessions_.erase(conn_id);
+    }
+
+private:
+    void HandleHandshake(TCPConn* conn, Packet& pkt) {
+        constexpr size_t kHandshakeV1Size = 1 + 8 + 8 + 16;
+        if (pkt.payload.size() < kHandshakeV1Size) {
+            std::cerr << "Invalid handshake request from client " << conn->ID() << std::endl;
+            conn->Close();
+            return;
+        }
+
+        uint8_t version = pkt.payload[0];
+        if (version != 1) {
+            std::cerr << "Unsupported handshake version: " << (int)version << std::endl;
+            conn->Close();
+            return;
+        }
+
+        uint64_t timestamp = ReadU64BE(pkt.payload.data() + 1);
+        std::string nonce(pkt.payload.begin() + 9, pkt.payload.begin() + 17);
+        std::vector<uint8_t> client_random(pkt.payload.begin() + 17, pkt.payload.begin() + 33);
+
+        auto ts = std::chrono::system_clock::from_time_t(static_cast<time_t>(timestamp));
+        if (!replay_checker_->Check(ts, nonce)) {
+            std::cerr << "Replay detected or invalid timestamp from client " << conn->ID() << std::endl;
+            conn->Close();
+            return;
+        }
+
+        std::vector<uint8_t> server_random = RandomBytes(16);
+
+        std::vector<uint8_t> session_key;
+        try {
+            session_key = DeriveSessionKey(master_key_, client_random, server_random);
+        } catch (const std::exception& e) {
+            std::cerr << "Session key derivation failed: " << e.what() << std::endl;
+            conn->Close();
+            return;
+        }
+
+        std::vector<uint8_t> encrypted_challenge;
+        try {
+            encrypted_challenge = EncryptPacketPayload(session_key, client_random);
+        } catch (const std::exception& e) {
+            std::cerr << "Handshake encrypt failed: " << e.what() << std::endl;
+            conn->Close();
+            return;
+        }
+
+        Packet res;
+        res.header.cmd_id = CMD_HANDSHAKE;
+        res.header.magic = MAGIC_VALUE;
+        res.header.seq_id = pkt.header.seq_id;
+        res.header.flags = 0;
+        res.payload.reserve(1 + 16 + encrypted_challenge.size());
+        res.payload.push_back(1); // version
+        res.payload.insert(res.payload.end(), server_random.begin(), server_random.end());
+        res.payload.insert(res.payload.end(), encrypted_challenge.begin(), encrypted_challenge.end());
+        res.header.length = HEADER_SIZE + static_cast<uint32_t>(res.payload.size());
+        conn->SendPacket(res);
+
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            sessions_[conn->ID()] = std::move(session_key);
+        }
+        std::cout << "Handshake completed with client " << conn->ID() << std::endl;
+    }
+
+    std::vector<uint8_t> master_key_;
+    gs::replay::Checker* replay_checker_;
+    mutable std::mutex mtx_;
+    std::unordered_map<uint64_t, std::vector<uint8_t>> sessions_;
+};
+
+// EncryptionMiddleware 处理 Gateway-Client 加密/解密
+class EncryptionMiddleware : public Middleware {
+public:
+    EncryptionMiddleware(HandshakeMiddleware* handshake_mw) : handshake_mw_(handshake_mw) {}
+
+    bool OnPacket(TCPConn* conn, Packet& pkt) override {
+        // 握手完成检查
+        if (!handshake_mw_->IsHandshaked(conn->ID())) {
+            std::cerr << "Client " << conn->ID() << " sent packet before handshake, closing" << std::endl;
+            conn->Close();
+            return false;
+        }
+
+        // 解密 payload
+        if (HasFlag(pkt.header.flags, Flag::ENCRYPT)) {
+            auto key = handshake_mw_->GetSessionKey(conn->ID());
+            if (key.empty()) {
+                std::cerr << "No session key for client " << conn->ID() << std::endl;
+                conn->Close();
+                return false;
+            }
+            try {
+                pkt.payload = DecryptPacketPayload(key, pkt.payload);
+                pkt.header.flags &= ~static_cast<uint32_t>(Flag::ENCRYPT);
+            } catch (const std::exception& e) {
+                std::cerr << "Decrypt failed for client " << conn->ID() << ": " << e.what() << std::endl;
+                conn->Close();
+                return false;
+            }
+        }
+        return true;
+    }
+
+private:
+    HandshakeMiddleware* handshake_mw_;
+};
+
 class Gateway {
 public:
     bool Start(uint16_t listen_port,
@@ -107,6 +248,10 @@ public:
         std::cout << "Biz upstream pool started, " << biz_pool_->HealthyCount()
                   << "/" << biz_pool_->TotalCount() << " nodes connected" << std::endl;
 
+        // 初始化中间件
+        handshake_mw_ = std::make_shared<HandshakeMiddleware>(master_key_, &replay_checker_);
+        encryption_mw_ = std::make_shared<EncryptionMiddleware>(handshake_mw_.get());
+
         // 启动 Gateway 监听
         TCPServer::Config cfg;
         cfg.port = listen_port;
@@ -116,6 +261,10 @@ public:
             [this](TCPConn* c, Packet& p) { OnClientPacket(c, p); },
             [this](TCPConn* c) { OnClientClose(c); }
         );
+        // 注册中间件：先握手，后加密解密
+        server_->Use(handshake_mw_);
+        server_->Use(encryption_mw_);
+
         if (!server_->Start()) {
             std::cerr << "Failed to start gateway server" << std::endl;
             return false;
@@ -155,43 +304,6 @@ private:
         auto start = std::chrono::steady_clock::now();
         req_counter_->Inc();
 
-        if (pkt.header.cmd_id == CMD_HANDSHAKE) {
-            HandleHandshake(conn, pkt);
-            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - start).count();
-            req_latency_->Observe(static_cast<double>(ms));
-            return;
-        }
-
-        // 检查是否已完成握手（强制加密模式）
-        bool encrypted = false;
-        {
-            std::lock_guard<std::mutex> lk(sessions_mtx_);
-            encrypted = sessions_.find(conn->ID()) != sessions_.end();
-        }
-        if (!encrypted) {
-            std::cerr << "Client " << conn->ID() << " sent packet before handshake, closing" << std::endl;
-            conn->Close();
-            return;
-        }
-
-        // 解密 payload
-        if (HasFlag(pkt.header.flags, Flag::ENCRYPT)) {
-            std::vector<uint8_t> key;
-            {
-                std::lock_guard<std::mutex> lk(sessions_mtx_);
-                key = sessions_[conn->ID()];
-            }
-            try {
-                pkt.payload = DecryptPacketPayload(key, pkt.payload);
-                pkt.header.flags &= ~static_cast<uint32_t>(Flag::ENCRYPT);
-            } catch (const std::exception& e) {
-                std::cerr << "Decrypt failed for client " << conn->ID() << ": " << e.what() << std::endl;
-                conn->Close();
-                return;
-            }
-        }
-
         // 转发到 Biz（轮询负载均衡）
         pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.size());
         if (!biz_pool_->SendPacket(pkt)) {
@@ -213,9 +325,8 @@ private:
         std::vector<std::pair<TCPConn*, std::vector<uint8_t>>> targets_encrypted;
 
         for (auto& [id, client] : clients_) {
-            auto it = sessions_.find(id);
-            if (it != sessions_.end()) {
-                targets_encrypted.emplace_back(client, it->second);
+            if (handshake_mw_->IsHandshaked(id)) {
+                targets_encrypted.emplace_back(client, handshake_mw_->GetSessionKey(id));
             } else {
                 targets_plain.push_back(client);
             }
@@ -243,77 +354,9 @@ private:
     void OnClientClose(TCPConn* conn) {
         std::lock_guard<std::mutex> lk(sessions_mtx_);
         clients_.erase(conn->ID());
-        sessions_.erase(conn->ID());
+        handshake_mw_->RemoveSession(conn->ID());
         conn_gauge_->Dec();
         std::cout << "Client disconnected: " << conn->ID() << std::endl;
-    }
-
-    void HandleHandshake(TCPConn* conn, Packet& pkt) {
-        // HandshakeReq v1: [version: 1][timestamp: 8 BE][nonce: 8][client_random: 16] = 33 bytes
-        constexpr size_t kHandshakeV1Size = 1 + 8 + 8 + 16;
-        if (pkt.payload.size() < kHandshakeV1Size) {
-            std::cerr << "Invalid handshake request from client " << conn->ID() << std::endl;
-            conn->Close();
-            return;
-        }
-
-        uint8_t version = pkt.payload[0];
-        if (version != 1) {
-            std::cerr << "Unsupported handshake version: " << (int)version << std::endl;
-            conn->Close();
-            return;
-        }
-
-        uint64_t timestamp = ReadU64BE(pkt.payload.data() + 1);
-        std::string nonce(pkt.payload.begin() + 9, pkt.payload.begin() + 17);
-        std::vector<uint8_t> client_random(pkt.payload.begin() + 17, pkt.payload.begin() + 33);
-
-        // 防重放检查
-        auto ts = std::chrono::system_clock::from_time_t(static_cast<time_t>(timestamp));
-        if (!replay_checker_.Check(ts, nonce)) {
-            std::cerr << "Replay detected or invalid timestamp from client " << conn->ID() << std::endl;
-            conn->Close();
-            return;
-        }
-
-        std::vector<uint8_t> server_random = RandomBytes(16);
-
-        std::vector<uint8_t> session_key;
-        try {
-            session_key = DeriveSessionKey(master_key_, client_random, server_random);
-        } catch (const std::exception& e) {
-            std::cerr << "Session key derivation failed: " << e.what() << std::endl;
-            conn->Close();
-            return;
-        }
-
-        std::vector<uint8_t> encrypted_challenge;
-        try {
-            encrypted_challenge = EncryptPacketPayload(session_key, client_random);
-        } catch (const std::exception& e) {
-            std::cerr << "Handshake encrypt failed: " << e.what() << std::endl;
-            conn->Close();
-            return;
-        }
-
-        // HandshakeRes v1: [version: 1][server_random: 16][encrypted_challenge: variable]
-        Packet res;
-        res.header.cmd_id = CMD_HANDSHAKE;
-        res.header.magic = MAGIC_VALUE;
-        res.header.seq_id = pkt.header.seq_id;
-        res.header.flags = 0;
-        res.payload.reserve(1 + 16 + encrypted_challenge.size());
-        res.payload.push_back(1); // version
-        res.payload.insert(res.payload.end(), server_random.begin(), server_random.end());
-        res.payload.insert(res.payload.end(), encrypted_challenge.begin(), encrypted_challenge.end());
-        res.header.length = HEADER_SIZE + static_cast<uint32_t>(res.payload.size());
-        conn->SendPacket(res);
-
-        {
-            std::lock_guard<std::mutex> lk(sessions_mtx_);
-            sessions_[conn->ID()] = std::move(session_key);
-        }
-        std::cout << "Handshake completed with client " << conn->ID() << std::endl;
     }
 
     std::unique_ptr<TCPServer> server_;
@@ -322,9 +365,11 @@ private:
     std::unique_ptr<gs::registry::RegistryClient> reg_client_;
     std::mutex sessions_mtx_;
     std::unordered_map<uint64_t, TCPConn*> clients_;
-    std::unordered_map<uint64_t, std::vector<uint8_t>> sessions_;
     std::vector<uint8_t> master_key_;
     gs::replay::Checker replay_checker_{std::chrono::seconds(300)};
+
+    std::shared_ptr<HandshakeMiddleware> handshake_mw_;
+    std::shared_ptr<EncryptionMiddleware> encryption_mw_;
 
     // metrics
     gs::metrics::Counter*   req_counter_ = nullptr;

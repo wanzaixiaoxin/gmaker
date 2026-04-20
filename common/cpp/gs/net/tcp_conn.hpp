@@ -16,6 +16,7 @@ constexpr int INVALID_SOCKET = -1;
 constexpr int SOCKET_ERROR = -1;
 #endif
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <thread>
@@ -49,6 +50,9 @@ public:
     // 设置会话密钥，启用 AES-GCM 加密通信
     void SetSessionKey(const std::vector<uint8_t>& key);
 
+    // 设置心跳超时（毫秒，0 表示不检测）
+    void SetHeartbeatTimeout(int ms);
+
     bool Send(const std::vector<uint8_t>& data);
     bool SendPacket(const Packet& pkt);
 
@@ -60,6 +64,8 @@ private:
     void WriteLoop();
     void MonitorLoop();
     bool ReadN(uint8_t* buf, size_t n);
+    bool IsHeartbeatExpired() const;
+    void UpdateLastActive();
 
     SocketType socket_;
     uint64_t id_;
@@ -77,6 +83,10 @@ private:
     std::queue<std::vector<uint8_t>> write_queue_;
 
     std::vector<uint8_t> session_key_; // 若非空则启用 AES-GCM 加密
+
+    // 心跳超时（存储 steady_clock 纳秒数，避免 atomic<time_point> 兼容性问题）
+    int heartbeat_timeout_ms_ = 0;
+    std::atomic<int64_t> last_active_ns_{0};
 };
 
 } // namespace net

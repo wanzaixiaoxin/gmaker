@@ -25,18 +25,23 @@ type TCPConn struct {
 	wg         sync.WaitGroup
 	closeOnce  sync.Once
 	sessionKey []byte // 若非空则启用 AES-GCM 加密
+
+	lastActive       time.Time
+	heartbeatTimeout time.Duration
+	hbMu             sync.RWMutex
 }
 
 // NewTCPConn 创建封装连接
 func NewTCPConn(c net.Conn, onData func(*TCPConn, *Packet), onClose func(*TCPConn)) *TCPConn {
 	conn := &TCPConn{
-		id:      atomic.AddUint64(&globalConnID, 1),
-		raw:     c,
-		reader:  bufio.NewReader(c),
-		writeCh: make(chan []byte, 256),
-		closeCh: make(chan struct{}),
-		onData:  onData,
-		onClose: onClose,
+		id:         atomic.AddUint64(&globalConnID, 1),
+		raw:        c,
+		reader:     bufio.NewReader(c),
+		writeCh:    make(chan []byte, 256),
+		closeCh:    make(chan struct{}),
+		onData:     onData,
+		onClose:    onClose,
+		lastActive: time.Now(),
 	}
 	conn.wg.Add(2)
 	go conn.readLoop()
@@ -52,6 +57,30 @@ func (c *TCPConn) ID() uint64 {
 // Raw 返回底层 net.Conn
 func (c *TCPConn) Raw() net.Conn {
 	return c.raw
+}
+
+// SetHeartbeatTimeout 设置心跳超时时间（0 表示不检测）
+func (c *TCPConn) SetHeartbeatTimeout(d time.Duration) {
+	c.hbMu.Lock()
+	c.heartbeatTimeout = d
+	c.hbMu.Unlock()
+}
+
+func (c *TCPConn) isHeartbeatExpired() bool {
+	c.hbMu.RLock()
+	timeout := c.heartbeatTimeout
+	last := c.lastActive
+	c.hbMu.RUnlock()
+	if timeout <= 0 {
+		return false
+	}
+	return time.Since(last) > timeout
+}
+
+func (c *TCPConn) updateLastActive() {
+	c.hbMu.Lock()
+	c.lastActive = time.Now()
+	c.hbMu.Unlock()
 }
 
 // Send 异步发送字节流（要求外部已编码）
@@ -107,6 +136,12 @@ func (c *TCPConn) readLoop() {
 		default:
 		}
 
+		// 心跳超时检测
+		if c.isHeartbeatExpired() {
+			c.raw.Close()
+			return
+		}
+
 		// 使用 ReadDeadline 避免 select default 忙等，同时允许及时响应 closeCh
 		c.raw.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 		h, err := DecodeHeader(c.reader)
@@ -124,6 +159,8 @@ func (c *TCPConn) readLoop() {
 			c.raw.Close()
 			return
 		}
+
+		c.updateLastActive()
 
 		pkt := &Packet{
 			Header:  *h,

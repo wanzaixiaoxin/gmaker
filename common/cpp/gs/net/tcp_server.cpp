@@ -70,6 +70,10 @@ void TCPServer::SetCallbacks(ConnectCallback on_connect,
     on_close_   = on_close;
 }
 
+void TCPServer::Use(std::shared_ptr<Middleware> mw) {
+    middlewares_.push_back(std::move(mw));
+}
+
 void TCPServer::Broadcast(const Packet& pkt) {
     auto data = EncodePacket(pkt);
     std::lock_guard<std::mutex> lk(conn_mtx_);
@@ -88,10 +92,23 @@ void TCPServer::AcceptLoop() {
             continue;
         }
 
+        // 连接数上限检查
+        {
+            std::lock_guard<std::mutex> lk(conn_mtx_);
+            if (static_cast<int>(conns_.size()) >= cfg_.max_conn) {
+#ifdef _WIN32
+                closesocket(client_sock);
+#else
+                ::close(client_sock);
+#endif
+                continue;
+            }
+        }
+
         uint64_t id = ++conn_id_counter_;
         auto conn = new TCPConn(client_sock, id);
         conn->SetCallbacks(
-            on_data_,
+            [this](TCPConn* c, Packet& p) { OnConnPacket(c, p); },
             [this](TCPConn* c) { OnConnClose(c); }
         );
 
@@ -104,6 +121,17 @@ void TCPServer::AcceptLoop() {
         if (on_connect_) {
             on_connect_(conn);
         }
+    }
+}
+
+void TCPServer::OnConnPacket(TCPConn* conn, Packet& pkt) {
+    for (auto& mw : middlewares_) {
+        if (!mw->OnPacket(conn, pkt)) {
+            return;
+        }
+    }
+    if (on_data_) {
+        on_data_(conn, pkt);
     }
 }
 

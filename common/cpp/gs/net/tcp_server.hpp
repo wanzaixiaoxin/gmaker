@@ -1,10 +1,12 @@
 #pragma once
 
 #include "tcp_conn.hpp"
+#include "middleware.hpp"
 #include <string>
 #include <unordered_map>
 #include <atomic>
 #include <mutex>
+#include <vector>
 
 namespace gs {
 namespace net {
@@ -31,11 +33,15 @@ public:
                       DataCallback on_data,
                       CloseCallback on_close);
 
+    // 注册中间件（按注册顺序执行，返回 false 则拦截）
+    void Use(std::shared_ptr<Middleware> mw);
+
     void Broadcast(const Packet& pkt);
 
 private:
     void AcceptLoop();
     void OnConnClose(TCPConn* conn);
+    void OnConnPacket(TCPConn* conn, Packet& pkt);
 
     Config cfg_;
     SocketType listen_sock_ = INVALID_SOCKET_HANDLE;
@@ -44,6 +50,8 @@ private:
 
     std::mutex conn_mtx_;
     std::unordered_map<uint64_t, TCPConn*> conns_;
+
+    std::vector<std::shared_ptr<Middleware>> middlewares_;
 
     ConnectCallback on_connect_;
     DataCallback    on_data_;

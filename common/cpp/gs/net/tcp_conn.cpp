@@ -7,6 +7,8 @@ namespace net {
 
 TCPConn::TCPConn(SocketType sock, uint64_t id)
     : socket_(sock), id_(id) {
+    auto now = std::chrono::steady_clock::now().time_since_epoch();
+    last_active_ns_.store(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
 }
 
 TCPConn::~TCPConn() {
@@ -23,7 +25,25 @@ void TCPConn::SetSessionKey(const std::vector<uint8_t>& key) {
     session_key_ = key;
 }
 
+void TCPConn::SetHeartbeatTimeout(int ms) {
+    heartbeat_timeout_ms_ = ms;
+}
+
 void TCPConn::Start() {
+    // 设置接收超时，使 ReadLoop 能定期检查 closed_ 和心跳超时
+    if (heartbeat_timeout_ms_ > 0) {
+        int timeout_ms = std::min(heartbeat_timeout_ms_, 1000); // 至少 1s 检查一次
+#ifdef _WIN32
+        setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO,
+                   reinterpret_cast<const char*>(&timeout_ms), sizeof(timeout_ms));
+#else
+        struct timeval tv;
+        tv.tv_sec = timeout_ms / 1000;
+        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+#endif
+    }
+
     read_thread_ = std::thread(&TCPConn::ReadLoop, this);
     write_thread_ = std::thread(&TCPConn::WriteLoop, this);
     monitor_thread_ = std::thread(&TCPConn::MonitorLoop, this);
@@ -79,22 +99,45 @@ bool TCPConn::ReadN(uint8_t* buf, size_t n) {
         } else {
 #ifdef _WIN32
             int err = WSAGetLastError();
+            if (err == WSAETIMEDOUT) {
+                continue; // 接收超时，继续循环，让上层检查心跳超时
+            }
             if (err != WSAEWOULDBLOCK && err != WSAEINTR) {
                 return false;
             }
 #else
-            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-                return false;
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                continue; // 超时或可中断，继续循环
             }
+            return false;
 #endif
         }
     }
     return total == n;
 }
 
+bool TCPConn::IsHeartbeatExpired() const {
+    if (heartbeat_timeout_ms_ <= 0) return false;
+    auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    auto elapsed_ms = static_cast<int>((now_ns - last_active_ns_.load()) / 1'000'000);
+    return elapsed_ms > heartbeat_timeout_ms_;
+}
+
+void TCPConn::UpdateLastActive() {
+    auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    last_active_ns_.store(now_ns);
+}
+
 void TCPConn::ReadLoop() {
     uint8_t header_buf[HEADER_SIZE];
     while (!closed_.load()) {
+        // 心跳超时检测
+        if (IsHeartbeatExpired()) {
+            return;
+        }
+
         if (!ReadN(header_buf, HEADER_SIZE)) {
             return;
         }
@@ -113,6 +156,8 @@ void TCPConn::ReadLoop() {
                 return;
             }
         }
+
+        UpdateLastActive();
 
         if (!session_key_.empty() && HasFlag(pkt.header.flags, Flag::ENCRYPT)) {
             try {
