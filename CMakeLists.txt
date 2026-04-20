@@ -8,6 +8,10 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
+# ==================== 第三方库 ====================
+# libuv: 异步 I/O 库（C++ 网络层基础）
+add_subdirectory(3rd/libuv)
+
 include(FetchContent)
 FetchContent_Declare(
     toml11
@@ -23,6 +27,14 @@ set(CPP_NET_SOURCES
     common/cpp/gs/net/tcp_client.cpp
     common/cpp/gs/net/upstream.cpp
     common/cpp/gs/net/coalescer.cpp
+)
+
+# libuv 异步网络封装层（Phase 5 替换阻塞模型）
+set(CPP_ASYNC_NET_SOURCES
+    common/cpp/gs/net/async/event_loop.cpp
+    common/cpp/gs/net/async/tcp_connection.cpp
+    common/cpp/gs/net/async/tcp_listener.cpp
+    common/cpp/gs/net/async/tcp_server.cpp
 )
 
 set(CPP_RPC_SOURCES
@@ -85,10 +97,14 @@ target_include_directories(gateway-cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gen/cpp
 )
 
-target_link_libraries(gateway-cpp toml11::toml11)
+target_link_libraries(gateway-cpp toml11::toml11 uv_a)
 # TODO: install protobuf and uncomment: target_link_libraries(gateway-cpp protobuf::libprotobuf)
 if(WIN32)
-    target_link_libraries(gateway-cpp ws2_32 bcrypt)
+    target_link_libraries(gateway-cpp ws2_32 bcrypt iphlpapi psapi userenv)
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(gateway-cpp pthread dl rt)
+elseif(APPLE)
+    target_link_libraries(gateway-cpp pthread)
 endif()
 
 # ==================== 实时服 ====================
@@ -112,10 +128,14 @@ target_include_directories(realtime-cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gen/cpp
 )
 
-target_link_libraries(realtime-cpp toml11::toml11)
+target_link_libraries(realtime-cpp toml11::toml11 uv_a)
 # TODO: install protobuf and uncomment: target_link_libraries(realtime-cpp protobuf::libprotobuf)
 if(WIN32)
-    target_link_libraries(realtime-cpp ws2_32 bcrypt)
+    target_link_libraries(realtime-cpp ws2_32 bcrypt iphlpapi psapi userenv)
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(realtime-cpp pthread dl rt)
+elseif(APPLE)
+    target_link_libraries(realtime-cpp pthread)
 endif()
 
 # ==================== 测试可执行文件 ====================
@@ -132,4 +152,28 @@ if(WIN32)
     target_link_libraries(test-crypto bcrypt)
 endif()
 
-# TODO: 后续添加 protobuf 库、asio/libuv、gtest 等依赖
+# ==================== 异步网络封装层测试 ====================
+add_executable(test-async-net
+    common/cpp/gs/net/async/test.cpp
+    common/cpp/gs/net/async/event_loop.cpp
+    common/cpp/gs/net/async/tcp_connection.cpp
+    common/cpp/gs/net/async/tcp_listener.cpp
+    common/cpp/gs/net/async/tcp_server.cpp
+    common/cpp/gs/crypto/aes_gcm.cpp
+    common/cpp/gs/crypto/hmac.cpp
+    common/cpp/gs/crypto/session.cpp
+)
+target_include_directories(test-async-net PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp
+)
+target_link_libraries(test-async-net uv_a)
+if(WIN32)
+    target_link_libraries(test-async-net ws2_32 bcrypt iphlpapi psapi userenv)
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(test-async-net pthread dl rt)
+elseif(APPLE)
+    target_link_libraries(test-async-net pthread)
+endif()
+
+# TODO: 后续添加 protobuf 库、gtest 等依赖

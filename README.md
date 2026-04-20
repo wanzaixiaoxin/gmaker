@@ -88,11 +88,3 @@ go run tests/phase1/main.go
 ```
 
 测试会自动拉起 Registry、Biz、Gateway，并模拟 Client 通过 Gateway 向 Biz 发送 Ping 包，验证 `Client -> Gateway(C++) -> Biz(Go) -> Registry(Go)` 整条链路。
-
-## 当前进度
-
-- **Phase 1 通信与发现骨架** ✅ 已完成
-  - 统一协议栈、Go/C++ 网络库、Registry 服务、RPC 骨架、端到端联调全部跑通
-- **Phase 2 数据与存储基础设施** 待开始
-
-更多设计细节见 [DESIGN.md](DESIGN.md) 与 [IMPLEMENTATION.md](IMPLEMENTATION.md)。

@@ -32,7 +32,7 @@ void TCPConn::SetHeartbeatTimeout(int ms) {
 void TCPConn::Start() {
     // 设置接收超时，使 ReadLoop 能定期检查 closed_ 和心跳超时
     if (heartbeat_timeout_ms_ > 0) {
-        int timeout_ms = std::min(heartbeat_timeout_ms_, 1000); // 至少 1s 检查一次
+        int timeout_ms = (std::min)(heartbeat_timeout_ms_, 1000); // 至少 1s 检查一次
 #ifdef _WIN32
         setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO,
                    reinterpret_cast<const char*>(&timeout_ms), sizeof(timeout_ms));

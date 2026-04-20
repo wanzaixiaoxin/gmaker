@@ -148,7 +148,7 @@ void UpstreamPool::ReconnectLoop() {
         if (any_reconnected) {
             interval_ms = 1000;
         } else if (HealthyCount() == 0) {
-            interval_ms = std::min(interval_ms * 2, max_interval_ms);
+            interval_ms = (std::min)(interval_ms * 2, max_interval_ms);
         } else {
             interval_ms = 1000;
         }
