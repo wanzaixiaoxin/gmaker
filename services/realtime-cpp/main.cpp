@@ -4,11 +4,8 @@
 #include <condition_variable>
 #include <thread>
 #include <chrono>
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
-#include "gs/net/tcp_server.hpp"
-#include "gs/net/upstream.hpp"
+#include "gs/net/async/tcp_server.hpp"
+#include "gs/net/async/upstream.hpp"
 #include "gs/net/packet.hpp"
 #include "gs/registry/client.hpp"
 #include "gs/realtime/compute_thread.hpp"
@@ -16,6 +13,7 @@
 #include "gs/metrics/metrics.hpp"
 
 using namespace gs::net;
+using namespace gs::net::async;
 using namespace gs::realtime;
 
 constexpr uint32_t CMD_REALTIME_ENTER  = 0x00020001;
@@ -25,7 +23,7 @@ constexpr uint32_t CMD_REALTIME_ACTION = 0x00020004;
 constexpr uint32_t CMD_REALTIME_SYNC   = 0x00020005;
 
 // RealtimeServer 实时服
-truct RealtimeServer {
+struct RealtimeServer {
     bool Start(uint16_t listen_port,
                const std::vector<std::pair<std::string, uint16_t>>& registry_addrs,
                const std::vector<std::pair<std::string, uint16_t>>& fallback_gateway_addrs) {
@@ -55,13 +53,19 @@ truct RealtimeServer {
         }
         compute_->Start();
 
-        // 连接 Gateway（多节点，从 Registry 发现或 fallback）
-        gateway_pool_ = std::make_unique<UpstreamPool>(
-            [this](TCPConn* c, Packet& p) { OnGatewayPacket(c, p); }
+        // 启动监听（接收 Gateway 转发的客户端消息）
+        AsyncTCPServer::Config cfg;
+        cfg.port = listen_port;
+        server_ = std::make_unique<AsyncTCPServer>(cfg);
+
+        // 连接 Gateway（多节点，从 Registry 发现或 fallback），共享服务器事件循环
+        gateway_pool_ = std::make_unique<AsyncUpstreamPool>(
+            server_->EventLoop(),
+            [this](IConnection* c, Packet& p) { OnGatewayPacket(c, p); }
         );
 
         if (!registry_addrs.empty()) {
-            reg_client_ = std::make_unique<gs::registry::RegistryClient>(registry_addrs);
+            reg_client_ = std::make_unique<gs::registry::RegistryClient>(nullptr, registry_addrs);
             if (reg_client_->Connect()) {
                 ::registry::NodeList list;
                 if (reg_client_->Discover("gateway", &list)) {
@@ -92,14 +96,10 @@ truct RealtimeServer {
             return false;
         }
 
-        // 启动监听（接收 Gateway 转发的客户端消息）
-        TCPServer::Config cfg;
-        cfg.port = listen_port;
-        server_ = std::make_unique<TCPServer>(cfg);
         server_->SetCallbacks(
-            [this](TCPConn* c) { OnClientConnect(c); },
-            [this](TCPConn* c, Packet& p) { OnClientPacket(c, p); },
-            [this](TCPConn* c) { OnClientClose(c); }
+            [this](AsyncTCPConnection* c) { OnClientConnect(c); },
+            [this](AsyncTCPConnection* c, Packet& p) { OnClientPacket(c, p); },
+            [this](AsyncTCPConnection* c) { OnClientClose(c); }
         );
         if (!server_->Start()) {
             std::cerr << "Failed to start realtime server" << std::endl;
@@ -128,13 +128,13 @@ truct RealtimeServer {
     }
 
 private:
-    void OnClientConnect(TCPConn* conn) {
+    void OnClientConnect(AsyncTCPConnection* conn) {
         std::lock_guard<std::mutex> lk(conn_mtx_);
         conns_[conn->ID()] = conn;
         std::cout << "Gateway connected: " << conn->ID() << std::endl;
     }
 
-    void OnClientPacket(TCPConn* conn, Packet& pkt) {
+    void OnClientPacket(AsyncTCPConnection* conn, Packet& pkt) {
         (void)conn;
         // Gateway -> Realtime：解析客户端消息，投递到 Compute Thread
         switch (pkt.header.cmd_id) {
@@ -146,7 +146,6 @@ private:
                 float spawn_x = *reinterpret_cast<const float*>(pkt.payload.data() + 12);
                 float spawn_z = *reinterpret_cast<const float*>(pkt.payload.data() + 16);
                 auto msg = std::make_unique<PlayerEnterMsg>();
-                msg->room_id = room_id; // 这里需要 room_id，实际消息里已包含
                 msg->player_id = player_id;
                 msg->spawn_pos = {spawn_x, 0, spawn_z};
                 msg->conn_id = pkt.header.seq_id; // 复用 seq_id 作为 conn_id（简化）
@@ -195,12 +194,12 @@ private:
         }
     }
 
-    void OnClientClose(TCPConn* conn) {
+    void OnClientClose(AsyncTCPConnection* conn) {
         std::lock_guard<std::mutex> lk(conn_mtx_);
         conns_.erase(conn->ID());
     }
 
-    void OnGatewayPacket(TCPConn* conn, Packet& pkt) {
+    void OnGatewayPacket(IConnection* conn, Packet& pkt) {
         (void)conn;
         (void)pkt;
         // Gateway -> Realtime 的响应（当前 Realtime 主动发消息给 Gateway，不需要处理响应）
@@ -251,13 +250,13 @@ private:
         }
     }
 
-    std::unique_ptr<TCPServer> server_;
-    std::unique_ptr<UpstreamPool> gateway_pool_;
+    std::unique_ptr<AsyncTCPServer> server_;
+    std::unique_ptr<AsyncUpstreamPool> gateway_pool_;
     std::unique_ptr<gs::registry::RegistryClient> reg_client_;
     std::unique_ptr<ComputeThread> compute_;
 
     std::mutex conn_mtx_;
-    std::unordered_map<uint64_t, TCPConn*> conns_;
+    std::unordered_map<uint64_t, AsyncTCPConnection*> conns_;
 
     std::mutex stop_mtx_;
     std::condition_variable stop_cv_;
@@ -282,13 +281,6 @@ static std::vector<std::pair<std::string, uint16_t>> ParseAddrList(const std::st
 }
 
 int main(int argc, char* argv[]) {
-#ifdef _WIN32
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        std::cerr << "WSAStartup failed" << std::endl;
-        return 1;
-    }
-#endif
     uint16_t port = 8084;
     std::vector<std::pair<std::string, uint16_t>> registry_addrs = {{"127.0.0.1", 2379}};
     std::vector<std::pair<std::string, uint16_t>> fallback_gw = {{"127.0.0.1", 8081}};
@@ -303,8 +295,5 @@ int main(int argc, char* argv[]) {
     }
     srv.Wait();
     srv.Stop();
-#ifdef _WIN32
-    WSACleanup();
-#endif
     return 0;
 }

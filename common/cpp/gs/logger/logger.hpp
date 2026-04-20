@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <string>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -9,6 +8,8 @@
 #include <mutex>
 #include <vector>
 #include <ctime>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 namespace gs {
 namespace logger {
@@ -101,7 +102,43 @@ public:
     }
 
 private:
-    // 统一输出逻辑
+    // rapidjson Writer 的数值写入辅助函数
+    template<typename T>
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, const T& v) {
+        writer.String(std::to_string(v).c_str());
+    }
+
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, const std::string& v) {
+        writer.String(v.c_str());
+    }
+
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, const char* v) {
+        writer.String(v);
+    }
+
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, bool v) {
+        writer.Bool(v);
+    }
+
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, int v) { writer.Int(v); }
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, long v) { writer.Int64(v); }
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, long long v) { writer.Int64(v); }
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, unsigned int v) { writer.Uint(v); }
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, unsigned long v) { writer.Uint64(v); }
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, unsigned long long v) { writer.Uint64(v); }
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, double v) { writer.Double(v); }
+    static void WriteJSONValue(rapidjson::Writer<rapidjson::StringBuffer>& writer, float v) { writer.Double(v); }
+
+    static void AppendArgs(rapidjson::Writer<rapidjson::StringBuffer>&) {}
+
+    template<typename K, typename V, typename... Rest>
+    void AppendArgs(rapidjson::Writer<rapidjson::StringBuffer>& writer, K k, V v, Rest... rest) {
+        writer.Key(k);
+        WriteJSONValue(writer, v);
+        AppendArgs(writer, rest...);
+    }
+
+    // 统一输出逻辑（使用 rapidjson 生成标准 JSON）
     template<typename... Args>
     void EmitLog(Level level, const std::string& msg, Args... args) {
         auto now = std::chrono::system_clock::now();
@@ -116,69 +153,43 @@ private:
         gmtime_r(&sec, &tm);
 #endif
 
-        std::cout << "{"
-                  << "\"time\":\"" << std::put_time(&tm, "%Y-%m-%dT%H:%M:%S")
-                  << "." << std::setfill('0') << std::setw(3) << ms.count() << "Z"
-                  << "\",\"level\":\"" << LevelStr(level)
-                  << "\",\"service\":\"" << Escape(service_)
-                  << "\",\"node_id\":\"" << Escape(node_id_)
-                  << "\",\"msg\":\"" << Escape(msg) << "\"";
+        char time_buf[32];
+        std::strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%S", &tm);
+        std::string time_str = std::string(time_buf) + "." +
+            (ms.count() < 100 ? "0" : "") +
+            (ms.count() < 10 ? "0" : "") +
+            std::to_string(ms.count()) + "Z";
+
+        rapidjson::StringBuffer buffer;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+
+        writer.StartObject();
+        writer.Key("time");
+        writer.String(time_str.c_str());
+        writer.Key("level");
+        writer.String(LevelStr(level));
+        writer.Key("service");
+        writer.String(service_.c_str());
+        writer.Key("node_id");
+        writer.String(node_id_.c_str());
+        writer.Key("msg");
+        writer.String(msg.c_str());
 
         // 子 Logger 的固定字段
         for (const auto& f : fields_) {
-            std::cout << ",\"" << f.first << "\":\"" << Escape(f.second) << "\"";
+            writer.Key(f.first.c_str());
+            writer.String(f.second.c_str());
         }
 
-        AppendArgs(std::cout, args...);
-        std::cout << "}" << std::endl;
-    }
+        AppendArgs(writer, args...);
+        writer.EndObject();
 
-    // 完整的 JSON 字符串转义（处理控制字符、引号、反斜杠）
-    static std::string Escape(const std::string& s) {
-        std::string out;
-        out.reserve(s.size());
-        for (unsigned char c : s) {
-            switch (c) {
-                case '"': out += "\\\""; break;
-                case '\\': out += "\\\\"; break;
-                case '\b': out += "\\b"; break;
-                case '\f': out += "\\f"; break;
-                case '\n': out += "\\n"; break;
-                case '\r': out += "\\r"; break;
-                case '\t': out += "\\t"; break;
-                default:
-                    if (c < 0x20) {
-                        // 其他控制字符用 \u00xx 表示
-                        char buf[7];
-                        std::snprintf(buf, sizeof(buf), "\\u%04x", c);
-                        out += buf;
-                    } else {
-                        out += static_cast<char>(c);
-                    }
-            }
-        }
-        return out;
-    }
-
-    static void AppendArgs(std::ostream&) {}
-
-    template<typename K, typename V, typename... Rest>
-    void AppendArgs(std::ostream& os, K k, V v, Rest... rest) {
-        os << ",\"" << k << "\":\"" << Escape(std::to_string(v)) << "\"";
-        AppendArgs(os, rest...);
-    }
-
-    // std::string 特化，避免 to_string 二次转义
-    template<typename K, typename... Rest>
-    void AppendArgs(std::ostream& os, K k, const std::string& v, Rest... rest) {
-        os << ",\"" << k << "\":\"" << Escape(v) << "\"";
-        AppendArgs(os, rest...);
+        std::cout << buffer.GetString() << std::endl;
     }
 
     // 格式化字符串（简化版 printf）
     template<typename... Args>
     static std::string Format(const std::string& fmt, Args...&& args) {
-        // 使用 snprintf 计算所需大小
         int size = std::snprintf(nullptr, 0, fmt.c_str(), std::forward<Args>(args)...);
         if (size < 0) return fmt;
         std::string buf(size, '\0');

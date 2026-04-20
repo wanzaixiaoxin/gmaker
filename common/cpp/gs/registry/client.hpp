@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../net/upstream.hpp"
+#include "../net/async/upstream.hpp"
+#include "../net/async/event_loop.hpp"
 #include <string>
 #include <functional>
 #include <atomic>
@@ -34,8 +35,9 @@ using EventCallback = std::function<void(const ::registry::NodeEvent&)>;
 
 class RegistryClient {
 public:
-    // addrs: Registry 节点地址列表，如 {{"127.0.0.1", 2379}, {"127.0.0.1", 2380}}
-    explicit RegistryClient(const std::vector<std::pair<std::string, uint16_t>>& addrs);
+    // loop: 外部事件循环（可为 nullptr，内部将自动创建）
+    explicit RegistryClient(net::async::AsyncEventLoop* loop,
+                            const std::vector<std::pair<std::string, uint16_t>>& addrs);
     ~RegistryClient();
 
     bool Connect();
@@ -55,8 +57,8 @@ public:
     bool Watch(const std::string& service_type, EventCallback on_event);
 
 private:
-    void OnPacket(net::TCPConn* conn, net::Packet& pkt);
-    void OnClose(net::TCPConn* conn);
+    void OnPacket(net::IConnection* conn, net::Packet& pkt);
+    void OnClose(net::IConnection* conn);
     void OnNodeEvent(const std::string& addr, bool healthy);
     uint32_t NextSeqID();
 
@@ -70,7 +72,9 @@ private:
     // 重新发送所有 Watch 请求（节点恢复时调用）
     void ResendWatches();
 
-    std::unique_ptr<net::UpstreamPool> pool_;
+    std::unique_ptr<net::async::AsyncEventLoop> owned_loop_;
+    net::async::AsyncEventLoop* loop_ = nullptr;
+    std::unique_ptr<net::async::AsyncUpstreamPool> pool_;
     std::atomic<uint32_t> seq_id_{0};
 
     // Pending RPC 响应

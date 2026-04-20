@@ -37,6 +37,9 @@ public:
     AsyncTCPServer(const AsyncTCPServer&) = delete;
     AsyncTCPServer& operator=(const AsyncTCPServer&) = delete;
 
+    // 获取内部事件循环（供 UpstreamPool / Coalescer 共享）
+    AsyncEventLoop* EventLoop() const { return loop_.get(); }
+
     // 启动服务器（非阻塞，内部启动事件循环线程）
     bool Start();
     void Stop();

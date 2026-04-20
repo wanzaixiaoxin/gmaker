@@ -21,12 +21,12 @@ enum class MsgType : uint8_t {
 };
 
 // Vec3 位置
-truct Vec3 {
+struct Vec3 {
     float x = 0, y = 0, z = 0;
 };
 
 // 玩家状态
-truct PlayerState {
+struct PlayerState {
     uint64_t player_id = 0;
     Vec3 pos;
     Vec3 vel;
@@ -36,7 +36,7 @@ truct PlayerState {
 };
 
 // 房间状态快照（每帧广播）
-truct RoomSnapshot {
+struct RoomSnapshot {
     uint32_t room_id = 0;
     uint32_t frame_seq = 0;
     uint64_t timestamp_ms = 0;

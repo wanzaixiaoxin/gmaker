@@ -1,5 +1,8 @@
 #include "config.hpp"
 #include <toml.hpp>
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 #include <iostream>
 #include <algorithm>
 #include <fstream>
@@ -26,88 +29,52 @@ std::string ValueToString(const toml::value& v) {
     return "";
 }
 
-// 简易扁平 JSON 解析器（仅支持 string/number/bool/null 值，不支持嵌套对象/数组）
+// 使用 rapidjson 解析 JSON，输出扁平键值对（嵌套对象会被递归展平为 "a.b" 形式）
+void FlattenJSONValue(const std::string& prefix, const rapidjson::Value& v,
+                      std::unordered_map<std::string, std::string>& out) {
+    if (v.IsObject()) {
+        for (auto it = v.MemberBegin(); it != v.MemberEnd(); ++it) {
+            std::string key = prefix.empty() ? it->name.GetString()
+                                             : prefix + "." + it->name.GetString();
+            FlattenJSONValue(key, it->value, out);
+        }
+    } else if (v.IsArray()) {
+        // 数组直接序列化为 JSON 字符串片段（保持兼容）
+        rapidjson::StringBuffer buffer;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        v.Accept(writer);
+        out[prefix] = buffer.GetString();
+    } else if (v.IsString()) {
+        out[prefix] = v.GetString();
+    } else if (v.IsInt64()) {
+        out[prefix] = std::to_string(v.GetInt64());
+    } else if (v.IsUint64()) {
+        out[prefix] = std::to_string(v.GetUint64());
+    } else if (v.IsDouble()) {
+        out[prefix] = std::to_string(v.GetDouble());
+    } else if (v.IsBool()) {
+        out[prefix] = v.GetBool() ? "true" : "false";
+    } else if (v.IsNull()) {
+        out[prefix] = "null";
+    } else {
+        // 回退：直接序列化
+        rapidjson::StringBuffer buffer;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        v.Accept(writer);
+        out[prefix] = buffer.GetString();
+    }
+}
+
 bool ParseFlatJSON(const std::string& content, std::unordered_map<std::string, std::string>& out) {
-    size_t i = 0;
-    auto skip_ws = [&]() {
-        while (i < content.size() && (content[i] == ' ' || content[i] == '\n' || content[i] == '\r' || content[i] == '\t')) i++;
-    };
-
-    skip_ws();
-    if (i >= content.size() || content[i] != '{') return false;
-    i++;
-
-    while (true) {
-        skip_ws();
-        if (i < content.size() && content[i] == '}') { i++; break; }
-
-        if (i >= content.size() || content[i] != '"') return false;
-        i++;
-        std::string key;
-        while (i < content.size() && content[i] != '"') {
-            if (content[i] == '\\' && i + 1 < content.size()) {
-                i++;
-                switch (content[i]) {
-                    case '"': case '\\': case '/': key += content[i]; break;
-                    case 'b': key += '\b'; break;
-                    case 'f': key += '\f'; break;
-                    case 'n': key += '\n'; break;
-                    case 'r': key += '\r'; break;
-                    case 't': key += '\t'; break;
-                    default: key += content[i]; break;
-                }
-            } else {
-                key += content[i];
-            }
-            i++;
-        }
-        if (i >= content.size() || content[i] != '"') return false;
-        i++;
-
-        skip_ws();
-        if (i >= content.size() || content[i] != ':') return false;
-        i++;
-
-        skip_ws();
-        std::string value;
-        if (i < content.size() && content[i] == '"') {
-            i++;
-            while (i < content.size() && content[i] != '"') {
-                if (content[i] == '\\' && i + 1 < content.size()) {
-                    i++;
-                    switch (content[i]) {
-                        case '"': case '\\': case '/': value += content[i]; break;
-                        case 'b': value += '\b'; break;
-                        case 'f': value += '\f'; break;
-                        case 'n': value += '\n'; break;
-                        case 'r': value += '\r'; break;
-                        case 't': value += '\t'; break;
-                        default: value += content[i]; break;
-                    }
-                } else {
-                    value += content[i];
-                }
-                i++;
-            }
-            if (i >= content.size() || content[i] != '"') return false;
-            i++;
-        } else {
-            while (i < content.size() && content[i] != ',' && content[i] != '}') {
-                value += content[i];
-                i++;
-            }
-            while (!value.empty() && (value.back() == ' ' || value.back() == '\t' || value.back() == '\n' || value.back() == '\r')) {
-                value.pop_back();
-            }
-        }
-
-        out[key] = value;
-
-        skip_ws();
-        if (i < content.size() && content[i] == ',') { i++; continue; }
-        if (i < content.size() && content[i] == '}') { i++; break; }
+    rapidjson::Document doc;
+    doc.Parse(content.c_str());
+    if (doc.HasParseError()) {
         return false;
     }
+    if (!doc.IsObject()) {
+        return false;
+    }
+    FlattenJSONValue("", doc, out);
     return true;
 }
 

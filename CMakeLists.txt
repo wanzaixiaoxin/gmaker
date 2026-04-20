@@ -10,31 +10,40 @@ endif()
 
 # ==================== 第三方库 ====================
 # libuv: 异步 I/O 库（C++ 网络层基础）
-add_subdirectory(3rd/libuv)
+# 使用预编译静态库 + 头文件方式引入（不再 add_subdirectory 编译源码）
+set(UV_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rd/libuv/include)
+find_library(UV_LIB uv
+    PATHS ${CMAKE_CURRENT_SOURCE_DIR}/3rd/libuv/lib/win-x64
+    NO_DEFAULT_PATH
+)
+if(NOT UV_LIB)
+    message(FATAL_ERROR "libuv prebuilt library not found. Please build libuv and place the library in 3rd/libuv/lib/<platform>/")
+endif()
+message(STATUS "Found libuv: ${UV_LIB}")
 
 include(FetchContent)
+
+# toml11: TOML 配置解析库
 FetchContent_Declare(
     toml11
     URL https://github.com/ToruNiina/toml11/archive/refs/tags/v4.2.0.tar.gz
     URL_HASH SHA256=9287971cd4a1a3992ef37e7b95a3972d1ae56410e7f8e3f300727ab1d6c79c2c
 )
+
 FetchContent_MakeAvailable(toml11)
 
-# ==================== 源文件 ====================
-set(CPP_NET_SOURCES
-    common/cpp/gs/net/tcp_conn.cpp
-    common/cpp/gs/net/tcp_server.cpp
-    common/cpp/gs/net/tcp_client.cpp
-    common/cpp/gs/net/upstream.cpp
-    common/cpp/gs/net/coalescer.cpp
-)
+# rapidjson: 高性能 JSON 解析/生成库（header-only，本地拷贝）
+set(RAPIDJSON_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rd)
 
-# libuv 异步网络封装层（Phase 5 替换阻塞模型）
+# ==================== 源文件 ====================
+# libuv 异步网络封装层（已统一替代阻塞模型）
 set(CPP_ASYNC_NET_SOURCES
     common/cpp/gs/net/async/event_loop.cpp
     common/cpp/gs/net/async/tcp_connection.cpp
     common/cpp/gs/net/async/tcp_listener.cpp
     common/cpp/gs/net/async/tcp_server.cpp
+    common/cpp/gs/net/async/upstream.cpp
+    common/cpp/gs/net/async/coalescer.cpp
 )
 
 set(CPP_RPC_SOURCES
@@ -80,7 +89,7 @@ set(CPP_REALTIME_SOURCES
 # ==================== 网关服务 ====================
 add_executable(gateway-cpp
     services/gateway-cpp/main.cpp
-    ${CPP_NET_SOURCES}
+    ${CPP_ASYNC_NET_SOURCES}
     ${CPP_RPC_SOURCES}
     ${CPP_REGISTRY_SOURCES}
     ${CPP_PROTO_SOURCES}
@@ -95,12 +104,13 @@ target_include_directories(gateway-cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/gen/cpp
+    ${UV_INCLUDE_DIR}
+    ${RAPIDJSON_INCLUDE_DIR}
 )
-
-target_link_libraries(gateway-cpp toml11::toml11 uv_a)
+target_link_libraries(gateway-cpp toml11::toml11 ${UV_LIB})
 # TODO: install protobuf and uncomment: target_link_libraries(gateway-cpp protobuf::libprotobuf)
 if(WIN32)
-    target_link_libraries(gateway-cpp ws2_32 bcrypt iphlpapi psapi userenv)
+    target_link_libraries(gateway-cpp ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
 elseif(UNIX AND NOT APPLE)
     target_link_libraries(gateway-cpp pthread dl rt)
 elseif(APPLE)
@@ -110,7 +120,7 @@ endif()
 # ==================== 实时服 ====================
 add_executable(realtime-cpp
     services/realtime-cpp/main.cpp
-    ${CPP_NET_SOURCES}
+    ${CPP_ASYNC_NET_SOURCES}
     ${CPP_RPC_SOURCES}
     ${CPP_REGISTRY_SOURCES}
     ${CPP_PROTO_SOURCES}
@@ -126,12 +136,13 @@ target_include_directories(realtime-cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/gen/cpp
+    ${UV_INCLUDE_DIR}
+    ${RAPIDJSON_INCLUDE_DIR}
 )
-
-target_link_libraries(realtime-cpp toml11::toml11 uv_a)
+target_link_libraries(realtime-cpp toml11::toml11 ${UV_LIB})
 # TODO: install protobuf and uncomment: target_link_libraries(realtime-cpp protobuf::libprotobuf)
 if(WIN32)
-    target_link_libraries(realtime-cpp ws2_32 bcrypt iphlpapi psapi userenv)
+    target_link_libraries(realtime-cpp ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
 elseif(UNIX AND NOT APPLE)
     target_link_libraries(realtime-cpp pthread dl rt)
 elseif(APPLE)
@@ -155,10 +166,7 @@ endif()
 # ==================== 异步网络封装层测试 ====================
 add_executable(test-async-net
     common/cpp/gs/net/async/test.cpp
-    common/cpp/gs/net/async/event_loop.cpp
-    common/cpp/gs/net/async/tcp_connection.cpp
-    common/cpp/gs/net/async/tcp_listener.cpp
-    common/cpp/gs/net/async/tcp_server.cpp
+    ${CPP_ASYNC_NET_SOURCES}
     common/cpp/gs/crypto/aes_gcm.cpp
     common/cpp/gs/crypto/hmac.cpp
     common/cpp/gs/crypto/session.cpp
@@ -167,9 +175,10 @@ target_include_directories(test-async-net PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp
 )
-target_link_libraries(test-async-net uv_a)
+target_include_directories(test-async-net PRIVATE ${UV_INCLUDE_DIR})
+target_link_libraries(test-async-net ${UV_LIB})
 if(WIN32)
-    target_link_libraries(test-async-net ws2_32 bcrypt iphlpapi psapi userenv)
+    target_link_libraries(test-async-net ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
 elseif(UNIX AND NOT APPLE)
     target_link_libraries(test-async-net pthread dl rt)
 elseif(APPLE)

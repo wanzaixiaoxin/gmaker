@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../iconnection.hpp"
 #include "../packet.hpp"
 #include <cstdint>
 #include <functional>
@@ -17,11 +18,12 @@ namespace async {
 class AsyncEventLoop;
 
 // AsyncTCPConnection 基于 libuv 的异步 TCP 连接
-// 与现有 TCPConn 保持接口兼容，未来可无缝替换
-class AsyncTCPConnection : public std::enable_shared_from_this<AsyncTCPConnection> {
+// 实现 IConnection 接口，与上层 Middleware 解耦
+class AsyncTCPConnection : public IConnection, public std::enable_shared_from_this<AsyncTCPConnection> {
 public:
     using DataCallback = std::function<void(AsyncTCPConnection*, Packet&)>;
     using CloseCallback = std::function<void(AsyncTCPConnection*)>;
+    using ConnectCallback = std::function<void(bool success)>;
 
     AsyncTCPConnection(AsyncEventLoop* loop, uint64_t id);
     ~AsyncTCPConnection();
@@ -33,9 +35,13 @@ public:
     // 从已接受的 uv_tcp_t 初始化（由 Listener 调用）
     bool InitFromAccepted(uv_tcp_t* client);
 
-    uint64_t ID() const { return id_; }
+    // 作为客户端主动连接
+    bool Connect(const std::string& host, uint16_t port);
+
+    uint64_t ID() const override { return id_; }
 
     void SetCallbacks(DataCallback on_data, CloseCallback on_close);
+    void SetConnectCallback(ConnectCallback cb);
 
     // 设置会话密钥，启用 AES-GCM 加密通信
     void SetSessionKey(const std::vector<uint8_t>& key);
@@ -47,12 +53,15 @@ public:
     bool SendPacket(const Packet& pkt);
 
     // 关闭连接（线程安全）
-    void Close();
+    void Close() override;
 
     bool IsClosed() const { return closed_.load(); }
 
     // 获取底层 uv_tcp_t（仅用于高级操作）
     uv_tcp_t* RawHandle() const { return handle_; }
+
+    // 判断是否已连接（客户端模式）
+    bool IsConnected() const { return connected_.load(); }
 
 private:
     static void OnAlloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf);
@@ -74,9 +83,11 @@ private:
 
     std::atomic<bool> closed_{false};
     std::atomic<bool> closing_{false};
+    std::atomic<bool> connected_{false};
 
     DataCallback on_data_;
     CloseCallback on_close_;
+    ConnectCallback on_connect_;
 
     std::mutex read_mtx_;
     std::vector<uint8_t> read_buf_;

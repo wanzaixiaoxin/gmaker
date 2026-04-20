@@ -30,12 +30,56 @@ bool AsyncTCPConnection::InitFromAccepted(uv_tcp_t* client) {
     handle_ = client;
     handle_->data = this;
     StartRead();
+    connected_.store(true);
+    return true;
+}
+
+bool AsyncTCPConnection::Connect(const std::string& host, uint16_t port) {
+    if (!loop_ || !loop_->RawLoop()) return false;
+
+    handle_ = new uv_tcp_t;
+    uv_tcp_init(loop_->RawLoop(), handle_);
+    handle_->data = this;
+
+    sockaddr_in addr{};
+    if (uv_ip4_addr(host.c_str(), port, &addr) != 0) {
+        delete handle_;
+        handle_ = nullptr;
+        return false;
+    }
+
+    auto* connect_req = new uv_connect_t;
+    connect_req->data = this;
+    int r = uv_tcp_connect(connect_req, handle_, (const sockaddr*)&addr,
+        [](uv_connect_t* req, int status) {
+            auto* conn = static_cast<AsyncTCPConnection*>(req->data);
+            delete req;
+            if (!conn) return;
+            if (status < 0) {
+                if (conn->on_connect_) conn->on_connect_(false);
+                conn->Close();
+                return;
+            }
+            conn->connected_.store(true);
+            conn->StartRead();
+            if (conn->on_connect_) conn->on_connect_(true);
+        });
+    if (r != 0) {
+        delete connect_req;
+        delete handle_;
+        handle_ = nullptr;
+        return false;
+    }
     return true;
 }
 
 void AsyncTCPConnection::SetCallbacks(DataCallback on_data, CloseCallback on_close) {
     on_data_ = on_data;
     on_close_ = on_close;
+}
+
+void AsyncTCPConnection::SetConnectCallback(ConnectCallback cb) {
+    on_connect_ = std::move(cb);
 }
 
 void AsyncTCPConnection::SetSessionKey(const std::vector<uint8_t>& key) {
@@ -255,6 +299,7 @@ void AsyncTCPConnection::OnWriteDone(uv_write_t* req, int status) {
 
 void AsyncTCPConnection::OnCloseDone(uv_handle_t* handle) {
     auto* conn = static_cast<AsyncTCPConnection*>(handle->data);
+    delete (uv_tcp_t*)handle;
     if (!conn) return;
 
     auto cb = std::move(conn->on_close_);

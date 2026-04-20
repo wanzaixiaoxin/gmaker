@@ -68,6 +68,16 @@ inline uint16_t ReadU16BE(const uint8_t* p) {
     return (static_cast<uint16_t>(p[0]) << 8) |
             static_cast<uint16_t>(p[1]);
 }
+inline void WriteU64BE(uint8_t* p, uint64_t v) {
+    p[0] = static_cast<uint8_t>((v >> 56) & 0xFF);
+    p[1] = static_cast<uint8_t>((v >> 48) & 0xFF);
+    p[2] = static_cast<uint8_t>((v >> 40) & 0xFF);
+    p[3] = static_cast<uint8_t>((v >> 32) & 0xFF);
+    p[4] = static_cast<uint8_t>((v >> 24) & 0xFF);
+    p[5] = static_cast<uint8_t>((v >> 16) & 0xFF);
+    p[6] = static_cast<uint8_t>((v >> 8)  & 0xFF);
+    p[7] = static_cast<uint8_t>( v        & 0xFF);
+}
 inline uint64_t ReadU64BE(const uint8_t* p) {
     return (static_cast<uint64_t>(p[0]) << 56) |
            (static_cast<uint64_t>(p[1]) << 48) |

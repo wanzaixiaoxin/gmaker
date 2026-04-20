@@ -4,7 +4,7 @@
 namespace gs {
 namespace rpc {
 
-Client::Client(net::TCPConn* conn) : conn_(conn) {
+Client::Client(net::IConnection* conn) : conn_(conn) {
 }
 
 Client::~Client() {
@@ -16,7 +16,7 @@ Client::~Client() {
     pending_.clear();
 }
 
-void Client::SetConn(net::TCPConn* conn) {
+void Client::SetConn(net::IConnection* conn) {
     conn_ = conn;
 }
 

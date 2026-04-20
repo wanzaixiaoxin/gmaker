@@ -124,9 +124,7 @@ void AsyncTCPServer::OnAccept(uv_tcp_t* client) {
 
 void AsyncTCPServer::OnConnData(AsyncTCPConnection* conn, Packet& pkt) {
     for (auto& mw : middlewares_) {
-        // 注意：Middleware 接口接受 TCPConn*，这里需要桥接
-        // Phase 5 替换时统一改为 AsyncTCPConnection*
-        if (!mw->OnPacket(nullptr, pkt)) {
+        if (!mw->OnPacket(conn, pkt)) {
             return;
         }
     }

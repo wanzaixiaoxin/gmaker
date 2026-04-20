@@ -6,9 +6,20 @@
 namespace gs {
 namespace registry {
 
-RegistryClient::RegistryClient(const std::vector<std::pair<std::string, uint16_t>>& addrs) {
-    pool_ = std::make_unique<net::UpstreamPool>(
-        [this](net::TCPConn* c, net::Packet& p) { OnPacket(c, p); }
+RegistryClient::RegistryClient(net::async::AsyncEventLoop* loop,
+                               const std::vector<std::pair<std::string, uint16_t>>& addrs) {
+    if (loop) {
+        loop_ = loop;
+    } else {
+        owned_loop_ = std::make_unique<net::async::AsyncEventLoop>();
+        if (owned_loop_->Init()) {
+            loop_ = owned_loop_.get();
+        }
+    }
+
+    pool_ = std::make_unique<net::async::AsyncUpstreamPool>(
+        loop_,
+        [this](net::IConnection* c, net::Packet& p) { OnPacket(c, p); }
     );
     pool_->SetOnNodeEvent(
         [this](const std::string& addr, bool healthy) { OnNodeEvent(addr, healthy); }
@@ -23,6 +34,12 @@ RegistryClient::~RegistryClient() {
 }
 
 bool RegistryClient::Connect() {
+    if (owned_loop_ && loop_) {
+        // 启动内部事件循环线程
+        std::thread([this]() {
+            owned_loop_->Run();
+        }).detach();
+    }
     return pool_->Start();
 }
 
@@ -36,6 +53,10 @@ void RegistryClient::Close() {
             std::runtime_error("registry client closed")));
     }
     pending_.clear();
+
+    if (owned_loop_ && loop_) {
+        loop_->Stop();
+    }
 }
 
 bool RegistryClient::IsConnected() const {
@@ -105,7 +126,7 @@ bool RegistryClient::Watch(const std::string& service_type, EventCallback on_eve
     return FireForget(CMD_WATCH, payload);
 }
 
-void RegistryClient::OnPacket(net::TCPConn* conn, net::Packet& pkt) {
+void RegistryClient::OnPacket(net::IConnection* conn, net::Packet& pkt) {
     (void)conn;
 
     // NodeEvent 是服务端推送，不走 pending 映射
@@ -131,7 +152,7 @@ void RegistryClient::OnPacket(net::TCPConn* conn, net::Packet& pkt) {
     }
 }
 
-void RegistryClient::OnClose(net::TCPConn* conn) {
+void RegistryClient::OnClose(net::IConnection* conn) {
     (void)conn;
 }
 

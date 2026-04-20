@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../net/tcp_conn.hpp"
+#include "../net/iconnection.hpp"
 #include "../net/packet.hpp"
 #include <cstdint>
 #include <future>
@@ -13,10 +13,10 @@ namespace rpc {
 
 class Client {
 public:
-    explicit Client(net::TCPConn* conn);
+    explicit Client(net::IConnection* conn);
     ~Client();
 
-    void SetConn(net::TCPConn* conn);
+    void SetConn(net::IConnection* conn);
 
     // 收到数据包时调用，由外部网络层注入
     void OnPacket(net::Packet& pkt);
@@ -33,7 +33,7 @@ private:
     uint32_t NextSeqID();
     void TimeoutCleanup(uint32_t seq_id);
 
-    net::TCPConn* conn_ = nullptr;
+    net::IConnection* conn_ = nullptr;
     std::atomic<uint32_t> seq_id_{0};
 
     std::mutex pending_mtx_;

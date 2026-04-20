@@ -4,13 +4,10 @@
 #include <condition_variable>
 #include <thread>
 #include <chrono>
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
-#include "gs/net/tcp_server.hpp"
-#include "gs/net/upstream.hpp"
+#include "gs/net/async/tcp_server.hpp"
+#include "gs/net/async/upstream.hpp"
+#include "gs/net/async/coalescer.hpp"
 #include "gs/net/packet.hpp"
-#include "gs/net/coalescer.hpp"
 #include "gs/crypto/session.hpp"
 #include "gs/replay/replay.hpp"
 #include "gs/registry/client.hpp"
@@ -18,6 +15,7 @@
 #include "gs/errors.hpp"
 
 using namespace gs::net;
+using namespace gs::net::async;
 using namespace gs::crypto;
 
 constexpr uint32_t CMD_HANDSHAKE = 0x00000002;
@@ -35,7 +33,7 @@ public:
                         gs::replay::Checker* replay_checker)
         : master_key_(master_key), replay_checker_(replay_checker) {}
 
-    bool OnPacket(TCPConn* conn, Packet& pkt) override {
+    bool OnPacket(IConnection* conn, Packet& pkt) override {
         if (pkt.header.cmd_id != CMD_HANDSHAKE) {
             return true; // 非握手包，透传
         }
@@ -61,7 +59,7 @@ public:
     }
 
 private:
-    void HandleHandshake(TCPConn* conn, Packet& pkt) {
+    void HandleHandshake(IConnection* conn, Packet& pkt) {
         constexpr size_t kHandshakeV1Size = 1 + 8 + 8 + 16;
         if (pkt.payload.size() < kHandshakeV1Size) {
             std::cerr << "Invalid handshake request from client " << conn->ID() << std::endl;
@@ -137,7 +135,7 @@ class EncryptionMiddleware : public Middleware {
 public:
     EncryptionMiddleware(HandshakeMiddleware* handshake_mw) : handshake_mw_(handshake_mw) {}
 
-    bool OnPacket(TCPConn* conn, Packet& pkt) override {
+    bool OnPacket(IConnection* conn, Packet& pkt) override {
         // 握手完成检查
         if (!handshake_mw_->IsHandshaked(conn->ID())) {
             std::cerr << "Client " << conn->ID() << " sent packet before handshake, closing" << std::endl;
@@ -184,18 +182,24 @@ public:
         req_latency_ = gs::metrics::DefaultHistogram("gateway_request_duration_ms", {1, 5, 10, 25, 50, 100, 250, 500, 1000});
         conn_gauge_  = gs::metrics::DefaultGauge("gateway_connections");
 
-        // 初始化写聚合器（Write Coalescing）
-        coalescer_ = std::make_unique<WriteCoalescer>(16); // 16ms 聚合窗口
+        // 启动 Gateway 监听（先创建服务器，以便共享事件循环）
+        AsyncTCPServer::Config cfg;
+        cfg.port = listen_port;
+        server_ = std::make_unique<AsyncTCPServer>(cfg);
+
+        // 初始化写聚合器（Write Coalescing），共享服务器事件循环
+        coalescer_ = std::make_unique<AsyncWriteCoalescer>(server_->EventLoop(), 16);
         coalescer_->Start();
 
-        // 初始化 UpstreamPool
-        biz_pool_ = std::make_unique<UpstreamPool>(
-            [this](TCPConn* c, Packet& p) { OnBizPacket(c, p); }
+        // 初始化 UpstreamPool，共享服务器事件循环
+        biz_pool_ = std::make_unique<AsyncUpstreamPool>(
+            server_->EventLoop(),
+            [this](IConnection* c, Packet& p) { OnBizPacket(c, p); }
         );
 
         // 连接 Registry（多节点）
         if (!registry_addrs.empty()) {
-            reg_client_ = std::make_unique<gs::registry::RegistryClient>(registry_addrs);
+            reg_client_ = std::make_unique<gs::registry::RegistryClient>(nullptr, registry_addrs);
             if (!reg_client_->Connect()) {
                 std::cerr << "Failed to connect to registry, using fallback biz nodes" << std::endl;
             } else {
@@ -252,14 +256,10 @@ public:
         handshake_mw_ = std::make_shared<HandshakeMiddleware>(master_key_, &replay_checker_);
         encryption_mw_ = std::make_shared<EncryptionMiddleware>(handshake_mw_.get());
 
-        // 启动 Gateway 监听
-        TCPServer::Config cfg;
-        cfg.port = listen_port;
-        server_ = std::make_unique<TCPServer>(cfg);
         server_->SetCallbacks(
-            [this](TCPConn* c) { OnClientConnect(c); },
-            [this](TCPConn* c, Packet& p) { OnClientPacket(c, p); },
-            [this](TCPConn* c) { OnClientClose(c); }
+            [this](AsyncTCPConnection* c) { OnClientConnect(c); },
+            [this](AsyncTCPConnection* c, Packet& p) { OnClientPacket(c, p); },
+            [this](AsyncTCPConnection* c) { OnClientClose(c); }
         );
         // 注册中间件：先握手，后加密解密
         server_->Use(handshake_mw_);
@@ -293,14 +293,15 @@ public:
     }
 
 private:
-    void OnClientConnect(TCPConn* conn) {
+    void OnClientConnect(AsyncTCPConnection* conn) {
         std::lock_guard<std::mutex> lk(sessions_mtx_);
         clients_[conn->ID()] = conn;
         conn_gauge_->Inc();
         std::cout << "Client connected: " << conn->ID() << std::endl;
     }
 
-    void OnClientPacket(TCPConn* conn, Packet& pkt) {
+    void OnClientPacket(AsyncTCPConnection* conn, Packet& pkt) {
+        (void)conn;
         auto start = std::chrono::steady_clock::now();
         req_counter_->Inc();
 
@@ -316,13 +317,13 @@ private:
         req_latency_->Observe(static_cast<double>(ms));
     }
 
-    void OnBizPacket(TCPConn* conn, Packet& pkt) {
+    void OnBizPacket(IConnection* conn, Packet& pkt) {
         (void)conn;
         // 单次加锁完成所有目标收集和加密发送，避免并发断开导致 UAF
         std::lock_guard<std::mutex> lk(sessions_mtx_);
 
-        std::vector<TCPConn*> targets_plain;
-        std::vector<std::pair<TCPConn*, std::vector<uint8_t>>> targets_encrypted;
+        std::vector<IConnection*> targets_plain;
+        std::vector<std::pair<IConnection*, std::vector<uint8_t>>> targets_encrypted;
 
         for (auto& [id, client] : clients_) {
             if (handshake_mw_->IsHandshaked(id)) {
@@ -351,7 +352,7 @@ private:
         }
     }
 
-    void OnClientClose(TCPConn* conn) {
+    void OnClientClose(AsyncTCPConnection* conn) {
         std::lock_guard<std::mutex> lk(sessions_mtx_);
         clients_.erase(conn->ID());
         handshake_mw_->RemoveSession(conn->ID());
@@ -359,12 +360,12 @@ private:
         std::cout << "Client disconnected: " << conn->ID() << std::endl;
     }
 
-    std::unique_ptr<TCPServer> server_;
-    std::unique_ptr<UpstreamPool> biz_pool_;
-    std::unique_ptr<WriteCoalescer> coalescer_;
+    std::unique_ptr<AsyncTCPServer> server_;
+    std::unique_ptr<AsyncUpstreamPool> biz_pool_;
+    std::unique_ptr<AsyncWriteCoalescer> coalescer_;
     std::unique_ptr<gs::registry::RegistryClient> reg_client_;
     std::mutex sessions_mtx_;
-    std::unordered_map<uint64_t, TCPConn*> clients_;
+    std::unordered_map<uint64_t, AsyncTCPConnection*> clients_;
     std::vector<uint8_t> master_key_;
     gs::replay::Checker replay_checker_{std::chrono::seconds(300)};
 
@@ -399,13 +400,6 @@ static std::vector<std::pair<std::string, uint16_t>> ParseAddrList(const std::st
 }
 
 int main(int argc, char* argv[]) {
-#ifdef _WIN32
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        std::cerr << "WSAStartup failed" << std::endl;
-        return 1;
-    }
-#endif
     uint16_t gateway_port = 8081;
 
     // Registry 地址（多节点）
@@ -441,8 +435,5 @@ int main(int argc, char* argv[]) {
     }
     gw.Wait();
     gw.Stop();
-#ifdef _WIN32
-    WSACleanup();
-#endif
     return 0;
 }
