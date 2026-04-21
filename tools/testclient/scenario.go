@@ -72,13 +72,14 @@ func (s *HeartbeatScenario) Run(bot *Bot, stats *GlobalStats, stopCh <-chan stru
 	account := fmt.Sprintf("bot_%d_%d", bot.id, time.Now().UnixNano())
 	password := "test1234"
 
-	// 登录
+	// 登录（失败时不退出，继续发送心跳）
 	start := time.Now()
 	if err := bot.Login(account, password); err != nil {
 		stats.Record(false, time.Since(start))
-		return fmt.Errorf("bot %d login failed: %w", bot.id, err)
+		fmt.Printf("Bot %d login failed (continuing with heartbeat): %v\n", bot.id, err)
+	} else {
+		stats.Record(true, time.Since(start))
 	}
-	stats.Record(true, time.Since(start))
 
 	ticker := time.NewTicker(s.Interval)
 	defer ticker.Stop()

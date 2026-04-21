@@ -40,7 +40,15 @@ bool RegistryClient::Connect() {
             owned_loop_->Run();
         }).detach();
     }
-    return pool_->Start();
+    if (!pool_->Start()) {
+        return false;
+    }
+    // 等待连接建立（异步连接最多等 3 秒）
+    for (int i = 0; i < 30; ++i) {
+        if (IsConnected()) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    return true;
 }
 
 void RegistryClient::Close() {
@@ -128,7 +136,6 @@ bool RegistryClient::Watch(const std::string& service_type, EventCallback on_eve
 
 void RegistryClient::OnPacket(net::IConnection* conn, net::Packet& pkt) {
     (void)conn;
-
     // NodeEvent 是服务端推送，不走 pending 映射
     if (pkt.header.cmd_id == CMD_NODE_EVENT) {
         ::registry::NodeEvent ev;
@@ -187,7 +194,16 @@ bool RegistryClient::Call(uint32_t cmd_id, const std::vector<uint8_t>& payload,
     pkt.header.flags  = static_cast<uint32_t>(net::Flag::RPC_REQ);
     pkt.payload = payload;
 
-    if (!pool_->SendPacket(pkt)) {
+    // 发送重试：异步连接可能尚未就绪，最多重试 5 次
+    bool sent = false;
+    for (int retry = 0; retry < 5; ++retry) {
+        if (pool_->SendPacket(pkt)) {
+            sent = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+    if (!sent) {
         std::lock_guard<std::mutex> lk(pending_mtx_);
         pending_.erase(seq);
         std::cerr << "RegistryClient::Call: no healthy node available" << std::endl;

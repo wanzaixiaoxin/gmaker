@@ -82,6 +82,22 @@ func (c *Client) Register(node *pb.NodeInfo) (*pb.Result, error) {
 	return &res, nil
 }
 
+// RegisterWithRetry 带退避重试的注册，适用于服务启动时 Registry 尚未就绪的场景
+func (c *Client) RegisterWithRetry(node *pb.NodeInfo, maxRetries int) (*pb.Result, error) {
+	var lastErr error
+	for i := 0; i < maxRetries; i++ {
+		res, err := c.Register(node)
+		if err == nil {
+			return res, nil
+		}
+		lastErr = err
+		if i < maxRetries-1 {
+			time.Sleep(time.Duration(i+1) * time.Second)
+		}
+	}
+	return nil, lastErr
+}
+
 // Heartbeat 发送心跳
 func (c *Client) Heartbeat(nodeID string) (*pb.Result, error) {
 	req := &pb.NodeId{NodeId: nodeID}

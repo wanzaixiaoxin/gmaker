@@ -103,10 +103,18 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	select {
-	case <-time.After(*duration):
-		// 正常结束
-	case <-sigCh:
+	if *duration > 0 {
+		select {
+		case <-time.After(*duration):
+			// 正常结束
+		case <-sigCh:
+			if *output == "text" {
+				fmt.Println("\nReceived signal, stopping...")
+			}
+		}
+	} else {
+		// duration == 0 表示永久运行（守护模式）
+		<-sigCh
 		if *output == "text" {
 			fmt.Println("\nReceived signal, stopping...")
 		}

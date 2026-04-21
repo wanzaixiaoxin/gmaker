@@ -3,16 +3,17 @@
 
 param(
     [Parameter()]
-    [ValidateSet("all", "registry", "biz", "dbproxy", "gateway", "logstats")]
+    [ValidateSet("all", "registry", "biz", "dbproxy", "gateway", "logstats", "testclient")]
     [string]$Target = "all"
 )
 
 $exeMap = @{
-    "registry" = "registry-go"
-    "biz"      = "biz-go"
-    "dbproxy"  = "dbproxy-go"
-    "gateway"  = "gateway-cpp"
-    "logstats" = "logstats-go"
+    "registry"   = "registry-go"
+    "biz"        = "biz-go"
+    "dbproxy"    = "dbproxy-go"
+    "gateway"    = "gateway-cpp"
+    "logstats"   = "logstats-go"
+    "testclient" = "testclient"
 }
 
 Write-Host "==========================================" -ForegroundColor Cyan

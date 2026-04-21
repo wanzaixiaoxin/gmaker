@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include <unordered_map>
 #include <mutex>
 #include <condition_variable>
@@ -175,6 +176,12 @@ private:
     std::shared_ptr<gs::logger::Logger> gateway_logger_;
 };
 
+inline std::string ToHex(uint32_t v) {
+    std::stringstream ss;
+    ss << std::hex << std::uppercase << v;
+    return ss.str();
+}
+
 class Gateway {
 public:
     void SetLogger(std::shared_ptr<gs::logger::Logger> logger) { logger_ = logger; }
@@ -192,14 +199,34 @@ public:
         req_latency_ = gs::metrics::DefaultHistogram("gateway_request_duration_ms", {1, 5, 10, 25, 50, 100, 250, 500, 1000});
         conn_gauge_  = gs::metrics::DefaultGauge("gateway_connections");
 
-        // 启动 Gateway 监听（先创建服务器，以便共享事件循环）
+        // 启动 Gateway 监听（先创建服务器并设置回调/中间件，再启动事件循环）
         AsyncTCPServer::Config cfg;
         cfg.port = listen_port;
         server_ = std::make_unique<AsyncTCPServer>(cfg);
 
+        // 初始化中间件（必须在 Start 前注册，否则新连接无法被正确处理）
+        handshake_mw_ = std::make_shared<HandshakeMiddleware>(master_key_, &replay_checker_, logger_);
+        encryption_mw_ = std::make_shared<EncryptionMiddleware>(handshake_mw_.get(), logger_);
+        server_->SetCallbacks(
+            [this](AsyncTCPConnection* c) { OnClientConnect(c); },
+            [this](AsyncTCPConnection* c, Packet& p) { OnClientPacket(c, p); },
+            [this](AsyncTCPConnection* c) { OnClientClose(c); }
+        );
+        server_->Use(handshake_mw_);
+        server_->Use(encryption_mw_);
+
+        if (!server_->Start()) {
+            if (logger_) logger_->Error("Failed to start gateway server");
+            return false;
+        }
+        if (logger_) logger_->Info("Gateway server started on port " + std::to_string(listen_port));
+
         // 初始化写聚合器（Write Coalescing），共享服务器事件循环
         coalescer_ = std::make_unique<AsyncWriteCoalescer>(server_->EventLoop(), 16);
-        coalescer_->Start();
+        if (!coalescer_->Start()) {
+            if (logger_) logger_->Error("Failed to start write coalescer");
+            return false;
+        }
 
         // 初始化 UpstreamPool，共享服务器事件循环
         biz_pool_ = std::make_unique<AsyncUpstreamPool>(
@@ -260,23 +287,6 @@ public:
         }
         if (logger_) logger_->Info("Biz upstream pool started, " + std::to_string(biz_pool_->HealthyCount()) + "/" + std::to_string(biz_pool_->TotalCount()) + " nodes connected");
 
-        // 初始化中间件
-        handshake_mw_ = std::make_shared<HandshakeMiddleware>(master_key_, &replay_checker_, logger_);
-        encryption_mw_ = std::make_shared<EncryptionMiddleware>(handshake_mw_.get(), logger_);
-
-        server_->SetCallbacks(
-            [this](AsyncTCPConnection* c) { OnClientConnect(c); },
-            [this](AsyncTCPConnection* c, Packet& p) { OnClientPacket(c, p); },
-            [this](AsyncTCPConnection* c) { OnClientClose(c); }
-        );
-        // 注册中间件：先握手，后加密解密
-        server_->Use(handshake_mw_);
-        server_->Use(encryption_mw_);
-
-        if (!server_->Start()) {
-            if (logger_) logger_->Error("Failed to start gateway server");
-            return false;
-        }
         if (logger_) logger_->Info("Gateway listening on port " + std::to_string(listen_port));
         return true;
     }
@@ -313,11 +323,21 @@ private:
         auto start = std::chrono::steady_clock::now();
         req_counter_->Inc();
 
+        if (logger_) {
+            logger_->Info("[Flow] Client -> Gateway: client=" + std::to_string(conn->ID()) +
+                          " cmd=0x" + ToHex(pkt.header.cmd_id) + " seq=" + std::to_string(pkt.header.seq_id));
+        }
+
         // 转发到 Biz（轮询负载均衡）
         pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.size());
         if (!biz_pool_->SendPacket(pkt)) {
             if (logger_) logger_->Warn("No healthy biz node available to forward packet");
             // TODO: 向客户端返回 SERVICE_UNAVAILABLE 错误包
+        } else {
+            if (logger_) {
+                logger_->Info("[Flow] Gateway -> Biz: cmd=0x" + ToHex(pkt.header.cmd_id) +
+                              " seq=" + std::to_string(pkt.header.seq_id));
+            }
         }
 
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -327,6 +347,11 @@ private:
 
     void OnBizPacket(IConnection* conn, Packet& pkt) {
         (void)conn;
+        if (logger_) {
+            logger_->Info("[Flow] Biz -> Gateway: cmd=0x" + ToHex(pkt.header.cmd_id) +
+                          " seq=" + std::to_string(pkt.header.seq_id));
+        }
+
         // 单次加锁完成所有目标收集和加密发送，避免并发断开导致 UAF
         std::lock_guard<std::mutex> lk(sessions_mtx_);
 
@@ -340,6 +365,8 @@ private:
                 targets_plain.push_back(client);
             }
         }
+
+        size_t total_targets = targets_plain.size() + targets_encrypted.size();
 
         // 明文连接直接通过 coalescer 广播
         if (!targets_plain.empty()) {
@@ -357,6 +384,14 @@ private:
             } catch (const std::exception& e) {
                 if (logger_) logger_->Error("Encrypt failed: " + std::string(e.what()));
             }
+        }
+
+        if (logger_ && total_targets > 0) {
+            logger_->Info("[Flow] Gateway -> Client: cmd=0x" + ToHex(pkt.header.cmd_id) +
+                          " seq=" + std::to_string(pkt.header.seq_id) +
+                          " targets=" + std::to_string(total_targets) +
+                          " (plain=" + std::to_string(targets_plain.size()) +
+                          ", encrypted=" + std::to_string(targets_encrypted.size()) + ")");
         }
     }
 

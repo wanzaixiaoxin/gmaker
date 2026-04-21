@@ -5,8 +5,8 @@
 #include <bcrypt.h>
 #pragma comment(lib, "bcrypt.lib")
 
-#ifndef BCRYPT_AES_GCM_ALGORITHM
-#define BCRYPT_AES_GCM_ALGORITHM L"AESGCM"
+#ifndef BCRYPT_CHAIN_MODE_GCM
+#define BCRYPT_CHAIN_MODE_GCM L"ChainingModeGCM"
 #endif
 
 #ifndef NT_SUCCESS
@@ -17,6 +17,21 @@ namespace gs {
 namespace crypto {
 
 namespace {
+
+// 打开 AES 算法并设置为 GCM 模式（Windows CNG 不支持直接的 AES-GCM 算法名）
+static BCRYPT_ALG_HANDLE OpenAESGCMProvider() {
+    BCRYPT_ALG_HANDLE hAlg = nullptr;
+    if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_AES_ALGORITHM, nullptr, 0))) {
+        return nullptr;
+    }
+    if (!NT_SUCCESS(BCryptSetProperty(hAlg, BCRYPT_CHAINING_MODE,
+                                      (PBYTE)BCRYPT_CHAIN_MODE_GCM,
+                                      sizeof(BCRYPT_CHAIN_MODE_GCM), 0))) {
+        BCryptCloseAlgorithmProvider(hAlg, 0);
+        return nullptr;
+    }
+    return hAlg;
+}
 
 // RAII 包装器，确保 BCrypt 句柄在任何退出路径都被释放
 class BCryptAlgHandle {
@@ -69,9 +84,9 @@ std::vector<uint8_t> AESGCMEncrypt(const std::vector<uint8_t>& key,
         throw std::invalid_argument("key must be 32 bytes for AES-256");
     }
 
-    BCRYPT_ALG_HANDLE hAlgRaw = nullptr;
-    if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(&hAlgRaw, BCRYPT_AES_GCM_ALGORITHM, nullptr, 0))) {
-        throw std::runtime_error("BCryptOpenAlgorithmProvider failed");
+    BCRYPT_ALG_HANDLE hAlgRaw = OpenAESGCMProvider();
+    if (!hAlgRaw) {
+        throw std::runtime_error("OpenAESGCMProvider failed");
     }
     BCryptAlgHandle hAlg(hAlgRaw);
 
@@ -108,14 +123,8 @@ std::vector<uint8_t> AESGCMEncrypt(const std::vector<uint8_t>& key,
     authInfo.pbTag = nullptr;
     authInfo.cbTag = 0;
 
-    // 先查询所需输出大小
-    ULONG cbCipherText = 0;
-    if (!NT_SUCCESS(BCryptEncrypt(hKey.get(), (PUCHAR)plaintext.data(), (ULONG)plaintext.size(),
-                                   &authInfo, nullptr, 0, nullptr, 0, &cbCipherText, 0))) {
-        throw std::runtime_error("BCryptEncrypt (size query) failed");
-    }
-
-    // 分配密文缓冲区（含 tag 空间）
+    // AES-GCM 密文大小 = 明文大小，再加上 16 字节 tag
+    ULONG cbCipherText = static_cast<ULONG>(plaintext.size() + kTagSize);
     std::vector<uint8_t> ciphertext(cbCipherText);
 
     // 设置 tag 输出位置
@@ -153,9 +162,9 @@ std::vector<uint8_t> AESGCMDecrypt(const std::vector<uint8_t>& key,
     std::vector<uint8_t> ciphertext(data.begin() + kNonceSize, data.end());
     size_t plaintextSize = ciphertext.size() - kTagSize;
 
-    BCRYPT_ALG_HANDLE hAlgRaw = nullptr;
-    if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(&hAlgRaw, BCRYPT_AES_GCM_ALGORITHM, nullptr, 0))) {
-        throw std::runtime_error("BCryptOpenAlgorithmProvider failed");
+    BCRYPT_ALG_HANDLE hAlgRaw = OpenAESGCMProvider();
+    if (!hAlgRaw) {
+        throw std::runtime_error("OpenAESGCMProvider failed");
     }
     BCryptAlgHandle hAlg(hAlgRaw);
 

@@ -3,7 +3,7 @@
 
 param(
     [Parameter()]
-    [ValidateSet("minimal", "full", "registry", "biz", "dbproxy", "gateway", "logstats", "all")]
+    [ValidateSet("minimal", "full", "registry", "biz", "dbproxy", "gateway", "logstats", "testclient", "all")]
     [string]$Target = "minimal",
 
     [Parameter()]
@@ -57,6 +57,10 @@ function Start-LogStats {
     $logFile = Join-Path $logDir "logstats_${logTs}.log"
     Start-ServiceProcess "LogStats" (Join-Path $binDir "logstats-go.exe") "-listen 127.0.0.1:8085 -http :8086 -log-file `"$logFile`" -log-level $LogLevel"
 }
+function Start-TestClient {
+    $logFile = Join-Path $logDir "testclient_${logTs}.log"
+    Start-ServiceProcess "TestClient" (Join-Path $binDir "testclient.exe") "-addr 127.0.0.1:8081 -bots 1 -scenario heartbeat -duration 0 -interval 5s"
+}
 
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "  gmaker Service Starter" -ForegroundColor Cyan
@@ -64,12 +68,13 @@ Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
 switch ($Target) {
-    "registry"  { Start-Registry }
-    "dbproxy"   { Start-DBProxy }
-    "biz"       { Start-Biz }
-    "gateway"   { Start-Gateway }
-    "logstats"  { Start-LogStats }
-    "minimal"   {
+    "registry"   { Start-Registry }
+    "dbproxy"    { Start-DBProxy }
+    "biz"        { Start-Biz }
+    "gateway"    { Start-Gateway }
+    "logstats"   { Start-LogStats }
+    "testclient" { Start-TestClient }
+    "minimal"    {
         Write-Host "Starting minimal link (Registry -> Biz -> Gateway)..." -ForegroundColor Cyan
         Start-Registry; Start-Sleep -Milliseconds 800
         Start-Biz;      Start-Sleep -Milliseconds 800
@@ -90,6 +95,7 @@ switch ($Target) {
         Start-Biz;      Start-Sleep -Milliseconds 800
         Start-Gateway;  Start-Sleep -Milliseconds 500
         Start-LogStats; Start-Sleep -Milliseconds 500
+        Start-TestClient; Start-Sleep -Milliseconds 500
     }
 }
 

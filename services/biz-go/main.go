@@ -88,25 +88,24 @@ func main() {
 		Port:        parsePort(*listenAddr),
 		RegisterAt:  uint64(time.Now().Unix()),
 	}
-	if _, err := regClient.Register(node); err != nil {
+	if _, err := regClient.RegisterWithRetry(node, 5); err != nil {
 		log.Fatalf("register failed: %v", err)
 	}
 	log.Info("Biz registered to registry")
 
-	// 连接 DBProxy（多节点）
+	// 连接 DBProxy（多节点），失败时不阻塞启动（Phase 1 最小链路无需 DBProxy）
+	var playerSvc *PlayerService // 在闭包之前声明
 	dbClient := NewDBProxyClient(strings.Split(*dbproxyAddrs, ","))
 	if err := dbClient.Connect(); err != nil {
-		log.Fatalf("connect dbproxy failed: %v", err)
-	}
-	defer dbClient.Close()
-	log.Info("Biz connected to dbproxy")
-
-	// 业务服务层（与 DBProxy 客户端解耦）
-	playerSvc := NewPlayerService(dbClient, idGen, log)
-
-	// 确保 player 表存在
-	if err := ensurePlayerTable(playerSvc); err != nil {
-		log.Fatalf("ensure player table failed: %v", err)
+		log.Warnf("connect dbproxy failed: %v, running without dbproxy", err)
+	} else {
+		log.Info("Biz connected to dbproxy")
+		// 业务服务层（与 DBProxy 客户端解耦）
+		playerSvc = NewPlayerService(dbClient, idGen, log)
+		// 确保 player 表存在
+		if err := ensurePlayerTable(playerSvc); err != nil {
+			log.Warnf("ensure player table failed: %v, player service disabled", err)
+		}
 	}
 
 	// 启动 TCP 服务
@@ -116,7 +115,13 @@ func main() {
 			start := time.Now()
 			connGauge.Inc()
 			reqCounter.Inc()
-			handleBizPacket(conn, pkt, playerSvc)
+			log.Info(fmt.Sprintf("[Flow] OnData: cmd=0x%08X seq=%d", pkt.CmdID, pkt.SeqID))
+			if playerSvc == nil {
+				// DBProxy 不可用时返回服务不可用
+				sendProto(conn, pkt.SeqID, pkt.CmdID+1, &commonpb.Result{Ok: false, Code: 503, Msg: "service unavailable"})
+			} else {
+				handleBizPacket(conn, pkt, playerSvc)
+			}
 			reqLatency.Observe(float64(time.Since(start).Milliseconds()))
 			connGauge.Dec()
 		},
@@ -142,6 +147,7 @@ func handleBizPacket(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
 	ctx, traceID := trace.Ensure(context.Background())
 	_ = ctx
 	log := svc.log.WithTrace(traceID)
+	svc.log.Info(fmt.Sprintf("[Flow] Gateway -> Biz: cmd=0x%08X seq=%d flags=%d payload=%d", pkt.CmdID, pkt.SeqID, pkt.Flags, len(pkt.Payload)))
 	switch pkt.CmdID {
 	case CmdLoginReq:
 		log.Infof("[%s] login req", traceID)
@@ -153,7 +159,7 @@ func handleBizPacket(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService) {
 		log.Infof("[%s] update_player req", traceID)
 		handleUpdatePlayer(conn, pkt, svc, traceID)
 	case CmdPing:
-		handlePing(conn, pkt)
+		handlePing(conn, pkt, traceID)
 	default:
 		log.Warnf("unknown cmd_id: 0x%08X", pkt.CmdID)
 	}
@@ -232,12 +238,14 @@ func handleUpdatePlayer(conn *net.TCPConn, pkt *net.Packet, svc *PlayerService, 
 	sendUpdatePlayerRes(conn, pkt.SeqID, 0)
 }
 
-func handlePing(conn *net.TCPConn, pkt *net.Packet) {
+func handlePing(conn *net.TCPConn, pkt *net.Packet, traceID string) {
 	var req bizpb.Ping
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
+		logger.Info(fmt.Sprintf("[Flow] Biz -> Gateway: ping parse error: %v", err))
 		return
 	}
 	res := &bizpb.Pong{ClientTime: req.ClientTime, ServerTime: uint64(time.Now().UnixMilli())}
+	logger.Info(fmt.Sprintf("[Flow] Biz -> Gateway: cmd=0x%08X seq=%d (pong)", CmdPong, pkt.SeqID))
 	sendProto(conn, pkt.SeqID, CmdPong, res)
 }
 

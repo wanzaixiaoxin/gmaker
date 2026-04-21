@@ -62,6 +62,16 @@ struct RealtimeServer {
         AsyncTCPServer::Config cfg;
         cfg.port = listen_port;
         server_ = std::make_unique<AsyncTCPServer>(cfg);
+        server_->SetCallbacks(
+            [this](AsyncTCPConnection* c) { OnClientConnect(c); },
+            [this](AsyncTCPConnection* c, Packet& p) { OnClientPacket(c, p); },
+            [this](AsyncTCPConnection* c) { OnClientClose(c); }
+        );
+        if (!server_->Start()) {
+            if (logger_) logger_->Error("Failed to start realtime server");
+            return false;
+        }
+        if (logger_) logger_->Info("Realtime server started on port " + std::to_string(listen_port));
 
         // 连接 Gateway（多节点，从 Registry 发现或 fallback），共享服务器事件循环
         gateway_pool_ = std::make_unique<AsyncUpstreamPool>(
@@ -101,15 +111,6 @@ struct RealtimeServer {
             return false;
         }
 
-        server_->SetCallbacks(
-            [this](AsyncTCPConnection* c) { OnClientConnect(c); },
-            [this](AsyncTCPConnection* c, Packet& p) { OnClientPacket(c, p); },
-            [this](AsyncTCPConnection* c) { OnClientClose(c); }
-        );
-        if (!server_->Start()) {
-            if (logger_) logger_->Error("Failed to start realtime server");
-            return false;
-        }
         if (logger_) logger_->Info("Realtime server listening on port " + std::to_string(listen_port));
         return true;
     }

@@ -30,17 +30,25 @@ func NewMemoryStore() *MemoryStore {
 
 func (m *MemoryStore) Register(ctx context.Context, node *pb.NodeInfo) (int64, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	leaseID := m.seqID
 	m.seqID++
 	m.nodes[node.NodeId] = node
 	m.leases[node.NodeId] = leaseID
 
-	m.broadcast(node.ServiceType, &pb.NodeEvent{
-		Type: pb.NodeEvent_JOIN,
-		Node: node,
-	})
+	// 复制 watchers 列表并在解锁后广播，避免同一线程内 Lock -> RLock 死锁
+	var watchers []chan *pb.NodeEvent
+	if arr, ok := m.watches[node.ServiceType]; ok {
+		watchers = make([]chan *pb.NodeEvent, len(arr))
+		copy(watchers, arr)
+	}
+	m.mu.Unlock()
+
+	for _, ch := range watchers {
+		select {
+		case ch <- &pb.NodeEvent{Type: pb.NodeEvent_JOIN, Node: node}:
+		default:
+		}
+	}
 	return leaseID, nil
 }
 

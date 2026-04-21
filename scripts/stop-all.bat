@@ -14,6 +14,9 @@ echo Stopping C++ services ...
 taskkill /F /IM gateway-cpp.exe 2>nul
 taskkill /F /IM realtime-cpp.exe 2>nul
 
+echo Stopping test clients ...
+taskkill /F /IM testclient.exe 2>nul
+
 echo.
 echo All services stopped.
 pause
