@@ -1,50 +1,93 @@
 # gmaker
 
-去中心化游戏服务器框架骨架，采用 Go + C++ 双语言栈，通过 TCP + protobuf3 进行服务间通信。
+去中心化游戏服务器框架骨架，采用 **Go + C++ 双语言栈**，通过自研 TCP 二进制协议 + protobuf3 进行服务间通信。
+
+> 当前已完成 6 个 Phase 的基础设施落地，核心链路 `Client -> Gateway(C++) -> Biz(Go) -> Registry(Go)` 已跑通。
+
+---
 
 ## 技术栈
 
-- **Go**：业务服（Biz）、注册中心（Registry）、日志统计（LogStats）等 IO/业务密集型服务
-- **C++**：网关（Gateway）、实时服（Realtime）等网络/计算密集型服务
-- **协议**：18 字节定长二进制帧头 + protobuf3 包体
-- **服务发现**：Registry (Go) + Etcd（Phase 1 提供 memory 模式兜底）
-- **构建**：Makefile（Go）+ CMake（C++）
+| 层面 | 技术/工具 | 说明 |
+|------|-----------|------|
+| **Go** | 1.22+ | 业务服（Biz）、注册中心（Registry）、数据库代理（DBProxy）、日志统计（LogStats）等 IO/业务密集型服务 |
+| **C++** | C++17 | 网关（Gateway）、实时服（Realtime）等网络/计算密集型服务 |
+| **协议** | protobuf3 | 18 字节定长二进制帧头 + protobuf3 包体，大端序 |
+| **网络（C++）** | libuv | 异步 IO（已统一替代阻塞模型） |
+| **网络（Go）** | 标准库 `net` | 薄封装，自研拆包粘包 |
+| **服务发现** | Registry (Go) | 支持 etcd / memory 双后端 |
+| **构建** | Makefile + CMake | Makefile 负责 Go + Proto，CMake 负责 C++ |
+| **部署** | Docker Compose | 完整编排见 `tools/deploy/` |
+
+---
 
 ## 目录结构
 
 ```
-common/
-  go/net/        Go 网络库（TCP 连接/拆包/服务端/客户端）
-  go/registry/   Go Registry SDK
-  go/rpc/        Go RPC 封装（Req-Res 配对、超时）
-  cpp/gs/net/    C++ 网络库（WinSock2 阻塞模型）
-  cpp/gs/registry/  C++ Registry SDK
-  cpp/gs/rpc/    C++ RPC 封装
-services/
-  registry-go/   注册中心（支持 etcd / memory 双后端）
-  biz-go/        业务服骨架
-  gateway-cpp/   网关服（客户端接入 + 转发 Biz）
-  realtime-cpp/  实时服骨架
-spec/
-  proto/         protobuf3 协议定义
-  cmd_ids.yaml   全局命令号
-  errors.toml    错误码体系
-  rpc_spec.yaml  RPC 行为契约
-tests/phase1/    Phase 1 端到端联调测试
+gmaker/
+├── common/                 # 公共库（Go + C++ 双语言对称实现）
+│   ├── go/net/             # TCP 网络框架（Server/Client、拆包粘包）
+│   ├── go/registry/        # Registry SDK（注册/心跳/发现/监听）
+│   ├── go/rpc/             # RPC 客户端（Req-Res、Fire-Forget、超时）
+│   ├── go/crypto/          # AES-256-GCM、HMAC-SHA256
+│   ├── go/limiter/         # 令牌桶限流 + 熔断器
+│   ├── cpp/gs/net/         # C++ 异步网络封装（libuv）
+│   ├── cpp/gs/registry/    # C++ Registry SDK
+│   ├── cpp/gs/rpc/         # C++ RPC 封装
+│   └── cpp/gs/crypto/      # C++ 加密库
+├── services/               # 可独立部署的服务
+│   ├── registry-go/        # 注册中心（etcd / memory 双后端）
+│   ├── biz-go/             # 业务服骨架（登录、玩家数据、Ping）
+│   ├── dbproxy-go/         # 数据库代理（Redis + MySQL 统一入口）
+│   ├── logstats-go/        # 日志收集与实时聚合
+│   ├── login-go/           # 登录验签服（占位）
+│   ├── bot-go/             # 压测机器人（占位）
+│   ├── gateway-cpp/        # C++ 网关（客户端接入、转发 Biz、加密握手）
+│   └── realtime-cpp/       # C++ 实时服骨架（Room + ComputeThread）
+├── spec/                   # 协议与规范
+│   ├── proto/              # protobuf3 定义
+│   ├── cmd_ids.yaml        # 全局命令号
+│   ├── errors.toml         # 错误码体系
+│   └── rpc_spec.yaml       # RPC 行为契约
+├── gen/                    # 生成的 protobuf 代码（Go + C++）
+├── tests/
+│   ├── phase1/             # Phase 1 端到端联调（无需 MySQL/Redis）
+│   └── phase2/             # Phase 2 数据链路测试（需 MySQL + Redis）
+├── tools/
+│   ├── deploy/             # Docker Compose 全服编排
+│   └── testclient/         # 测试客户端
+└── 3rd/                    # 第三方依赖
+    ├── libuv/              # 异步 IO 库
+    ├── protobuf/           # protobuf 34.1 源码与构建产物
+    └── rapidjson/          # JSON 解析（header-only）
 ```
+
+---
 
 ## 环境准备
 
-当前已在 Windows + MSYS2/MinGW 环境验证，需要：
+已在 **Windows + MSVC 2022** 环境验证，需要：
 
-- Go 1.22+
-- protoc 25.1+ + Go 插件（`protoc-gen-go`、`protoc-gen-go-grpc`）
-- CMake 3.16+ + MSVC 2022
-- etcd（可选；未安装时 Registry 可用 `-store memory` 运行）
+- **Go** 1.22+
+- **CMake** 3.16+
+- **MSVC 2022**（C++ 服务）
+- **etcd**（可选；未安装时 Registry 可用 `-store memory` 运行）
+- **MySQL 8.0 + Redis 7**（仅 Phase 2 测试及完整部署需要）
 
-> 若本地未安装上述工具，可下载并加入 `PATH` 后使用。
+> 本项目已内置 protobuf 34.1 源码与预编译产物于 `3rd/protobuf/`，无需额外安装 protoc。
+
+---
 
 ## 编译
+
+### Windows（推荐）
+
+```bash
+# 一键编译全部服务（Go + C++）
+./build.bat
+```
+
+### Makefile（Go + Proto）
 
 ```bash
 # 生成 protobuf 代码（Go + C++）
@@ -60,31 +103,132 @@ make build-cpp
 make build
 ```
 
-编译产物：
-- `bin/registry-go.exe`
-- `bin/biz-go.exe`
-- `build/Release/gateway-cpp.exe`
-- `build/Release/realtime-cpp.exe`
+### 编译产物
+
+```
+bin/
+  ├── registry-go.exe
+  ├── dbproxy-go.exe
+  ├── biz-go.exe
+  ├── logstats-go.exe
+  ├── gateway-cpp.exe      (从 build/Release/ 复制)
+  ├── realtime-cpp.exe     (从 build/Release/ 复制)
+  └── test-crypto.exe
+```
+
+---
 
 ## 运行
 
-### 手动启动（Phase 1 链路）
+### 快速启动脚本
+
+项目提供 `scripts/` 目录下的快捷脚本，方便开发调试：
 
 ```bash
-# 1. 启动 Registry（内存模式，无需 etcd）
+# 启动 Phase 1 最小链路（Registry + Biz + Gateway）
+scripts\start-minimal.bat
+
+# 启动 Phase 2 完整链路（Registry + DBProxy + Biz + Gateway）
+scripts\start-full.bat
+
+# 停止所有服务
+scripts\stop-all.bat
+
+# 单独启动某个服务
+scripts\start-registry.bat
+scripts\start-biz.bat
+scripts\start-dbproxy.bat
+scripts\start-gateway.bat
+scripts\start-logstats.bat
+
+# 一键编译并运行测试
+scripts\run-phase1.bat
+scripts\run-phase2.bat
+```
+
+PowerShell 用户也可以使用：
+
+```powershell
+# 启动指定服务组合
+.\scripts\start-services.ps1 minimal   # minimal / full / all / registry / biz / dbproxy / gateway / logstats
+
+# 停止指定或全部服务
+.\scripts\stop-services.ps1 all       # all / registry / biz / dbproxy / gateway / logstats
+```
+
+### 手动启动（Phase 1，无需 MySQL/Redis）
+
+```bash
+# 1. 启动 Registry（内存模式）
 ./bin/registry-go.exe -listen 127.0.0.1:2379 -store memory
 
 # 2. 启动 Biz
 ./bin/biz-go.exe -listen 127.0.0.1:8082 -registry 127.0.0.1:2379
 
-# 3. 启动 Gateway（参数：gateway_port biz_host biz_port）
-./build/Release/gateway-cpp.exe 8081 127.0.0.1 8082
+# 3. 启动 Gateway（参数：gateway_port registry_addr fallback_biz_nodes）
+./bin/gateway-cpp.exe 8081 127.0.0.1:2379 127.0.0.1:8082
 ```
 
 ### 一键联调测试
 
 ```bash
+# Phase 1（验证 Client -> Gateway -> Biz -> Registry 链路）
 go run tests/phase1/main.go
+
+# Phase 2（验证登录 -> 读玩家数据 -> 修改 -> 写回，需本地 MySQL + Redis）
+go run tests/phase2/main.go
 ```
 
-测试会自动拉起 Registry、Biz、Gateway，并模拟 Client 通过 Gateway 向 Biz 发送 Ping 包，验证 `Client -> Gateway(C++) -> Biz(Go) -> Registry(Go)` 整条链路。
+### Docker Compose 全服部署
+
+```bash
+cd tools/deploy
+docker compose up -d
+```
+
+完整编排包含：etcd、mysql、redis、registry-go、dbproxy-go、biz-go×2、gateway-cpp、realtime-cpp、logstats-go、prometheus、grafana。
+
+---
+
+## 项目状态
+
+| Phase | 目标 | 状态 |
+|-------|------|------|
+| Phase 1 | 通信与发现骨架 | ✅ 完成 |
+| Phase 2 | 数据与存储基础设施 | ✅ 完成 |
+| Phase 3 | 安全与可靠性设施 | 🚧 进行中 |
+| Phase 4 | 可观测性设施 | ✅ 已完成子项 |
+| Phase 5 | 实时服基础设施 | 🚧 骨架阶段 |
+| Phase 6 | 部署与 CI/CD | ✅ 已完成子项 |
+
+详见 [IMPLEMENTATION.md](IMPLEMENTATION.md) 了解各 Phase 详细验收标准。
+
+---
+
+## 关键端口
+
+| 服务 | 业务端口 | Metrics 端口 |
+|------|----------|--------------|
+| registry-go | 2379 | - |
+| dbproxy-go | 3307 | - |
+| biz-go | 8082 | 9082 |
+| gateway-cpp | 8081 | 9081 |
+| realtime-cpp | 8084 | 9090 |
+| logstats-go | 8085 | 8086 |
+| prometheus | - | 9091 |
+| grafana | - | 3000 |
+
+---
+
+## 相关文档
+
+- [DESIGN.md](DESIGN.md) — 完整架构设计文档
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) — 落地实施计划与验收标准
+- [DESIGN_REVIEW.md](DESIGN_REVIEW.md) — 设计评审记录
+- [AGENTS.md](AGENTS.md) — 面向 AI Coding Agent 的项目指南
+
+---
+
+## License
+
+MIT
