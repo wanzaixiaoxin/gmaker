@@ -33,7 +33,14 @@ set GO_TOOLS=testclient
 
 for %%s in (%GO_SERVICES%) do (
     echo   [GO] Building services/%%s ...
-    go build -o "bin\%%s.exe" "./services/%%s" 2>nul
+    if exist "services\%%s\go.mod" (
+        pushd "services\%%s"
+        go mod tidy >nul 2>nul
+        go build -o "..\..\bin\%%s.exe" . 2>nul
+        popd
+    ) else (
+        go build -o "bin\%%s.exe" "./services/%%s" 2>nul
+    )
     if errorlevel 1 (
         echo   [FAIL] services/%%s
         set "BUILD_ERRORS=1"
@@ -68,9 +75,11 @@ where protoc >nul 2>nul
 if errorlevel 1 (
     if not exist "C:\Program Files\protobuf\include" (
         if not exist "C:\vcpkg\installed" (
-            echo   [SKIP] Protobuf C++ not detected.
-            echo          Install via vcpkg: vcpkg install protobuf
-            goto summary
+            if not exist "3rd\protobuf\protobuf-34.1\src\google\protobuf" (
+                echo   [SKIP] Protobuf C++ not detected.
+                echo          Install via vcpkg: vcpkg install protobuf
+                goto summary
+            )
         )
     )
 )

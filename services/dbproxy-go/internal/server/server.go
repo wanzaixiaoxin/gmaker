@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -180,12 +179,11 @@ func (s *Server) handleMySQLQuery(conn *net.TCPConn, pkt *net.Packet) {
 			if err := rows.Scan(scan...); err != nil {
 				continue
 			}
-			rowMap := make(map[string]string)
+			var rowCols []*pb.MySQLColumn
 			for i, col := range cols {
-				rowMap[col] = fmt.Sprintf("%v", vals[i])
+				rowCols = append(rowCols, &pb.MySQLColumn{Name: col, Value: fmt.Sprintf("%v", vals[i])})
 			}
-			rowBytes, _ := json.Marshal(rowMap)
-			res.Rows = append(res.Rows, rowBytes)
+			res.Rows = append(res.Rows, &pb.MySQLRow{Columns: rowCols})
 		}
 	}
 	s.sendProto(conn, pkt.SeqID, CmdMySQLQueryRes, res)

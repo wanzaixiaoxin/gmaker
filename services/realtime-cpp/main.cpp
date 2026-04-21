@@ -8,6 +8,7 @@
 #include "gs/net/async/upstream.hpp"
 #include "gs/net/packet.hpp"
 #include "gs/registry/client.hpp"
+#include "registry.pb.h"
 #include "gs/realtime/compute_thread.hpp"
 #include "gs/realtime/message.hpp"
 #include "gs/metrics/metrics.hpp"

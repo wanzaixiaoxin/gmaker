@@ -3,7 +3,6 @@ package net
 import (
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 

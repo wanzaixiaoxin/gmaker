@@ -13,6 +13,7 @@
 #include "gs/registry/client.hpp"
 #include "gs/metrics/metrics.hpp"
 #include "gs/errors.hpp"
+#include "registry.pb.h"
 
 using namespace gs::net;
 using namespace gs::net::async;

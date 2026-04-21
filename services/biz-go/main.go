@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -506,10 +505,10 @@ func parsePort(addr string) uint32 {
 	return 0
 }
 
-func parsePlayerRow(rowBytes []byte) (*bizpb.PlayerBase, error) {
+func parsePlayerRow(row *dbproxypb.MySQLRow) (*bizpb.PlayerBase, error) {
 	m := make(map[string]string)
-	if err := json.Unmarshal(rowBytes, &m); err != nil {
-		return nil, err
+	for _, col := range row.Columns {
+		m[col.Name] = col.Value
 	}
 	pid, _ := strconv.ParseUint(m["player_id"], 10, 64)
 	lvl, _ := strconv.ParseUint(m["level"], 10, 64)

@@ -8,12 +8,13 @@ GO_SERVICES    := services/registry-go
 CPP_SERVICES   := services/gateway-cpp services/realtime-cpp
 COMMON_GO      := common/go
 COMMON_CPP     := common/cpp/gs
+PROTOC         := 3rd/protobuf/protobuf-34.1/build/Release/protoc.exe
 
 # ==================== Protobuf 生成 ====================
 proto:
 	@echo "Generating protobuf code..."
 	@mkdir -p $(GEN_GO_DIR) $(GEN_CPP_DIR)
-	protoc \
+	$(PROTOC) \
 		--proto_path=$(PROTO_DIR) \
 		--go_out=. --go_opt=module=github.com/gmaker/game-server \
 		--go-grpc_out=. --go-grpc_opt=module=github.com/gmaker/game-server \

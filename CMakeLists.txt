@@ -35,6 +35,53 @@ FetchContent_MakeAvailable(toml11)
 # rapidjson: 高性能 JSON 解析/生成库（header-only，本地拷贝）
 set(RAPIDJSON_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rd)
 
+# protobuf: 协议序列化库（从本地构建树引入）
+set(PROTOBUF_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/3rd/protobuf/protobuf-34.1)
+set(PROTOBUF_INCLUDE_DIR ${PROTOBUF_ROOT}/src)
+set(PROTOBUF_LIB_DIR ${PROTOBUF_ROOT}/build/Release)
+set(PROTOC_EXECUTABLE ${PROTOBUF_LIB_DIR}/protoc.exe)
+
+find_library(PROTOBUF_LIBRARY libprotobuf
+    PATHS ${PROTOBUF_LIB_DIR}
+    NO_DEFAULT_PATH
+)
+if(NOT PROTOBUF_LIBRARY)
+    message(FATAL_ERROR "libprotobuf not found in ${PROTOBUF_LIB_DIR}")
+endif()
+
+find_library(UTF8_VALIDITY_LIBRARY libutf8_validity
+    PATHS ${PROTOBUF_ROOT}/build/third_party/utf8_range/Release
+    NO_DEFAULT_PATH
+)
+if(NOT UTF8_VALIDITY_LIBRARY)
+    message(FATAL_ERROR "libutf8_validity not found")
+endif()
+
+# protobuf 34.1 依赖 abseil，收集所有已编译的 absl 静态库
+file(GLOB_RECURSE ABSL_LIBS
+    "${PROTOBUF_ROOT}/build/_deps/absl-build/absl_*.lib"
+)
+if(NOT ABSL_LIBS)
+    message(FATAL_ERROR "abseil libraries not found in ${PROTOBUF_ROOT}/build/_deps/absl-build")
+endif()
+
+message(STATUS "Found libprotobuf: ${PROTOBUF_LIBRARY}")
+message(STATUS "Found abseil libs: ${ABSL_LIBS}")
+
+# 创建 imported target 以保持与现有代码的兼容性
+add_library(protobuf::libprotobuf STATIC IMPORTED GLOBAL)
+set_target_properties(protobuf::libprotobuf PROPERTIES
+    IMPORTED_LOCATION ${PROTOBUF_LIBRARY}
+    INTERFACE_INCLUDE_DIRECTORIES "${PROTOBUF_INCLUDE_DIR};D:/Download/protobuf-34.1/build/_deps/absl-src"
+)
+target_link_libraries(protobuf::libprotobuf INTERFACE
+    ${UTF8_VALIDITY_LIBRARY}
+    ${ABSL_LIBS}
+)
+
+# 若后续需要编译 .proto 文件，可复用此变量
+set(CMAKE_PROTOC_EXECUTABLE ${PROTOC_EXECUTABLE})
+
 # ==================== 源文件 ====================
 # libuv 异步网络封装层（已统一替代阻塞模型）
 set(CPP_ASYNC_NET_SOURCES
@@ -107,8 +154,7 @@ target_include_directories(gateway-cpp PRIVATE
     ${UV_INCLUDE_DIR}
     ${RAPIDJSON_INCLUDE_DIR}
 )
-target_link_libraries(gateway-cpp toml11::toml11 ${UV_LIB})
-# TODO: install protobuf and uncomment: target_link_libraries(gateway-cpp protobuf::libprotobuf)
+target_link_libraries(gateway-cpp toml11::toml11 protobuf::libprotobuf ${UV_LIB})
 if(WIN32)
     target_link_libraries(gateway-cpp ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
 elseif(UNIX AND NOT APPLE)
@@ -139,8 +185,7 @@ target_include_directories(realtime-cpp PRIVATE
     ${UV_INCLUDE_DIR}
     ${RAPIDJSON_INCLUDE_DIR}
 )
-target_link_libraries(realtime-cpp toml11::toml11 ${UV_LIB})
-# TODO: install protobuf and uncomment: target_link_libraries(realtime-cpp protobuf::libprotobuf)
+target_link_libraries(realtime-cpp toml11::toml11 protobuf::libprotobuf ${UV_LIB})
 if(WIN32)
     target_link_libraries(realtime-cpp ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
 elseif(UNIX AND NOT APPLE)
