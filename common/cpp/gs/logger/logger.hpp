@@ -79,42 +79,20 @@ public:
     void Error(const std::string& msg) { Log(Level::Error, msg); }
     void Fatal(const std::string& msg) { Log(Level::Fatal, msg); std::exit(1); }
 
-    // 格式化日志方法
+    // 通用格式化日志方法
     template<typename... Args>
-    void Debugf(const std::string& fmt, Args&&... args) {
-        if (Level::Debug < level_) return;
+    void Logf(Level level, const std::string& fmt, Args&&... args) {
+        if (level < level_) return;
         std::lock_guard<std::mutex> lk(*mu_);
-        EmitLog(Level::Debug, Format(fmt, std::forward<Args>(args)...));
+        EmitLog(level, Format(fmt, std::forward<Args>(args)...));
     }
 
-    template<typename... Args>
-    void Infof(const std::string& fmt, Args&&... args) {
-        if (Level::Info < level_) return;
-        std::lock_guard<std::mutex> lk(*mu_);
-        EmitLog(Level::Info, Format(fmt, std::forward<Args>(args)...));
-    }
-
-    template<typename... Args>
-    void Warnf(const std::string& fmt, Args&&... args) {
-        if (Level::Warn < level_) return;
-        std::lock_guard<std::mutex> lk(*mu_);
-        EmitLog(Level::Warn, Format(fmt, std::forward<Args>(args)...));
-    }
-
-    template<typename... Args>
-    void Errorf(const std::string& fmt, Args&&... args) {
-        if (Level::Error < level_) return;
-        std::lock_guard<std::mutex> lk(*mu_);
-        EmitLog(Level::Error, Format(fmt, std::forward<Args>(args)...));
-    }
-
-    template<typename... Args>
-    void Fatalf(const std::string& fmt, Args&&... args) {
-        if (Level::Fatal < level_) return;
-        std::lock_guard<std::mutex> lk(*mu_);
-        EmitLog(Level::Fatal, Format(fmt, std::forward<Args>(args)...));
-        std::exit(1);
-    }
+    // 格式化日志快捷方法
+    template<typename... Args> void Debugf(const std::string& fmt, Args&&... args) { Logf(Level::Debug, fmt, std::forward<Args>(args)...); }
+    template<typename... Args> void Infof (const std::string& fmt, Args&&... args) { Logf(Level::Info,  fmt, std::forward<Args>(args)...); }
+    template<typename... Args> void Warnf (const std::string& fmt, Args&&... args) { Logf(Level::Warn,  fmt, std::forward<Args>(args)...); }
+    template<typename... Args> void Errorf(const std::string& fmt, Args&&... args) { Logf(Level::Error, fmt, std::forward<Args>(args)...); }
+    template<typename... Args> void Fatalf(const std::string& fmt, Args&&... args) { Logf(Level::Fatal, fmt, std::forward<Args>(args)...); std::exit(1); }
 
 private:
     // rapidjson Writer 的数值写入辅助函数
@@ -223,6 +201,15 @@ private:
     std::shared_ptr<std::mutex> mu_;
     std::shared_ptr<std::ofstream> file_out_;
 };
+
+// ParseLogLevel 从字符串解析日志级别（不区分大小写）
+inline Level ParseLogLevel(const std::string& s) {
+    if (s == "debug") return Level::Debug;
+    if (s == "warn")  return Level::Warn;
+    if (s == "error") return Level::Error;
+    if (s == "fatal") return Level::Fatal;
+    return Level::Info;
+}
 
 } // namespace logger
 } // namespace gs

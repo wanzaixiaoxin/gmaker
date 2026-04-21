@@ -24,14 +24,7 @@ func main() {
 	)
 	flag.Parse()
 
-	log := logger.NewWithService("dbproxy", "dbproxy-1")
-	log.SetLevel(*logLevel)
-	if *logFile != "" {
-		f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err == nil {
-			log = logger.New(logger.Config{Level: *logLevel, Service: "dbproxy", NodeID: "dbproxy-1", Output: f})
-		}
-	}
+	log := logger.InitServiceLogger("dbproxy", "dbproxy-1", *logLevel, *logFile)
 
 	// Redis
 	rcfg := redis.Config{

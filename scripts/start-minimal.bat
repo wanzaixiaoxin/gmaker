@@ -1,7 +1,6 @@
 @echo off
 cd /d "%~dp0.."
-if not exist logs mkdir logs
-for /f "tokens=*" %%a in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set LOG_TS=%%a
+call scripts\_init-logs.bat
 echo ==========================================
 echo   Start Minimal Link (Phase 1)
 echo ==========================================

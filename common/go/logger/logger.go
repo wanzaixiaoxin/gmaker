@@ -76,6 +76,19 @@ func NewWithService(service, nodeID string) *Logger {
 	return New(Config{Level: "info", Service: service, NodeID: nodeID})
 }
 
+// InitServiceLogger 根据命令行参数初始化服务日志（自动处理文件输出）
+func InitServiceLogger(service, nodeID, logLevel, logFile string) *Logger {
+	log := NewWithService(service, nodeID)
+	log.SetLevel(logLevel)
+	if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err == nil {
+			log = New(Config{Level: logLevel, Service: service, NodeID: nodeID, Output: f})
+		}
+	}
+	return log
+}
+
 // SetLevel 动态调整日志级别
 func (l *Logger) SetLevel(level string) {
 	l.mu.Lock()

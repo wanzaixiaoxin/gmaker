@@ -21,15 +21,8 @@ func main() {
 	)
 	flag.Parse()
 
-	log := logger.NewWithService("registry", "registry-1")
-	log.SetLevel(*logLevel)
-	if *logFile != "" {
-		f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err == nil {
-			logger.SetDefault(log)
-			log = logger.New(logger.Config{Level: *logLevel, Service: "registry", NodeID: "registry-1", Output: f})
-		}
-	}
+	log := logger.InitServiceLogger("registry", "registry-1", *logLevel, *logFile)
+	logger.SetDefault(log)
 
 	var s store.Store
 	var err error

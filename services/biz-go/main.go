@@ -59,14 +59,7 @@ func main() {
 	flag.Parse()
 
 	// 初始化结构化日志
-	log := logger.NewWithService("biz", fmt.Sprintf("biz-%d", *nodeID))
-	log.SetLevel(*logLevel)
-	if *logFile != "" {
-		f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err == nil {
-			log = logger.New(logger.Config{Level: *logLevel, Service: "biz", NodeID: fmt.Sprintf("biz-%d", *nodeID), Output: f})
-		}
-	}
+	log := logger.InitServiceLogger("biz", fmt.Sprintf("biz-%d", *nodeID), *logLevel, *logFile)
 	logger.SetDefault(log)
 
 	// 启动 Prometheus metrics HTTP 服务

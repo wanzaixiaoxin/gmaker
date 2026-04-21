@@ -7,6 +7,7 @@
 #include "gs/net/async/tcp_server.hpp"
 #include "gs/net/async/upstream.hpp"
 #include "gs/net/packet.hpp"
+#include "gs/net/address.hpp"
 #include "gs/registry/client.hpp"
 #include "registry.pb.h"
 #include "gs/realtime/compute_thread.hpp"
@@ -17,14 +18,6 @@
 using namespace gs::net;
 using namespace gs::net::async;
 using namespace gs::realtime;
-
-static gs::logger::Level ParseLogLevel(const std::string& s) {
-    if (s == "debug") return gs::logger::Level::Debug;
-    if (s == "warn")  return gs::logger::Level::Warn;
-    if (s == "error") return gs::logger::Level::Error;
-    if (s == "fatal") return gs::logger::Level::Fatal;
-    return gs::logger::Level::Info;
-}
 
 constexpr uint32_t CMD_REALTIME_ENTER  = 0x00020001;
 constexpr uint32_t CMD_REALTIME_LEAVE  = 0x00020002;
@@ -276,23 +269,6 @@ private:
     bool stop_flag_ = false;
 };
 
-static std::vector<std::pair<std::string, uint16_t>> ParseAddrList(const std::string& arg) {
-    std::vector<std::pair<std::string, uint16_t>> out;
-    size_t pos = 0;
-    while (pos < arg.size()) {
-        size_t comma = arg.find(',', pos);
-        if (comma == std::string::npos) comma = arg.size();
-        std::string pair = arg.substr(pos, comma - pos);
-        size_t colon = pair.find(':');
-        if (colon != std::string::npos) {
-            out.push_back({pair.substr(0, colon),
-                static_cast<uint16_t>(std::atoi(pair.substr(colon + 1).c_str()))});
-        }
-        pos = comma + 1;
-    }
-    return out;
-}
-
 int main(int argc, char* argv[]) {
     uint16_t port = 8084;
     std::vector<std::pair<std::string, uint16_t>> registry_addrs = {{"127.0.0.1", 2379}};
@@ -312,16 +288,16 @@ int main(int argc, char* argv[]) {
             port = static_cast<uint16_t>(std::atoi(arg.c_str()));
             pos_idx++;
         } else if (pos_idx == 2) {
-            registry_addrs = ParseAddrList(arg);
+            registry_addrs = gs::net::ParseAddrList(arg);
             pos_idx++;
         } else if (pos_idx == 3) {
-            fallback_gw = ParseAddrList(arg);
+            fallback_gw = gs::net::ParseAddrList(arg);
             pos_idx++;
         }
     }
 
     auto logger = std::make_shared<gs::logger::Logger>("realtime", "realtime-1");
-    logger->SetLevel(ParseLogLevel(log_level));
+    logger->SetLevel(gs::logger::ParseLogLevel(log_level));
     if (!log_file.empty()) {
         logger->SetOutputFile(log_file);
     }

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 
@@ -129,14 +128,7 @@ func main() {
 	)
 	flag.Parse()
 
-	log := logger.NewWithService("logstats", "logstats-1")
-	log.SetLevel(*logLevel)
-	if *logFile != "" {
-		f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err == nil {
-			log = logger.New(logger.Config{Level: *logLevel, Service: "logstats", NodeID: "logstats-1", Output: f})
-		}
-	}
+	log := logger.InitServiceLogger("logstats", "logstats-1", *logLevel, *logFile)
 
 	ls := NewLogStats(*maxSize)
 
