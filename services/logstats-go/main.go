@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
+
+	"github.com/gmaker/game-server/common/go/logger"
 )
 
 // LogEntry 单条结构化日志
@@ -122,8 +124,19 @@ func main() {
 		listenAddr = flag.String("listen", ":8085", "TCP log ingest address")
 		httpAddr   = flag.String("http", ":8086", "HTTP query address")
 		maxSize    = flag.Int("max-size", 100000, "Max in-memory log entries")
+		logFile    = flag.String("log-file", "", "Log file path (stdout if empty)")
+		logLevel   = flag.String("log-level", "info", "Log level: debug | info | warn | error | fatal")
 	)
 	flag.Parse()
+
+	log := logger.NewWithService("logstats", "logstats-1")
+	log.SetLevel(*logLevel)
+	if *logFile != "" {
+		f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err == nil {
+			log = logger.New(logger.Config{Level: *logLevel, Service: "logstats", NodeID: "logstats-1", Output: f})
+		}
+	}
 
 	ls := NewLogStats(*maxSize)
 
@@ -133,7 +146,7 @@ func main() {
 		log.Fatalf("listen tcp failed: %v", err)
 	}
 	defer tcpListener.Close()
-	log.Printf("LogStats TCP ingest on %s", *listenAddr)
+	log.Infof("LogStats TCP ingest on %s", *listenAddr)
 
 	go func() {
 		for {
@@ -172,7 +185,7 @@ func main() {
 		w.Write([]byte(`{"ok":true}`))
 	})
 
-	log.Printf("LogStats HTTP query on %s", *httpAddr)
+	log.Infof("LogStats HTTP query on %s", *httpAddr)
 	if err := http.ListenAndServe(*httpAddr, mux); err != nil {
 		log.Fatalf("http server failed: %v", err)
 	}

@@ -53,11 +53,20 @@ func main() {
 		dbproxyAddrs  = flag.String("dbproxy", "127.0.0.1:3307", "DBProxy addresses, comma separated")
 		nodeID        = flag.Int64("node-id", 1, "Snowflake node ID")
 		metricsAddr   = flag.String("metrics", ":9082", "Metrics HTTP address")
+		logFile       = flag.String("log-file", "", "Log file path (stdout if empty)")
+		logLevel      = flag.String("log-level", "info", "Log level: debug | info | warn | error | fatal")
 	)
 	flag.Parse()
 
 	// 初始化结构化日志
 	log := logger.NewWithService("biz", fmt.Sprintf("biz-%d", *nodeID))
+	log.SetLevel(*logLevel)
+	if *logFile != "" {
+		f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err == nil {
+			log = logger.New(logger.Config{Level: *logLevel, Service: "biz", NodeID: fmt.Sprintf("biz-%d", *nodeID), Output: f})
+		}
+	}
 	logger.SetDefault(log)
 
 	// 启动 Prometheus metrics HTTP 服务

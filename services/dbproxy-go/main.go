@@ -2,12 +2,12 @@ package main
 
 import (
 	"flag"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
+	"github.com/gmaker/game-server/common/go/logger"
 	"github.com/gmaker/game-server/services/dbproxy-go/internal/mysql"
 	"github.com/gmaker/game-server/services/dbproxy-go/internal/redis"
 	"github.com/gmaker/game-server/services/dbproxy-go/internal/server"
@@ -19,8 +19,19 @@ func main() {
 		redisAddrs = flag.String("redis", "127.0.0.1:6379", "Redis addresses, comma separated")
 		redisPass  = flag.String("redis-pass", "", "Redis password")
 		mysqlDSNs  = flag.String("mysql", "", "MySQL DSNs, comma separated")
+		logFile    = flag.String("log-file", "", "Log file path (stdout if empty)")
+		logLevel   = flag.String("log-level", "info", "Log level: debug | info | warn | error | fatal")
 	)
 	flag.Parse()
+
+	log := logger.NewWithService("dbproxy", "dbproxy-1")
+	log.SetLevel(*logLevel)
+	if *logFile != "" {
+		f, err := os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err == nil {
+			log = logger.New(logger.Config{Level: *logLevel, Service: "dbproxy", NodeID: "dbproxy-1", Output: f})
+		}
+	}
 
 	// Redis
 	rcfg := redis.Config{
@@ -55,12 +66,12 @@ func main() {
 	if err := srv.Start(); err != nil {
 		log.Fatalf("start dbproxy failed: %v", err)
 	}
-	log.Printf("DBProxy started on %s, redis=%s", *listenAddr, *redisAddrs)
+	log.Infof("DBProxy started on %s, redis=%s", *listenAddr, *redisAddrs)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("shutting down dbproxy...")
+	log.Info("shutting down dbproxy...")
 	srv.Stop()
 }

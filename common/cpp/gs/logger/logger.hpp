@@ -8,6 +8,8 @@
 #include <mutex>
 #include <vector>
 #include <ctime>
+#include <fstream>
+#include <memory>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
@@ -28,15 +30,28 @@ inline const char* LevelStr(Level l) {
 }
 
 // 结构化日志字段
-typealias Field = std::pair<std::string, std::string>;
+using Field = std::pair<std::string, std::string>;
 
-// Logger 轻量级结构化日志（输出 JSON 到 stdout）
+// Logger 轻量级结构化日志（支持输出到 stdout 或文件）
 class Logger {
 public:
     Logger(std::string service, std::string node_id)
-        : service_(std::move(service)), node_id_(std::move(node_id)) {}
+        : service_(std::move(service)), node_id_(std::move(node_id)), mu_(std::make_shared<std::mutex>()) {}
 
     void SetLevel(Level l) { level_ = l; }
+
+    // 设置日志输出文件（空字符串则输出到 stdout）
+    void SetOutputFile(const std::string& path) {
+        std::lock_guard<std::mutex> lk(*mu_);
+        if (path.empty()) {
+            file_out_.reset();
+            return;
+        }
+        auto fs = std::make_shared<std::ofstream>(path, std::ios::app);
+        if (fs->is_open()) {
+            file_out_ = std::move(fs);
+        }
+    }
 
     // 创建带有固定字段的子 Logger（值拷贝，线程安全）
     Logger With(const std::string& key, const std::string& value) const {
@@ -53,7 +68,7 @@ public:
     template<typename... Args>
     void Log(Level level, const std::string& msg, Args... args) {
         if (level < level_) return;
-        std::lock_guard<std::mutex> lk(mu_);
+        std::lock_guard<std::mutex> lk(*mu_);
         EmitLog(level, msg, args...);
     }
 
@@ -66,37 +81,37 @@ public:
 
     // 格式化日志方法
     template<typename... Args>
-    void Debugf(const std::string& fmt, Args...&& args) {
+    void Debugf(const std::string& fmt, Args&&... args) {
         if (Level::Debug < level_) return;
-        std::lock_guard<std::mutex> lk(mu_);
+        std::lock_guard<std::mutex> lk(*mu_);
         EmitLog(Level::Debug, Format(fmt, std::forward<Args>(args)...));
     }
 
     template<typename... Args>
-    void Infof(const std::string& fmt, Args...&& args) {
+    void Infof(const std::string& fmt, Args&&... args) {
         if (Level::Info < level_) return;
-        std::lock_guard<std::mutex> lk(mu_);
+        std::lock_guard<std::mutex> lk(*mu_);
         EmitLog(Level::Info, Format(fmt, std::forward<Args>(args)...));
     }
 
     template<typename... Args>
-    void Warnf(const std::string& fmt, Args...&& args) {
+    void Warnf(const std::string& fmt, Args&&... args) {
         if (Level::Warn < level_) return;
-        std::lock_guard<std::mutex> lk(mu_);
+        std::lock_guard<std::mutex> lk(*mu_);
         EmitLog(Level::Warn, Format(fmt, std::forward<Args>(args)...));
     }
 
     template<typename... Args>
-    void Errorf(const std::string& fmt, Args...&& args) {
+    void Errorf(const std::string& fmt, Args&&... args) {
         if (Level::Error < level_) return;
-        std::lock_guard<std::mutex> lk(mu_);
+        std::lock_guard<std::mutex> lk(*mu_);
         EmitLog(Level::Error, Format(fmt, std::forward<Args>(args)...));
     }
 
     template<typename... Args>
-    void Fatalf(const std::string& fmt, Args...&& args) {
+    void Fatalf(const std::string& fmt, Args&&... args) {
         if (Level::Fatal < level_) return;
-        std::lock_guard<std::mutex> lk(mu_);
+        std::lock_guard<std::mutex> lk(*mu_);
         EmitLog(Level::Fatal, Format(fmt, std::forward<Args>(args)...));
         std::exit(1);
     }
@@ -184,12 +199,16 @@ private:
         AppendArgs(writer, args...);
         writer.EndObject();
 
-        std::cout << buffer.GetString() << std::endl;
+        if (file_out_ && file_out_->is_open()) {
+            *file_out_ << buffer.GetString() << std::endl;
+        } else {
+            std::cout << buffer.GetString() << std::endl;
+        }
     }
 
     // 格式化字符串（简化版 printf）
     template<typename... Args>
-    static std::string Format(const std::string& fmt, Args...&& args) {
+    static std::string Format(const std::string& fmt, Args&&... args) {
         int size = std::snprintf(nullptr, 0, fmt.c_str(), std::forward<Args>(args)...);
         if (size < 0) return fmt;
         std::string buf(size, '\0');
@@ -201,7 +220,8 @@ private:
     std::string node_id_;
     Level level_ = Level::Info;
     std::vector<Field> fields_;
-    mutable std::mutex mu_;
+    std::shared_ptr<std::mutex> mu_;
+    std::shared_ptr<std::ofstream> file_out_;
 };
 
 } // namespace logger

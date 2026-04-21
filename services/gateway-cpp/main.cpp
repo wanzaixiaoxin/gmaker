@@ -13,11 +13,20 @@
 #include "gs/registry/client.hpp"
 #include "gs/metrics/metrics.hpp"
 #include "gs/errors.hpp"
+#include "gs/logger/logger.hpp"
 #include "registry.pb.h"
 
 using namespace gs::net;
 using namespace gs::net::async;
 using namespace gs::crypto;
+
+static gs::logger::Level ParseLogLevel(const std::string& s) {
+    if (s == "debug") return gs::logger::Level::Debug;
+    if (s == "warn")  return gs::logger::Level::Warn;
+    if (s == "error") return gs::logger::Level::Error;
+    if (s == "fatal") return gs::logger::Level::Fatal;
+    return gs::logger::Level::Info;
+}
 
 constexpr uint32_t CMD_HANDSHAKE = 0x00000002;
 
@@ -31,8 +40,9 @@ struct BizNodeConfig {
 class HandshakeMiddleware : public Middleware {
 public:
     HandshakeMiddleware(const std::vector<uint8_t>& master_key,
-                        gs::replay::Checker* replay_checker)
-        : master_key_(master_key), replay_checker_(replay_checker) {}
+                        gs::replay::Checker* replay_checker,
+                        std::shared_ptr<gs::logger::Logger> logger)
+        : master_key_(master_key), replay_checker_(replay_checker), logger_(std::move(logger)) {}
 
     bool OnPacket(IConnection* conn, Packet& pkt) override {
         if (pkt.header.cmd_id != CMD_HANDSHAKE) {
@@ -63,14 +73,14 @@ private:
     void HandleHandshake(IConnection* conn, Packet& pkt) {
         constexpr size_t kHandshakeV1Size = 1 + 8 + 8 + 16;
         if (pkt.payload.size() < kHandshakeV1Size) {
-            std::cerr << "Invalid handshake request from client " << conn->ID() << std::endl;
+            if (logger_) logger_->Error("Invalid handshake request from client " + std::to_string(conn->ID()));
             conn->Close();
             return;
         }
 
         uint8_t version = pkt.payload[0];
         if (version != 1) {
-            std::cerr << "Unsupported handshake version: " << (int)version << std::endl;
+            if (logger_) logger_->Error("Unsupported handshake version: " + std::to_string((int)version));
             conn->Close();
             return;
         }
@@ -81,7 +91,7 @@ private:
 
         auto ts = std::chrono::system_clock::from_time_t(static_cast<time_t>(timestamp));
         if (!replay_checker_->Check(ts, nonce)) {
-            std::cerr << "Replay detected or invalid timestamp from client " << conn->ID() << std::endl;
+            if (logger_) logger_->Error("Replay detected or invalid timestamp from client " + std::to_string(conn->ID()));
             conn->Close();
             return;
         }
@@ -92,7 +102,7 @@ private:
         try {
             session_key = DeriveSessionKey(master_key_, client_random, server_random);
         } catch (const std::exception& e) {
-            std::cerr << "Session key derivation failed: " << e.what() << std::endl;
+            if (logger_) logger_->Error("Session key derivation failed: " + std::string(e.what()));
             conn->Close();
             return;
         }
@@ -101,7 +111,7 @@ private:
         try {
             encrypted_challenge = EncryptPacketPayload(session_key, client_random);
         } catch (const std::exception& e) {
-            std::cerr << "Handshake encrypt failed: " << e.what() << std::endl;
+            if (logger_) logger_->Error("Handshake encrypt failed: " + std::string(e.what()));
             conn->Close();
             return;
         }
@@ -122,11 +132,12 @@ private:
             std::lock_guard<std::mutex> lk(mtx_);
             sessions_[conn->ID()] = std::move(session_key);
         }
-        std::cout << "Handshake completed with client " << conn->ID() << std::endl;
+        if (logger_) logger_->Info("Handshake completed with client " + std::to_string(conn->ID()));
     }
 
     std::vector<uint8_t> master_key_;
     gs::replay::Checker* replay_checker_;
+    std::shared_ptr<gs::logger::Logger> logger_;
     mutable std::mutex mtx_;
     std::unordered_map<uint64_t, std::vector<uint8_t>> sessions_;
 };
@@ -134,12 +145,13 @@ private:
 // EncryptionMiddleware 处理 Gateway-Client 加密/解密
 class EncryptionMiddleware : public Middleware {
 public:
-    EncryptionMiddleware(HandshakeMiddleware* handshake_mw) : handshake_mw_(handshake_mw) {}
+    EncryptionMiddleware(HandshakeMiddleware* handshake_mw, std::shared_ptr<gs::logger::Logger> logger)
+        : handshake_mw_(handshake_mw), gateway_logger_(logger) {}
 
     bool OnPacket(IConnection* conn, Packet& pkt) override {
         // 握手完成检查
         if (!handshake_mw_->IsHandshaked(conn->ID())) {
-            std::cerr << "Client " << conn->ID() << " sent packet before handshake, closing" << std::endl;
+            if (gateway_logger_) gateway_logger_->Error("Client " + std::to_string(conn->ID()) + " sent packet before handshake, closing");
             conn->Close();
             return false;
         }
@@ -148,7 +160,7 @@ public:
         if (HasFlag(pkt.header.flags, Flag::ENCRYPT)) {
             auto key = handshake_mw_->GetSessionKey(conn->ID());
             if (key.empty()) {
-                std::cerr << "No session key for client " << conn->ID() << std::endl;
+                if (gateway_logger_) gateway_logger_->Error("No session key for client " + std::to_string(conn->ID()));
                 conn->Close();
                 return false;
             }
@@ -156,7 +168,7 @@ public:
                 pkt.payload = DecryptPacketPayload(key, pkt.payload);
                 pkt.header.flags &= ~static_cast<uint32_t>(Flag::ENCRYPT);
             } catch (const std::exception& e) {
-                std::cerr << "Decrypt failed for client " << conn->ID() << ": " << e.what() << std::endl;
+                if (gateway_logger_) gateway_logger_->Error("Decrypt failed for client " + std::to_string(conn->ID()) + ": " + e.what());
                 conn->Close();
                 return false;
             }
@@ -166,10 +178,13 @@ public:
 
 private:
     HandshakeMiddleware* handshake_mw_;
+    std::shared_ptr<gs::logger::Logger> gateway_logger_;
 };
 
 class Gateway {
 public:
+    void SetLogger(std::shared_ptr<gs::logger::Logger> logger) { logger_ = logger; }
+
     bool Start(uint16_t listen_port,
                const std::vector<std::pair<std::string, uint16_t>>& registry_addrs,
                const std::vector<BizNodeConfig>& fallback_biz_nodes,
@@ -202,9 +217,9 @@ public:
         if (!registry_addrs.empty()) {
             reg_client_ = std::make_unique<gs::registry::RegistryClient>(nullptr, registry_addrs);
             if (!reg_client_->Connect()) {
-                std::cerr << "Failed to connect to registry, using fallback biz nodes" << std::endl;
+                if (logger_) logger_->Warn("Failed to connect to registry, using fallback biz nodes");
             } else {
-                std::cout << "Connected to registry, discovering biz nodes..." << std::endl;
+                if (logger_) logger_->Info("Connected to registry, discovering biz nodes...");
 
                 // 初始发现
                 ::registry::NodeList list;
@@ -212,8 +227,7 @@ public:
                     for (int i = 0; i < list.nodes_size(); ++i) {
                         const auto& node = list.nodes(i);
                         biz_pool_->AddNode(node.host(), static_cast<uint16_t>(node.port()));
-                        std::cout << "Registry discovered biz node: " << node.host()
-                                  << ":" << node.port() << std::endl;
+                        if (logger_) logger_->Info("Registry discovered biz node: " + node.host() + ":" + std::to_string(node.port()));
                     }
                 }
 
@@ -225,10 +239,10 @@ public:
                     if (ev.type() == ::registry::NodeEvent::JOIN ||
                         ev.type() == ::registry::NodeEvent::UPDATE) {
                         biz_pool_->AddNode(node.host(), static_cast<uint16_t>(node.port()));
-                        std::cout << "Registry event: biz node JOIN/UPDATE " << addr << std::endl;
+                        if (logger_) logger_->Info("Registry event: biz node JOIN/UPDATE " + addr);
                     } else if (ev.type() == ::registry::NodeEvent::LEAVE) {
                         biz_pool_->RemoveNode(node.host(), static_cast<uint16_t>(node.port()));
-                        std::cout << "Registry event: biz node LEAVE " << addr << std::endl;
+                        if (logger_) logger_->Info("Registry event: biz node LEAVE " + addr);
                     }
                 });
             }
@@ -237,25 +251,24 @@ public:
         // 如果没有从 Registry 发现任何节点，使用 fallback
         if (biz_pool_->TotalCount() == 0) {
             if (fallback_biz_nodes.empty()) {
-                std::cerr << "No biz nodes configured and no registry discovery" << std::endl;
+                if (logger_) logger_->Error("No biz nodes configured and no registry discovery");
                 return false;
             }
             for (const auto& node : fallback_biz_nodes) {
                 biz_pool_->AddNode(node.host, node.port);
             }
-            std::cout << "Using fallback biz nodes" << std::endl;
+            if (logger_) logger_->Info("Using fallback biz nodes");
         }
 
         if (!biz_pool_->Start()) {
-            std::cerr << "Failed to start biz upstream pool" << std::endl;
+            if (logger_) logger_->Error("Failed to start biz upstream pool");
             return false;
         }
-        std::cout << "Biz upstream pool started, " << biz_pool_->HealthyCount()
-                  << "/" << biz_pool_->TotalCount() << " nodes connected" << std::endl;
+        if (logger_) logger_->Info("Biz upstream pool started, " + std::to_string(biz_pool_->HealthyCount()) + "/" + std::to_string(biz_pool_->TotalCount()) + " nodes connected");
 
         // 初始化中间件
-        handshake_mw_ = std::make_shared<HandshakeMiddleware>(master_key_, &replay_checker_);
-        encryption_mw_ = std::make_shared<EncryptionMiddleware>(handshake_mw_.get());
+        handshake_mw_ = std::make_shared<HandshakeMiddleware>(master_key_, &replay_checker_, logger_);
+        encryption_mw_ = std::make_shared<EncryptionMiddleware>(handshake_mw_.get(), logger_);
 
         server_->SetCallbacks(
             [this](AsyncTCPConnection* c) { OnClientConnect(c); },
@@ -267,10 +280,10 @@ public:
         server_->Use(encryption_mw_);
 
         if (!server_->Start()) {
-            std::cerr << "Failed to start gateway server" << std::endl;
+            if (logger_) logger_->Error("Failed to start gateway server");
             return false;
         }
-        std::cout << "Gateway listening on port " << listen_port << std::endl;
+        if (logger_) logger_->Info("Gateway listening on port " + std::to_string(listen_port));
         return true;
     }
 
@@ -282,7 +295,7 @@ public:
     }
 
     void Wait() {
-        std::cout << "Gateway running, waiting for signal..." << std::endl;
+        if (logger_) logger_->Info("Gateway running, waiting for signal...");
         std::unique_lock<std::mutex> lk(stop_mtx_);
         stop_cv_.wait(lk, [this] { return stop_flag_; });
     }
@@ -298,7 +311,7 @@ private:
         std::lock_guard<std::mutex> lk(sessions_mtx_);
         clients_[conn->ID()] = conn;
         conn_gauge_->Inc();
-        std::cout << "Client connected: " << conn->ID() << std::endl;
+        if (logger_) logger_->Info("Client connected: " + std::to_string(conn->ID()));
     }
 
     void OnClientPacket(AsyncTCPConnection* conn, Packet& pkt) {
@@ -309,7 +322,7 @@ private:
         // 转发到 Biz（轮询负载均衡）
         pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.size());
         if (!biz_pool_->SendPacket(pkt)) {
-            std::cerr << "No healthy biz node available to forward packet" << std::endl;
+            if (logger_) logger_->Warn("No healthy biz node available to forward packet");
             // TODO: 向客户端返回 SERVICE_UNAVAILABLE 错误包
         }
 
@@ -348,7 +361,7 @@ private:
                 encrypted_pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(encrypted_pkt.payload.size());
                 coalescer_->Enqueue(client, encrypted_pkt);
             } catch (const std::exception& e) {
-                std::cerr << "Encrypt failed: " << e.what() << std::endl;
+                if (logger_) logger_->Error("Encrypt failed: " + std::string(e.what()));
             }
         }
     }
@@ -358,7 +371,7 @@ private:
         clients_.erase(conn->ID());
         handshake_mw_->RemoveSession(conn->ID());
         conn_gauge_->Dec();
-        std::cout << "Client disconnected: " << conn->ID() << std::endl;
+        if (logger_) logger_->Info("Client disconnected: " + std::to_string(conn->ID()));
     }
 
     std::unique_ptr<AsyncTCPServer> server_;
@@ -370,6 +383,7 @@ private:
     std::vector<uint8_t> master_key_;
     gs::replay::Checker replay_checker_{std::chrono::seconds(300)};
 
+    std::shared_ptr<gs::logger::Logger> logger_;
     std::shared_ptr<HandshakeMiddleware> handshake_mw_;
     std::shared_ptr<EncryptionMiddleware> encryption_mw_;
 
@@ -414,23 +428,43 @@ int main(int argc, char* argv[]) {
         {"127.0.0.1", 8083},
     };
 
-    if (argc > 1) gateway_port = static_cast<uint16_t>(std::atoi(argv[1]));
-    // 支持命令行传入 registry 地址，格式: host1:port1,host2:port2
-    if (argc > 2) {
-        registry_addrs = ParseAddrList(argv[2]);
-    }
-    // 支持命令行传入 fallback biz 节点，格式: host1:port1,host2:port2
-    if (argc > 3) {
-        fallback_biz_nodes.clear();
-        auto addrs = ParseAddrList(argv[3]);
-        for (const auto& [host, port] : addrs) {
-            fallback_biz_nodes.push_back({host, port});
+    std::string log_file;
+    std::string log_level = "info";
+
+    // 简单命令行解析：位置参数在前，--log-file / --log-level 为可选命名参数
+    int pos_idx = 1;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--log-file" && i + 1 < argc) {
+            log_file = argv[++i];
+        } else if (arg == "--log-level" && i + 1 < argc) {
+            log_level = argv[++i];
+        } else if (pos_idx == 1) {
+            gateway_port = static_cast<uint16_t>(std::atoi(arg.c_str()));
+            pos_idx++;
+        } else if (pos_idx == 2) {
+            registry_addrs = ParseAddrList(arg);
+            pos_idx++;
+        } else if (pos_idx == 3) {
+            fallback_biz_nodes.clear();
+            auto addrs = ParseAddrList(arg);
+            for (const auto& [host, port] : addrs) {
+                fallback_biz_nodes.push_back({host, port});
+            }
+            pos_idx++;
         }
     }
 
     std::vector<uint8_t> master_key(32, 0);
 
+    auto logger = std::make_shared<gs::logger::Logger>("gateway", "gateway-1");
+    logger->SetLevel(ParseLogLevel(log_level));
+    if (!log_file.empty()) {
+        logger->SetOutputFile(log_file);
+    }
+
     Gateway gw;
+    gw.SetLogger(logger);
     if (!gw.Start(gateway_port, registry_addrs, fallback_biz_nodes, master_key)) {
         return 1;
     }

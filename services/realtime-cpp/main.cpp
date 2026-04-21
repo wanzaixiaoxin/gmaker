@@ -12,10 +12,19 @@
 #include "gs/realtime/compute_thread.hpp"
 #include "gs/realtime/message.hpp"
 #include "gs/metrics/metrics.hpp"
+#include "gs/logger/logger.hpp"
 
 using namespace gs::net;
 using namespace gs::net::async;
 using namespace gs::realtime;
+
+static gs::logger::Level ParseLogLevel(const std::string& s) {
+    if (s == "debug") return gs::logger::Level::Debug;
+    if (s == "warn")  return gs::logger::Level::Warn;
+    if (s == "error") return gs::logger::Level::Error;
+    if (s == "fatal") return gs::logger::Level::Fatal;
+    return gs::logger::Level::Info;
+}
 
 constexpr uint32_t CMD_REALTIME_ENTER  = 0x00020001;
 constexpr uint32_t CMD_REALTIME_LEAVE  = 0x00020002;
@@ -25,6 +34,8 @@ constexpr uint32_t CMD_REALTIME_SYNC   = 0x00020005;
 
 // RealtimeServer 实时服
 struct RealtimeServer {
+    void SetLogger(std::shared_ptr<gs::logger::Logger> logger) { logger_ = logger; }
+
     bool Start(uint16_t listen_port,
                const std::vector<std::pair<std::string, uint16_t>>& registry_addrs,
                const std::vector<std::pair<std::string, uint16_t>>& fallback_gateway_addrs) {
@@ -50,7 +61,7 @@ struct RealtimeServer {
             cfg.enable_aoi = true;
             cfg.aoi_radius = 200.0f;
             compute_->CreateRoom(cfg);
-            std::cout << "Created room " << i << std::endl;
+            if (logger_) logger_->Info("Created room " + std::to_string(i));
         }
         compute_->Start();
 
@@ -93,7 +104,7 @@ struct RealtimeServer {
             }
         }
         if (!gateway_pool_->Start()) {
-            std::cerr << "Failed to start gateway upstream pool" << std::endl;
+            if (logger_) logger_->Error("Failed to start gateway upstream pool");
             return false;
         }
 
@@ -103,10 +114,10 @@ struct RealtimeServer {
             [this](AsyncTCPConnection* c) { OnClientClose(c); }
         );
         if (!server_->Start()) {
-            std::cerr << "Failed to start realtime server" << std::endl;
+            if (logger_) logger_->Error("Failed to start realtime server");
             return false;
         }
-        std::cout << "Realtime server listening on port " << listen_port << std::endl;
+        if (logger_) logger_->Info("Realtime server listening on port " + std::to_string(listen_port));
         return true;
     }
 
@@ -132,7 +143,7 @@ private:
     void OnClientConnect(AsyncTCPConnection* conn) {
         std::lock_guard<std::mutex> lk(conn_mtx_);
         conns_[conn->ID()] = conn;
-        std::cout << "Gateway connected: " << conn->ID() << std::endl;
+        if (logger_) logger_->Info("Gateway connected: " + std::to_string(conn->ID()));
     }
 
     void OnClientPacket(AsyncTCPConnection* conn, Packet& pkt) {
@@ -251,6 +262,7 @@ private:
         }
     }
 
+    std::shared_ptr<gs::logger::Logger> logger_;
     std::unique_ptr<AsyncTCPServer> server_;
     std::unique_ptr<AsyncUpstreamPool> gateway_pool_;
     std::unique_ptr<gs::registry::RegistryClient> reg_client_;
@@ -286,11 +298,36 @@ int main(int argc, char* argv[]) {
     std::vector<std::pair<std::string, uint16_t>> registry_addrs = {{"127.0.0.1", 2379}};
     std::vector<std::pair<std::string, uint16_t>> fallback_gw = {{"127.0.0.1", 8081}};
 
-    if (argc > 1) port = static_cast<uint16_t>(std::atoi(argv[1]));
-    if (argc > 2) registry_addrs = ParseAddrList(argv[2]);
-    if (argc > 3) fallback_gw = ParseAddrList(argv[3]);
+    std::string log_file;
+    std::string log_level = "info";
+
+    int pos_idx = 1;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--log-file" && i + 1 < argc) {
+            log_file = argv[++i];
+        } else if (arg == "--log-level" && i + 1 < argc) {
+            log_level = argv[++i];
+        } else if (pos_idx == 1) {
+            port = static_cast<uint16_t>(std::atoi(arg.c_str()));
+            pos_idx++;
+        } else if (pos_idx == 2) {
+            registry_addrs = ParseAddrList(arg);
+            pos_idx++;
+        } else if (pos_idx == 3) {
+            fallback_gw = ParseAddrList(arg);
+            pos_idx++;
+        }
+    }
+
+    auto logger = std::make_shared<gs::logger::Logger>("realtime", "realtime-1");
+    logger->SetLevel(ParseLogLevel(log_level));
+    if (!log_file.empty()) {
+        logger->SetOutputFile(log_file);
+    }
 
     RealtimeServer srv;
+    srv.SetLogger(logger);
     if (!srv.Start(port, registry_addrs, fallback_gw)) {
         return 1;
     }
