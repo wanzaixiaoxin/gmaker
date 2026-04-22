@@ -7,9 +7,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gmaker/game-server/common/go/net"
-	"github.com/gmaker/game-server/gen/go/biz"
-	"github.com/gmaker/game-server/gen/go/login"
+	"github.com/gmaker/luffa/common/go/net"
+	"github.com/gmaker/luffa/gen/go/biz"
+	"github.com/gmaker/luffa/gen/go/login"
 	"google.golang.org/protobuf/proto"
 )
 

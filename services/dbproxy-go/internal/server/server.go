@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gmaker/game-server/common/go/net"
-	pb "github.com/gmaker/game-server/gen/go/dbproxy"
+	"github.com/gmaker/luffa/common/go/net"
+	pb "github.com/gmaker/luffa/gen/go/dbproxy"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/gmaker/game-server/services/dbproxy-go/internal/mysql"
-	"github.com/gmaker/game-server/services/dbproxy-go/internal/redis"
+	"github.com/gmaker/luffa/services/dbproxy-go/internal/mysql"
+	"github.com/gmaker/luffa/services/dbproxy-go/internal/redis"
 )
 
 // DBProxy 内部命令号

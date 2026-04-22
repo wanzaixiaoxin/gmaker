@@ -6,9 +6,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/gmaker/game-server/common/go/logger"
-	"github.com/gmaker/game-server/services/registry-go/internal/server"
-	"github.com/gmaker/game-server/services/registry-go/internal/store"
+	"github.com/gmaker/luffa/common/go/logger"
+	"github.com/gmaker/luffa/services/registry-go/internal/server"
+	"github.com/gmaker/luffa/services/registry-go/internal/store"
 )
 
 func main() {

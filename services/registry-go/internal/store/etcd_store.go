@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gmaker/game-server/gen/go/registry"
+	"github.com/gmaker/luffa/gen/go/registry"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/protobuf/proto"
 )

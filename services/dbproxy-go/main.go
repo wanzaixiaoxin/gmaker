@@ -7,10 +7,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/gmaker/game-server/common/go/logger"
-	"github.com/gmaker/game-server/services/dbproxy-go/internal/mysql"
-	"github.com/gmaker/game-server/services/dbproxy-go/internal/redis"
-	"github.com/gmaker/game-server/services/dbproxy-go/internal/server"
+	"github.com/gmaker/luffa/common/go/logger"
+	"github.com/gmaker/luffa/services/dbproxy-go/internal/mysql"
+	"github.com/gmaker/luffa/services/dbproxy-go/internal/redis"
+	"github.com/gmaker/luffa/services/dbproxy-go/internal/server"
 )
 
 func main() {

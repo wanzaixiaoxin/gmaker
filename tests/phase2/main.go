@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gmaker/game-server/common/go/net"
-	bizpb "github.com/gmaker/game-server/gen/go/biz"
-	loginpb "github.com/gmaker/game-server/gen/go/login"
+	"github.com/gmaker/luffa/common/go/net"
+	bizpb "github.com/gmaker/luffa/gen/go/biz"
+	loginpb "github.com/gmaker/luffa/gen/go/login"
 	"google.golang.org/protobuf/proto"
 )
 

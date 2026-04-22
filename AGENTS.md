@@ -32,7 +32,7 @@
 | CI/CD | GitHub Actions | `.github/workflows/ci.yml` |
 
 ### 根级依赖文件
-- **`go.mod`** / **`go.sum`**：根 Go 模块，`github.com/gmaker/game-server`，依赖 `google.golang.org/grpc` 和 `protobuf`。
+- **`go.mod`** / **`go.sum`**：根 Go 模块，`github.com/gmaker/luffa`，依赖 `google.golang.org/grpc` 和 `protobuf`。
 - **`CMakeLists.txt`**：定义 C++ 编译目标（`gateway-cpp`、`realtime-cpp`、`test-crypto`、`test-async-net`）。
 - **`Makefile`**：提供 `proto`、`build-go`、`build-cpp`、`build`、`test`、`clean` 命令。
 
@@ -111,6 +111,10 @@ gmaker/
 ```bash
 # 生成 protobuf 代码（Go + C++）
 make proto
+
+# Windows 下如果没有 make，可直接运行：
+#   scripts\gen-proto.bat        (CMD)
+#   scripts\gen-proto.ps1        (PowerShell)
 
 # 编译全部 Go 服务（输出到 bin/）
 make build-go

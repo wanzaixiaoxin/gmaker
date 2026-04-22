@@ -6,9 +6,9 @@ import (
 	"log"
 	"sync"
 
-	"github.com/gmaker/game-server/common/go/net"
-	pb "github.com/gmaker/game-server/gen/go/registry"
-	"github.com/gmaker/game-server/services/registry-go/internal/store"
+	"github.com/gmaker/luffa/common/go/net"
+	pb "github.com/gmaker/luffa/gen/go/registry"
+	"github.com/gmaker/luffa/services/registry-go/internal/store"
 	"google.golang.org/protobuf/proto"
 )
 

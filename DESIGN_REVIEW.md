@@ -347,7 +347,7 @@
 - 各 service 的 `go.mod` 也缺失（只有 `go.sum`）
 
 **补救计划**：
-1. 根目录创建 `go.mod`，module 名为 `github.com/gmaker/game-server`
+1. 根目录创建 `go.mod`，module 名为 `github.com/gmaker/luffa`
 2. 或者：为每个 common 子包创建独立 module（推荐单 module monorepo，管理更简单）
 
 ---

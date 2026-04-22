@@ -303,9 +303,8 @@ const char descriptor_table_protodef_login_2eproto[] ABSL_ATTRIBUTE_SECTION_VARI
     "n.Result\022\021\n\tplayer_id\030\002 \001(\004\"\037\n\016VerifyTok"
     "enReq\022\r\n\005token\030\001 \001(\t\"V\n\016VerifyTokenRes\022\036"
     "\n\006result\030\001 \001(\0132\016.common.Result\022\021\n\tplayer"
-    "_id\030\002 \001(\004\022\021\n\texpire_at\030\003 \001(\004B,Z*github.c"
-    "om/gmaker/game-server/gen/go/loginb\006prot"
-    "o3"
+    "_id\030\002 \001(\004\022\021\n\texpire_at\030\003 \001(\004B&Z$github.c"
+    "om/gmaker/luffa/gen/go/loginb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_login_2eproto_deps[1] = {
@@ -315,7 +314,7 @@ static ::absl::once_flag descriptor_table_login_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_login_2eproto = {
     false,
     false,
-    522,
+    516,
     descriptor_table_protodef_login_2eproto,
     "login.proto",
     &descriptor_table_login_2eproto_once,

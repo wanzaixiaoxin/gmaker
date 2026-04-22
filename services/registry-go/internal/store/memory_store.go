@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/gmaker/game-server/gen/go/registry"
+	pb "github.com/gmaker/luffa/gen/go/registry"
 )
 
 // MemoryStore 内存版 Registry Store（用于 Phase 1 无 Etcd 环境联调）

@@ -16,8 +16,8 @@ proto:
 	@mkdir -p $(GEN_GO_DIR) $(GEN_CPP_DIR)
 	$(PROTOC) \
 		--proto_path=$(PROTO_DIR) \
-		--go_out=. --go_opt=module=github.com/gmaker/game-server \
-		--go-grpc_out=. --go-grpc_opt=module=github.com/gmaker/game-server \
+		--go_out=. --go_opt=module=github.com/gmaker/luffa \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/gmaker/luffa \
 		--cpp_out=$(GEN_CPP_DIR) \
 		$(PROTO_DIR)/*.proto
 	@echo "Protobuf generation done."

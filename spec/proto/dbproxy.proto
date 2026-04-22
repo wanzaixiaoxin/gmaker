@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package dbproxy;
-option go_package = "github.com/gmaker/game-server/gen/go/dbproxy";
+option go_package = "github.com/gmaker/luffa/gen/go/dbproxy";
 
 message RedisGetReq {
     string key = 1;

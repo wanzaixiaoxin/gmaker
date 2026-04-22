@@ -92,15 +92,14 @@ const char descriptor_table_protodef_packet_2eproto[] ABSL_ATTRIBUTE_SECTION_VAR
     protodesc_cold) = {
     "\n\014packet.proto\022\006common\"V\n\006Packet\022\r\n\005magi"
     "c\030\001 \001(\r\022\016\n\006cmd_id\030\002 \001(\r\022\016\n\006seq_id\030\003 \001(\r\022"
-    "\014\n\004flag\030\004 \001(\r\022\017\n\007payload\030\005 \001(\014B-Z+github"
-    ".com/gmaker/game-server/gen/go/commonb\006p"
-    "roto3"
+    "\014\n\004flag\030\004 \001(\r\022\017\n\007payload\030\005 \001(\014B\'Z%github"
+    ".com/gmaker/luffa/gen/go/commonb\006proto3"
 };
 static ::absl::once_flag descriptor_table_packet_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_packet_2eproto = {
     false,
     false,
-    165,
+    159,
     descriptor_table_protodef_packet_2eproto,
     "packet.proto",
     &descriptor_table_packet_2eproto_once,

@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	pb "github.com/gmaker/game-server/gen/go/registry"
+	pb "github.com/gmaker/luffa/gen/go/registry"
 )
 
 // Store 定义 Registry 底层存储接口

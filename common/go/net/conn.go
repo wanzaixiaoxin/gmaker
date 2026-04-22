@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gmaker/game-server/common/go/crypto"
+	"github.com/gmaker/luffa/common/go/crypto"
 )
 
 var globalConnID uint64

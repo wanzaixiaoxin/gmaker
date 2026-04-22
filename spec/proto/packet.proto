@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package common;
-option go_package = "github.com/gmaker/game-server/gen/go/common";
+option go_package = "github.com/gmaker/luffa/gen/go/common";
 
 // Packet 是通用包体消息，用于调试工具、日志落盘、网关内部异步透传等场景。
 // 实际网络通信时，包头采用 18 字节固定二进制格式（详见 DESIGN.md 4.1 节），

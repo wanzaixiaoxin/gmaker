@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gmaker/game-server/common/go/net"
+	"github.com/gmaker/luffa/common/go/net"
 )
 
 // Client RPC 客户端，支持单连接和连接池两种模式

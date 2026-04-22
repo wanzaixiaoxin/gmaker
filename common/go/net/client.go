@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/gmaker/game-server/common/go/crypto"
+	"github.com/gmaker/luffa/common/go/crypto"
 )
 
 // TCPClient TCP 客户端

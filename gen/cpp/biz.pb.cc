@@ -443,8 +443,8 @@ const char descriptor_table_protodef_biz_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIAB
     " \001(\004\"1\n\017UpdatePlayerRes\022\036\n\006result\030\001 \001(\0132"
     "\016.common.Result\"\033\n\004Ping\022\023\n\013client_time\030\001"
     " \001(\004\"0\n\004Pong\022\023\n\013client_time\030\001 \001(\004\022\023\n\013ser"
-    "ver_time\030\002 \001(\004B*Z(github.com/gmaker/game"
-    "-server/gen/go/bizb\006proto3"
+    "ver_time\030\002 \001(\004B$Z\"github.com/gmaker/luff"
+    "a/gen/go/bizb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_biz_2eproto_deps[1] = {
@@ -454,7 +454,7 @@ static ::absl::once_flag descriptor_table_biz_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_biz_2eproto = {
     false,
     false,
-    706,
+    700,
     descriptor_table_protodef_biz_2eproto,
     "biz.proto",
     &descriptor_table_biz_2eproto_once,

@@ -694,14 +694,14 @@ const char descriptor_table_protodef_dbproxy_2eproto[] ABSL_ATTRIBUTE_SECTION_VA
     "cReq\022\013\n\003uid\030\001 \001(\004\022\013\n\003sql\030\002 \001(\t\022\014\n\004args\030\003"
     " \003(\t\"X\n\014MySQLExecRes\022\n\n\002ok\030\001 \001(\010\022\026\n\016last"
     "_insert_id\030\002 \001(\003\022\025\n\rrows_affected\030\003 \001(\003\022"
-    "\r\n\005error\030\004 \001(\tB.Z,github.com/gmaker/game"
-    "-server/gen/go/dbproxyb\006proto3"
+    "\r\n\005error\030\004 \001(\tB(Z&github.com/gmaker/luff"
+    "a/gen/go/dbproxyb\006proto3"
 };
 static ::absl::once_flag descriptor_table_dbproxy_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_dbproxy_2eproto = {
     false,
     false,
-    870,
+    864,
     descriptor_table_protodef_dbproxy_2eproto,
     "dbproxy.proto",
     &descriptor_table_dbproxy_2eproto_once,

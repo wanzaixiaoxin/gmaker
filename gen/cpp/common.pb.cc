@@ -187,15 +187,15 @@ const char descriptor_table_protodef_common_2eproto[] ABSL_ATTRIBUTE_SECTION_VAR
     " \001(\010\022\014\n\004code\030\002 \001(\r\022\013\n\003msg\030\003 \001(\t\"&\n\007PageR"
     "eq\022\014\n\004page\030\001 \001(\r\022\r\n\005limit\030\002 \001(\r\"I\n\007PageR"
     "es\022\014\n\004page\030\001 \001(\r\022\r\n\005limit\030\002 \001(\r\022\r\n\005total"
-    "\030\003 \001(\r\022\022\n\ntotal_page\030\004 \001(\r\"\007\n\005EmptyB-Z+g"
-    "ithub.com/gmaker/game-server/gen/go/comm"
-    "onb\006proto3"
+    "\030\003 \001(\r\022\022\n\ntotal_page\030\004 \001(\r\"\007\n\005EmptyB\'Z%g"
+    "ithub.com/gmaker/luffa/gen/go/commonb\006pr"
+    "oto3"
 };
 static ::absl::once_flag descriptor_table_common_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_common_2eproto = {
     false,
     false,
-    250,
+    244,
     descriptor_table_protodef_common_2eproto,
     "common.proto",
     &descriptor_table_common_2eproto_once,

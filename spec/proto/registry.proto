@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package registry;
-option go_package = "github.com/gmaker/game-server/gen/go/registry";
+option go_package = "github.com/gmaker/luffa/gen/go/registry";
 
 // ==================== 节点信息 ====================
 
@@ -58,8 +58,7 @@ message ServiceType {
 // - Register  -> etcd LeaseGrant(15s) + Put(/registry/nodes/{svc}/{node_id}, NodeInfo bytes, lease)
 // - Heartbeat -> etcd LeaseKeepAlive(leaseID)
 // - Discover  -> etcd Get(/registry/nodes/{svc}/, prefix)
-// - Watch     -> etcd Watch(/registry/nodes/{svc}/, prefix), 事件流转为 NodeEvent 流
-
+// - Watch     -> etcd Watch(/registry/nodes/{svc}/, prefix), 事件流转为 NodeEvent。
 service Registry {
     // 服务注册。Registry 会为该节点在 Etcd 上创建一个 15s TTL 的 Lease。
     rpc Register(NodeInfo) returns (Result);

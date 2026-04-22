@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package biz;
-option go_package = "github.com/gmaker/game-server/gen/go/biz";
+option go_package = "github.com/gmaker/luffa/gen/go/biz";
 
 import "common.proto";
 

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gmaker/game-server/common/go/logger"
+	"github.com/gmaker/luffa/common/go/logger"
 )
 
 // LogEntry 单条结构化日志

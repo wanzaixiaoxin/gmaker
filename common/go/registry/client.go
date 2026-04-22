@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gmaker/game-server/common/go/net"
-	pb "github.com/gmaker/game-server/gen/go/registry"
+	"github.com/gmaker/luffa/common/go/net"
+	pb "github.com/gmaker/luffa/gen/go/registry"
 	"google.golang.org/protobuf/proto"
 )
 

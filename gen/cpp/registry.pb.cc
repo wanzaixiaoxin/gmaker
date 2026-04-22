@@ -341,15 +341,15 @@ const char descriptor_table_protodef_registry_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "/\n\tHeartbeat\022\020.registry.NodeId\032\020.registr"
     "y.Result\0225\n\010Discover\022\025.registry.ServiceT"
     "ype\032\022.registry.NodeList\0225\n\005Watch\022\025.regis"
-    "try.ServiceType\032\023.registry.NodeEvent0\001B/"
-    "Z-github.com/gmaker/game-server/gen/go/r"
-    "egistryb\006proto3"
+    "try.ServiceType\032\023.registry.NodeEvent0\001B)"
+    "Z\'github.com/gmaker/luffa/gen/go/registr"
+    "yb\006proto3"
 };
 static ::absl::once_flag descriptor_table_registry_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_registry_2eproto = {
     false,
     false,
-    815,
+    809,
     descriptor_table_protodef_registry_2eproto,
     "registry.proto",
     &descriptor_table_registry_2eproto_once,
