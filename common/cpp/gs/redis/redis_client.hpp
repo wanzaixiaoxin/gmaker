@@ -5,6 +5,7 @@
 #include <vector>
 #include <optional>
 #include <memory>
+#include <utility>
 
 #include <hiredis.h>
 
@@ -28,8 +29,91 @@ struct Reply {
     std::string Str;
     long long   Integer = 0;
     bool        Ok = false;
+    std::vector<Reply> Elements; // 数组类型子元素
 
     bool IsOk() const { return Type != ReplyType::Error; }
+};
+
+// Pipeline 批量操作封装
+// 通过 Client::Pipeline() 创建，追加命令后调用 Exec() 一次性获取结果
+class Pipeline {
+public:
+    explicit Pipeline(redisContext* ctx);
+    ~Pipeline() = default;
+
+    Pipeline(const Pipeline&) = delete;
+    Pipeline& operator=(const Pipeline&) = delete;
+    Pipeline(Pipeline&&) noexcept = default;
+    Pipeline& operator=(Pipeline&&) noexcept = default;
+
+    // ==================== String ====================
+    Pipeline& Set(const std::string& key, const std::string& value, int ttl_sec = 0);
+    Pipeline& SetEX(const std::string& key, const std::string& value, int ttl_sec);
+    Pipeline& SetNX(const std::string& key, const std::string& value, int ttl_sec = 0);
+    Pipeline& Get(const std::string& key);
+    Pipeline& Del(const std::string& key);
+    Pipeline& Del(const std::vector<std::string>& keys);
+    Pipeline& Incr(const std::string& key);
+    Pipeline& Decr(const std::string& key);
+    Pipeline& IncrBy(const std::string& key, long long delta);
+    Pipeline& DecrBy(const std::string& key, long long delta);
+    Pipeline& StrLen(const std::string& key);
+
+    // ==================== Hash ====================
+    Pipeline& HSet(const std::string& key, const std::string& field, const std::string& value);
+    Pipeline& HGet(const std::string& key, const std::string& field);
+    Pipeline& HDel(const std::string& key, const std::vector<std::string>& fields);
+    Pipeline& HExists(const std::string& key, const std::string& field);
+    Pipeline& HLen(const std::string& key);
+    Pipeline& HKeys(const std::string& key);
+    Pipeline& HVals(const std::string& key);
+
+    // ==================== List ====================
+    Pipeline& LPush(const std::string& key, const std::vector<std::string>& values);
+    Pipeline& RPush(const std::string& key, const std::vector<std::string>& values);
+    Pipeline& LPop(const std::string& key);
+    Pipeline& RPop(const std::string& key);
+    Pipeline& LLen(const std::string& key);
+    Pipeline& LRange(const std::string& key, long long start, long long stop);
+
+    // ==================== Set ====================
+    Pipeline& SAdd(const std::string& key, const std::vector<std::string>& members);
+    Pipeline& SRem(const std::string& key, const std::vector<std::string>& members);
+    Pipeline& SMembers(const std::string& key);
+    Pipeline& SIsMember(const std::string& key, const std::string& member);
+    Pipeline& SCard(const std::string& key);
+
+    // ==================== Sorted Set ====================
+    Pipeline& ZAdd(const std::string& key, const std::vector<std::pair<double, std::string>>& score_members);
+    Pipeline& ZRem(const std::string& key, const std::vector<std::string>& members);
+    Pipeline& ZRange(const std::string& key, long long start, long long stop);
+    Pipeline& ZRevRange(const std::string& key, long long start, long long stop);
+    Pipeline& ZRangeByScore(const std::string& key, double min, double max);
+    Pipeline& ZCard(const std::string& key);
+    Pipeline& ZScore(const std::string& key, const std::string& member);
+    Pipeline& ZRank(const std::string& key, const std::string& member);
+
+    // ==================== Key ====================
+    Pipeline& Exists(const std::vector<std::string>& keys);
+    Pipeline& Expire(const std::string& key, int ttl_sec);
+    Pipeline& TTL(const std::string& key);
+    Pipeline& Type(const std::string& key);
+
+    // 执行所有追加的命令，返回与追加顺序一致的结果列表
+    std::vector<Reply> Exec();
+    bool Empty() const { return count_ == 0; }
+    size_t Size() const { return count_; }
+    void Clear();
+
+    const std::string& LastError() const { return last_error_; }
+
+private:
+    redisContext* ctx_ = nullptr;
+    std::string last_error_;
+    size_t count_ = 0;
+
+    bool AppendCommand(const char* fmt, ...);
+    bool AppendCommandArgv(int argc, const char** argv, const size_t* argvlen);
 };
 
 // Client Redis 客户端封装（当前骨架阶段仅支持单节点，集群模式后续扩展）
@@ -53,11 +137,81 @@ public:
     // 心跳检测
     bool Ping();
 
-    // 基础操作
+    // ==================== String ====================
     bool Set(const std::string& key, const std::string& value, int ttl_sec = 0);
+    bool SetEX(const std::string& key, const std::string& value, int ttl_sec);
+    bool SetNX(const std::string& key, const std::string& value, int ttl_sec = 0);
     std::optional<std::string> Get(const std::string& key);
     bool Del(const std::vector<std::string>& keys);
     bool Del(const std::string& key);
+    // MSet / MGet：成对读写，失败时 last_error_ 记录原因
+    bool MSet(const std::vector<std::pair<std::string, std::string>>& kvs);
+    std::vector<std::optional<std::string>> MGet(const std::vector<std::string>& keys);
+    std::optional<long long> Incr(const std::string& key);
+    std::optional<long long> Decr(const std::string& key);
+    std::optional<long long> IncrBy(const std::string& key, long long delta);
+    std::optional<long long> DecrBy(const std::string& key, long long delta);
+    std::optional<long long> StrLen(const std::string& key);
+
+    // ==================== Hash ====================
+    bool HSet(const std::string& key, const std::string& field, const std::string& value);
+    std::optional<std::string> HGet(const std::string& key, const std::string& field);
+    bool HMSet(const std::string& key, const std::vector<std::pair<std::string, std::string>>& fvs);
+    std::vector<std::optional<std::string>> HMGet(const std::string& key, const std::vector<std::string>& fields);
+    std::vector<std::pair<std::string, std::string>> HGetAll(const std::string& key);
+    bool HDel(const std::string& key, const std::vector<std::string>& fields);
+    bool HExists(const std::string& key, const std::string& field);
+    std::optional<long long> HLen(const std::string& key);
+    std::vector<std::string> HKeys(const std::string& key);
+    std::vector<std::string> HVals(const std::string& key);
+    std::optional<long long> HIncrBy(const std::string& key, const std::string& field, long long delta);
+
+    // ==================== List ====================
+    std::optional<long long> LPush(const std::string& key, const std::vector<std::string>& values);
+    std::optional<long long> RPush(const std::string& key, const std::vector<std::string>& values);
+    std::optional<std::string> LPop(const std::string& key);
+    std::optional<std::string> RPop(const std::string& key);
+    std::optional<long long> LLen(const std::string& key);
+    std::vector<std::string> LRange(const std::string& key, long long start, long long stop);
+    std::optional<std::string> LIndex(const std::string& key, long long index);
+    bool LTrim(const std::string& key, long long start, long long stop);
+    std::optional<long long> LRem(const std::string& key, long long count, const std::string& value);
+
+    // ==================== Set ====================
+    std::optional<long long> SAdd(const std::string& key, const std::vector<std::string>& members);
+    std::optional<long long> SRem(const std::string& key, const std::vector<std::string>& members);
+    std::vector<std::string> SMembers(const std::string& key);
+    bool SIsMember(const std::string& key, const std::string& member);
+    std::optional<long long> SCard(const std::string& key);
+    std::optional<std::string> SPop(const std::string& key);
+
+    // ==================== Sorted Set ====================
+    std::optional<long long> ZAdd(const std::string& key, const std::vector<std::pair<double, std::string>>& score_members);
+    std::optional<long long> ZRem(const std::string& key, const std::vector<std::string>& members);
+    std::vector<std::string> ZRange(const std::string& key, long long start, long long stop);
+    std::vector<std::string> ZRevRange(const std::string& key, long long start, long long stop);
+    std::vector<std::pair<std::string, double>> ZRangeWithScores(const std::string& key, long long start, long long stop);
+    std::vector<std::pair<std::string, double>> ZRevRangeWithScores(const std::string& key, long long start, long long stop);
+    std::vector<std::string> ZRangeByScore(const std::string& key, double min, double max);
+    std::optional<long long> ZRemRangeByRank(const std::string& key, long long start, long long stop);
+    std::optional<long long> ZRemRangeByScore(const std::string& key, double min, double max);
+    std::optional<long long> ZCard(const std::string& key);
+    std::optional<double> ZScore(const std::string& key, const std::string& member);
+    std::optional<long long> ZRank(const std::string& key, const std::string& member);
+    std::optional<long long> ZRevRank(const std::string& key, const std::string& member);
+    std::optional<double> ZIncrBy(const std::string& key, double increment, const std::string& member);
+
+    // ==================== Key ====================
+    bool Exists(const std::vector<std::string>& keys);
+    bool Expire(const std::string& key, int ttl_sec);
+    std::optional<long long> TTL(const std::string& key);
+    bool Persist(const std::string& key);
+    bool Rename(const std::string& key, const std::string& new_key);
+    std::optional<std::string> Type(const std::string& key);
+    std::vector<std::string> Keys(const std::string& pattern);
+
+    // ==================== Pipeline ====================
+    Pipeline NewPipeline();
 
     // 通用命令执行（高级场景）
     Reply Command(const char* fmt, ...);
