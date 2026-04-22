@@ -35,6 +35,11 @@ FetchContent_MakeAvailable(toml11)
 # rapidjson: 高性能 JSON 解析/生成库（header-only，本地拷贝）
 set(RAPIDJSON_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rd)
 
+# hiredis: Redis C 客户端库（本地源码构建）
+set(ENABLE_SSL OFF CACHE BOOL "" FORCE)
+set(DISABLE_TESTS ON CACHE BOOL "" FORCE)
+add_subdirectory(3rd/hiredis)
+
 # protobuf: 协议序列化库（从本地构建树引入）
 set(PROTOBUF_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/3rd/protobuf/protobuf-34.1)
 set(PROTOBUF_INCLUDE_DIR ${PROTOBUF_ROOT}/src)
@@ -127,6 +132,10 @@ set(CPP_METRICS_SOURCES
     common/cpp/gs/metrics/metrics.cpp
 )
 
+set(CPP_REDIS_SOURCES
+    common/cpp/gs/redis/redis_client.cpp
+)
+
 set(CPP_REALTIME_SOURCES
     common/cpp/gs/realtime/room.cpp
     common/cpp/gs/realtime/compute_thread.cpp
@@ -145,6 +154,7 @@ add_executable(gateway-cpp
     ${CPP_LIMITER_SOURCES}
     ${CPP_REPLAY_SOURCES}
     ${CPP_METRICS_SOURCES}
+    ${CPP_REDIS_SOURCES}
 )
 
 target_include_directories(gateway-cpp PRIVATE
@@ -154,7 +164,7 @@ target_include_directories(gateway-cpp PRIVATE
     ${UV_INCLUDE_DIR}
     ${RAPIDJSON_INCLUDE_DIR}
 )
-target_link_libraries(gateway-cpp toml11::toml11 protobuf::libprotobuf ${UV_LIB})
+target_link_libraries(gateway-cpp toml11::toml11 protobuf::libprotobuf ${UV_LIB} hiredis)
 if(WIN32)
     target_link_libraries(gateway-cpp ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
 elseif(UNIX AND NOT APPLE)
@@ -176,6 +186,7 @@ add_executable(realtime-cpp
     ${CPP_REPLAY_SOURCES}
     ${CPP_METRICS_SOURCES}
     ${CPP_REALTIME_SOURCES}
+    ${CPP_REDIS_SOURCES}
 )
 
 target_include_directories(realtime-cpp PRIVATE
@@ -185,7 +196,7 @@ target_include_directories(realtime-cpp PRIVATE
     ${UV_INCLUDE_DIR}
     ${RAPIDJSON_INCLUDE_DIR}
 )
-target_link_libraries(realtime-cpp toml11::toml11 protobuf::libprotobuf ${UV_LIB})
+target_link_libraries(realtime-cpp toml11::toml11 protobuf::libprotobuf ${UV_LIB} hiredis)
 if(WIN32)
     target_link_libraries(realtime-cpp ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
 elseif(UNIX AND NOT APPLE)
@@ -228,6 +239,35 @@ elseif(UNIX AND NOT APPLE)
     target_link_libraries(test-async-net pthread dl rt)
 elseif(APPLE)
     target_link_libraries(test-async-net pthread)
+endif()
+
+# ==================== Redis 客户端测试 ====================
+add_executable(test-redis
+    common/cpp/gs/redis/test.cpp
+    common/cpp/gs/redis/redis_client.cpp
+)
+target_include_directories(test-redis PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp
+)
+target_link_libraries(test-redis hiredis)
+if(WIN32)
+    target_link_libraries(test-redis ws2_32)
+endif()
+
+# Windows: hiredis 构建为 DLL，需在构建后自动复制到可执行文件目录
+if(WIN32)
+    set(HIREDIS_DLL_TARGETS gateway-cpp realtime-cpp test-redis)
+    foreach(tgt IN LISTS HIREDIS_DLL_TARGETS)
+        if(TARGET ${tgt})
+            add_custom_command(TARGET ${tgt} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "$<TARGET_FILE:hiredis>"
+                    "$<TARGET_FILE_DIR:${tgt}>"
+                COMMENT "Copying hiredis.dll for ${tgt}"
+            )
+        endif()
+    endforeach()
 endif()
 
 # TODO: 后续添加 protobuf 库、gtest 等依赖

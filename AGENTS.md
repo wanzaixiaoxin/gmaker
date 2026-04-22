@@ -192,6 +192,7 @@ C++ 服务为单 `main.cpp` + 公共库模式，业务逻辑直接写在 `main.c
 | 加密 | `common/go/crypto` | `common/cpp/gs/crypto` |
 | ID 生成 | `common/go/idgen` | `common/cpp/gs/idgen` |
 | 限流 | `common/go/limiter` | `common/cpp/gs/limiter` |
+| Redis | `common/go/redis` | `common/cpp/gs/redis` |
 
 **原则**：同一功能在两种语言中的模块名、接口语义、常量值应尽量保持一致，方便跨语言维护。
 
