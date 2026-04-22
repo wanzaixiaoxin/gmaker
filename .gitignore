@@ -37,6 +37,7 @@
 *.out
 *.app
 *.log
+*.err
 
 # debug information files
 *.dwo
