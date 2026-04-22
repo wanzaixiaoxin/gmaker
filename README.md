@@ -1,6 +1,6 @@
 # gmaker
 
-去中心化游戏服务器框架骨架，采用 **Go + C++ 双语言栈**，通过自研 TCP 二进制协议 + protobuf3 进行服务间通信。
+去中心化服务端框架骨架，采用 **Go + C++ 双语言栈**，通过自研 TCP 二进制协议 + protobuf3 进行服务间通信。
 
 > 当前已完成 6 个 Phase 的基础设施落地，核心链路 `Client -> Gateway(C++) -> Biz(Go) -> Registry(Go)` 已跑通。
 

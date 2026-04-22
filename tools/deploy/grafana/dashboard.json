@@ -1,6 +1,6 @@
 {
   "dashboard": {
-    "title": "Game Server MVP",
+    "title": "Server MVP",
     "tags": ["gmaker", "mvp"],
     "timezone": "browser",
     "schemaVersion": 36,
