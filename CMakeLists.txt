@@ -258,6 +258,53 @@ if(WIN32)
     target_link_libraries(test-redis ws2_32)
 endif()
 
+# ==================== 网络层正确性与性能测试（服务端 + 客户端分离） ====================
+set(PERF_TEST_SOURCES
+    ${CPP_ASYNC_NET_SOURCES}
+    common/cpp/gs/crypto/aes_gcm.cpp
+    common/cpp/gs/crypto/hmac.cpp
+    common/cpp/gs/crypto/session.cpp
+)
+set(PERF_TEST_INCLUDES
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp
+    ${UV_INCLUDE_DIR}
+)
+set(PERF_TEST_LIBS ${UV_LIB})
+set(PERF_TEST_WIN_LIBS ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
+set(PERF_TEST_UNIX_LIBS pthread dl rt)
+set(PERF_TEST_APPLE_LIBS pthread)
+
+# 服务端
+add_executable(test-net-perf-server
+    tests/perf/net_perf_server.cpp
+    ${PERF_TEST_SOURCES}
+)
+target_include_directories(test-net-perf-server PRIVATE ${PERF_TEST_INCLUDES})
+target_link_libraries(test-net-perf-server ${PERF_TEST_LIBS})
+if(WIN32)
+    target_link_libraries(test-net-perf-server ${PERF_TEST_WIN_LIBS})
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(test-net-perf-server ${PERF_TEST_UNIX_LIBS})
+elseif(APPLE)
+    target_link_libraries(test-net-perf-server ${PERF_TEST_APPLE_LIBS})
+endif()
+
+# 客户端
+add_executable(test-net-perf-client
+    tests/perf/net_perf_client.cpp
+    ${PERF_TEST_SOURCES}
+)
+target_include_directories(test-net-perf-client PRIVATE ${PERF_TEST_INCLUDES})
+target_link_libraries(test-net-perf-client ${PERF_TEST_LIBS})
+if(WIN32)
+    target_link_libraries(test-net-perf-client ${PERF_TEST_WIN_LIBS})
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(test-net-perf-client ${PERF_TEST_UNIX_LIBS})
+elseif(APPLE)
+    target_link_libraries(test-net-perf-client ${PERF_TEST_APPLE_LIBS})
+endif()
+
 # Windows: hiredis 构建为 DLL，需在构建后自动复制到可执行文件目录
 if(WIN32)
     set(HIREDIS_DLL_TARGETS gateway-cpp realtime-cpp test-redis)
