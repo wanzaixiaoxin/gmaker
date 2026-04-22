@@ -1467,5 +1467,99 @@ Pipeline& Pipeline::Type(const std::string& key) {
     return *this;
 }
 
+// Pipeline 补充方法
+Pipeline& Pipeline::MSet(const std::vector<std::pair<std::string, std::string>>& kvs) {
+    std::vector<std::string> args = {"MSET"};
+    for (const auto& kv : kvs) { args.push_back(kv.first); args.push_back(kv.second); }
+    std::vector<const char*> argv; std::vector<size_t> argvlen;
+    BuildArgv(args, argv, argvlen);
+    AppendCommandArgv((int)argv.size(), argv.data(), argvlen.data());
+    return *this;
+}
+Pipeline& Pipeline::MGet(const std::vector<std::string>& keys) {
+    std::vector<std::string> args = {"MGET"};
+    args.insert(args.end(), keys.begin(), keys.end());
+    std::vector<const char*> argv; std::vector<size_t> argvlen;
+    BuildArgv(args, argv, argvlen);
+    AppendCommandArgv((int)argv.size(), argv.data(), argvlen.data());
+    return *this;
+}
+Pipeline& Pipeline::HMSet(const std::string& key, const std::vector<std::pair<std::string, std::string>>& fvs) {
+    std::vector<std::string> args = {"HMSET", key};
+    for (const auto& fv : fvs) { args.push_back(fv.first); args.push_back(fv.second); }
+    std::vector<const char*> argv; std::vector<size_t> argvlen;
+    BuildArgv(args, argv, argvlen);
+    AppendCommandArgv((int)argv.size(), argv.data(), argvlen.data());
+    return *this;
+}
+Pipeline& Pipeline::HMGet(const std::string& key, const std::vector<std::string>& fields) {
+    std::vector<std::string> args = {"HMGET", key};
+    args.insert(args.end(), fields.begin(), fields.end());
+    std::vector<const char*> argv; std::vector<size_t> argvlen;
+    BuildArgv(args, argv, argvlen);
+    AppendCommandArgv((int)argv.size(), argv.data(), argvlen.data());
+    return *this;
+}
+Pipeline& Pipeline::HGetAll(const std::string& key) {
+    AppendCommand("HGETALL %s", key.c_str());
+    return *this;
+}
+Pipeline& Pipeline::HIncrBy(const std::string& key, const std::string& field, long long delta) {
+    AppendCommand("HINCRBY %s %s %lld", key.c_str(), field.c_str(), delta);
+    return *this;
+}
+Pipeline& Pipeline::LIndex(const std::string& key, long long index) {
+    AppendCommand("LINDEX %s %lld", key.c_str(), index);
+    return *this;
+}
+Pipeline& Pipeline::LTrim(const std::string& key, long long start, long long stop) {
+    AppendCommand("LTRIM %s %lld %lld", key.c_str(), start, stop);
+    return *this;
+}
+Pipeline& Pipeline::LRem(const std::string& key, long long count, const std::string& value) {
+    AppendCommand("LREM %s %lld %s", key.c_str(), count, value.c_str());
+    return *this;
+}
+Pipeline& Pipeline::SPop(const std::string& key) {
+    AppendCommand("SPOP %s", key.c_str());
+    return *this;
+}
+Pipeline& Pipeline::ZRangeWithScores(const std::string& key, long long start, long long stop) {
+    AppendCommand("ZRANGE %s %lld %lld WITHSCORES", key.c_str(), start, stop);
+    return *this;
+}
+Pipeline& Pipeline::ZRevRangeWithScores(const std::string& key, long long start, long long stop) {
+    AppendCommand("ZREVRANGE %s %lld %lld WITHSCORES", key.c_str(), start, stop);
+    return *this;
+}
+Pipeline& Pipeline::ZRemRangeByRank(const std::string& key, long long start, long long stop) {
+    AppendCommand("ZREMRANGEBYRANK %s %lld %lld", key.c_str(), start, stop);
+    return *this;
+}
+Pipeline& Pipeline::ZRemRangeByScore(const std::string& key, double min, double max) {
+    AppendCommand("ZREMRANGEBYSCORE %s %f %f", key.c_str(), min, max);
+    return *this;
+}
+Pipeline& Pipeline::ZRevRank(const std::string& key, const std::string& member) {
+    AppendCommand("ZREVRANK %s %s", key.c_str(), member.c_str());
+    return *this;
+}
+Pipeline& Pipeline::ZIncrBy(const std::string& key, double increment, const std::string& member) {
+    AppendCommand("ZINCRBY %s %f %s", key.c_str(), increment, member.c_str());
+    return *this;
+}
+Pipeline& Pipeline::Persist(const std::string& key) {
+    AppendCommand("PERSIST %s", key.c_str());
+    return *this;
+}
+Pipeline& Pipeline::Rename(const std::string& key, const std::string& new_key) {
+    AppendCommand("RENAME %s %s", key.c_str(), new_key.c_str());
+    return *this;
+}
+Pipeline& Pipeline::Keys(const std::string& pattern) {
+    AppendCommand("KEYS %s", pattern.c_str());
+    return *this;
+}
+
 } // namespace redis
 } // namespace gs

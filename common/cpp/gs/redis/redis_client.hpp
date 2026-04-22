@@ -32,6 +32,78 @@ struct Reply {
     std::vector<Reply> Elements; // 数组类型子元素
 
     bool IsOk() const { return Type != ReplyType::Error; }
+
+    // 解析为字符串（String/Status → Str, Nil → nullopt）
+    std::optional<std::string> AsString() const {
+        if (Type == ReplyType::String || Type == ReplyType::Status) return Str;
+        if (Type == ReplyType::Nil) return std::nullopt;
+        return std::nullopt;
+    }
+
+    // 解析为整数（Integer → Integer）
+    std::optional<long long> AsInteger() const {
+        if (Type == ReplyType::Integer) return Integer;
+        return std::nullopt;
+    }
+
+    // 解析为浮点数（String → stod，用于 ZSCORE 等）
+    std::optional<double> AsDouble() const {
+        if (Type == ReplyType::String || Type == ReplyType::Status) {
+            try { return std::stod(Str); } catch (...) { return std::nullopt; }
+        }
+        return std::nullopt;
+    }
+
+    // 解析为布尔值（Integer → integer != 0，用于 EXISTS/SISMEMBER/HEXISTS 等）
+    std::optional<bool> AsBool() const {
+        if (Type == ReplyType::Integer) return Integer != 0;
+        return std::nullopt;
+    }
+
+    // 解析数组为字符串列表（用于 SMEMBERS/HKEYS/ZRANGE 等）
+    std::vector<std::string> AsStringArray() const {
+        std::vector<std::string> out;
+        if (Type != ReplyType::Array) return out;
+        out.reserve(Elements.size());
+        for (const auto& e : Elements) {
+            if (e.Type == ReplyType::String || e.Type == ReplyType::Status) {
+                out.push_back(e.Str);
+            }
+        }
+        return out;
+    }
+
+    // 解析数组为字符串对列表（用于 HGETALL 等）
+    std::vector<std::pair<std::string, std::string>> AsStringPairs() const {
+        std::vector<std::pair<std::string, std::string>> out;
+        if (Type != ReplyType::Array) return out;
+        for (size_t i = 0; i + 1 < Elements.size(); i += 2) {
+            const auto& k = Elements[i];
+            const auto& v = Elements[i + 1];
+            if ((k.Type == ReplyType::String || k.Type == ReplyType::Status) &&
+                (v.Type == ReplyType::String || v.Type == ReplyType::Status)) {
+                out.emplace_back(k.Str, v.Str);
+            }
+        }
+        return out;
+    }
+
+    // 解析数组为 (string, double) 对列表（用于 ZRANGE WITHSCORES 等）
+    std::vector<std::pair<std::string, double>> AsStringDoublePairs() const {
+        std::vector<std::pair<std::string, double>> out;
+        if (Type != ReplyType::Array) return out;
+        for (size_t i = 0; i + 1 < Elements.size(); i += 2) {
+            const auto& m = Elements[i];
+            const auto& s = Elements[i + 1];
+            if ((m.Type == ReplyType::String || m.Type == ReplyType::Status) &&
+                (s.Type == ReplyType::String || s.Type == ReplyType::Status)) {
+                try {
+                    out.emplace_back(m.Str, std::stod(s.Str));
+                } catch (...) {}
+            }
+        }
+        return out;
+    }
 };
 
 // Pipeline 批量操作封装
@@ -53,6 +125,8 @@ public:
     Pipeline& Get(const std::string& key);
     Pipeline& Del(const std::string& key);
     Pipeline& Del(const std::vector<std::string>& keys);
+    Pipeline& MSet(const std::vector<std::pair<std::string, std::string>>& kvs);
+    Pipeline& MGet(const std::vector<std::string>& keys);
     Pipeline& Incr(const std::string& key);
     Pipeline& Decr(const std::string& key);
     Pipeline& IncrBy(const std::string& key, long long delta);
@@ -62,11 +136,15 @@ public:
     // ==================== Hash ====================
     Pipeline& HSet(const std::string& key, const std::string& field, const std::string& value);
     Pipeline& HGet(const std::string& key, const std::string& field);
+    Pipeline& HMSet(const std::string& key, const std::vector<std::pair<std::string, std::string>>& fvs);
+    Pipeline& HMGet(const std::string& key, const std::vector<std::string>& fields);
+    Pipeline& HGetAll(const std::string& key);
     Pipeline& HDel(const std::string& key, const std::vector<std::string>& fields);
     Pipeline& HExists(const std::string& key, const std::string& field);
     Pipeline& HLen(const std::string& key);
     Pipeline& HKeys(const std::string& key);
     Pipeline& HVals(const std::string& key);
+    Pipeline& HIncrBy(const std::string& key, const std::string& field, long long delta);
 
     // ==================== List ====================
     Pipeline& LPush(const std::string& key, const std::vector<std::string>& values);
@@ -75,6 +153,9 @@ public:
     Pipeline& RPop(const std::string& key);
     Pipeline& LLen(const std::string& key);
     Pipeline& LRange(const std::string& key, long long start, long long stop);
+    Pipeline& LIndex(const std::string& key, long long index);
+    Pipeline& LTrim(const std::string& key, long long start, long long stop);
+    Pipeline& LRem(const std::string& key, long long count, const std::string& value);
 
     // ==================== Set ====================
     Pipeline& SAdd(const std::string& key, const std::vector<std::string>& members);
@@ -82,6 +163,7 @@ public:
     Pipeline& SMembers(const std::string& key);
     Pipeline& SIsMember(const std::string& key, const std::string& member);
     Pipeline& SCard(const std::string& key);
+    Pipeline& SPop(const std::string& key);
 
     // ==================== Sorted Set ====================
     Pipeline& ZAdd(const std::string& key, const std::vector<std::pair<double, std::string>>& score_members);
@@ -89,15 +171,24 @@ public:
     Pipeline& ZRange(const std::string& key, long long start, long long stop);
     Pipeline& ZRevRange(const std::string& key, long long start, long long stop);
     Pipeline& ZRangeByScore(const std::string& key, double min, double max);
+    Pipeline& ZRangeWithScores(const std::string& key, long long start, long long stop);
+    Pipeline& ZRevRangeWithScores(const std::string& key, long long start, long long stop);
+    Pipeline& ZRemRangeByRank(const std::string& key, long long start, long long stop);
+    Pipeline& ZRemRangeByScore(const std::string& key, double min, double max);
     Pipeline& ZCard(const std::string& key);
     Pipeline& ZScore(const std::string& key, const std::string& member);
     Pipeline& ZRank(const std::string& key, const std::string& member);
+    Pipeline& ZRevRank(const std::string& key, const std::string& member);
+    Pipeline& ZIncrBy(const std::string& key, double increment, const std::string& member);
 
     // ==================== Key ====================
     Pipeline& Exists(const std::vector<std::string>& keys);
     Pipeline& Expire(const std::string& key, int ttl_sec);
     Pipeline& TTL(const std::string& key);
+    Pipeline& Persist(const std::string& key);
+    Pipeline& Rename(const std::string& key, const std::string& new_key);
     Pipeline& Type(const std::string& key);
+    Pipeline& Keys(const std::string& pattern);
 
     // 执行所有追加的命令，返回与追加顺序一致的结果列表
     std::vector<Reply> Exec();

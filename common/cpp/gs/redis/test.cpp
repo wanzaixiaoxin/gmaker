@@ -232,15 +232,65 @@ int main() {
     CHECK(pipe.Size() == 9, "Pipeline size");
     auto replies = pipe.Exec();
     CHECK(replies.size() == 9, "Pipeline exec size");
+
+    // 使用 Reply 解析辅助方法提取 Pipeline 结果
     CHECK(replies[0].IsOk(), "Pipeline Set OK");
-    CHECK(replies[1].Type == gs::redis::ReplyType::String && replies[1].Str == "v1", "Pipeline Get OK");
-    CHECK(replies[2].Type == gs::redis::ReplyType::Integer, "Pipeline Incr OK");
+
+    auto pipe_val = replies[1].AsString();
+    CHECK(pipe_val && *pipe_val == "v1", "Pipeline Get via AsString()");
+
+    auto pipe_incr = replies[2].AsInteger();
+    CHECK(pipe_incr && *pipe_incr == 1, "Pipeline Incr via AsInteger()");
+
     CHECK(replies[3].IsOk(), "Pipeline HSet OK");
-    CHECK(replies[4].Type == gs::redis::ReplyType::String && replies[4].Str == "h1", "Pipeline HGet OK");
+
+    auto pipe_hval = replies[4].AsString();
+    CHECK(pipe_hval && *pipe_hval == "h1", "Pipeline HGet via AsString()");
+
     CHECK(replies[5].IsOk(), "Pipeline LPush OK");
     CHECK(replies[6].IsOk(), "Pipeline SAdd OK");
     CHECK(replies[7].IsOk(), "Pipeline ZAdd OK");
     CHECK(replies[8].IsOk(), "Pipeline Del OK");
+
+    // 额外测试：Pipeline 解析辅助方法（AsStringArray / AsStringPairs / AsStringDoublePairs / AsBool / AsDouble）
+    {
+        client.HMSet("test:cpp:pipe_hash2", {{"f1", "v1"}, {"f2", "v2"}});
+        client.SAdd("test:cpp:pipe_set2", {"s1", "s2", "s3"});
+        client.ZAdd("test:cpp:pipe_zset2", {{1.0, "z1"}, {2.0, "z2"}, {3.0, "z3"}});
+
+        auto pipe2 = client.NewPipeline();
+        pipe2.HGetAll("test:cpp:pipe_hash2")
+             .SMembers("test:cpp:pipe_set2")
+             .SIsMember("test:cpp:pipe_set2", "s1")
+             .ZRangeWithScores("test:cpp:pipe_zset2", 0, -1)
+             .ZScore("test:cpp:pipe_zset2", "z2")
+             .Exists({"test:cpp:pipe_hash2"})
+             .Del(std::vector<std::string>{
+                 "test:cpp:pipe_hash2", "test:cpp:pipe_set2", "test:cpp:pipe_zset2"
+             });
+        auto replies2 = pipe2.Exec();
+        CHECK(replies2.size() == 7, "Pipeline2 exec size");
+
+        auto pairs = replies2[0].AsStringPairs();
+        CHECK(pairs.size() == 2, "Pipeline2 AsStringPairs()");
+
+        auto arr = replies2[1].AsStringArray();
+        CHECK(arr.size() == 3, "Pipeline2 AsStringArray()");
+
+        auto b = replies2[2].AsBool();
+        CHECK(b && *b == true, "Pipeline2 AsBool() true");
+
+        auto sdp = replies2[3].AsStringDoublePairs();
+        CHECK(sdp.size() == 3 && sdp[0].second == 1.0, "Pipeline2 AsStringDoublePairs()");
+
+        auto d = replies2[4].AsDouble();
+        CHECK(d && *d == 2.0, "Pipeline2 AsDouble()");
+
+        auto ex = replies2[5].AsBool();
+        CHECK(ex && *ex == true, "Pipeline2 AsBool() Exists");
+
+        CHECK(replies2[6].IsOk(), "Pipeline2 Del OK");
+    }
 
     // 清理
     client.Del(std::vector<std::string>{
