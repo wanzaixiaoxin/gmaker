@@ -49,7 +49,7 @@ std::future<net::Packet> Client::Call(uint32_t cmd_id,
     pkt.header.cmd_id = cmd_id;
     pkt.header.seq_id = seq;
     pkt.header.flags  = static_cast<uint32_t>(net::Flag::RPC_REQ);
-    pkt.payload = payload;
+    pkt.payload = net::Buffer::FromVector(payload);
 
     if (!conn_ || !conn_->SendPacket(pkt)) {
         std::lock_guard<std::mutex> lk(pending_mtx_);
@@ -74,7 +74,7 @@ bool Client::FireForget(uint32_t cmd_id, const std::vector<uint8_t>& payload) {
     pkt.header.cmd_id = cmd_id;
     pkt.header.seq_id = 0;
     pkt.header.flags  = static_cast<uint32_t>(net::Flag::RPC_FF);
-    pkt.payload = payload;
+    pkt.payload = net::Buffer::FromVector(payload);
     return conn_ && conn_->SendPacket(pkt);
 }
 

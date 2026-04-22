@@ -146,11 +146,11 @@ private:
         switch (pkt.header.cmd_id) {
             case CMD_REALTIME_ENTER: {
                 // payload: [room_id: 4 BE][player_id: 8 BE][spawn_x: 4 BE][spawn_z: 4 BE]
-                if (pkt.payload.size() < 20) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.data());
-                uint64_t player_id = ReadU64BE(pkt.payload.data() + 4);
-                float spawn_x = *reinterpret_cast<const float*>(pkt.payload.data() + 12);
-                float spawn_z = *reinterpret_cast<const float*>(pkt.payload.data() + 16);
+                if (pkt.payload.Size() < 20) return;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data());
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
+                float spawn_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 12);
+                float spawn_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 16);
                 auto msg = std::make_unique<PlayerEnterMsg>();
                 msg->player_id = player_id;
                 msg->spawn_pos = {spawn_x, 0, spawn_z};
@@ -159,21 +159,21 @@ private:
                 break;
             }
             case CMD_REALTIME_LEAVE: {
-                if (pkt.payload.size() < 12) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.data());
-                uint64_t player_id = ReadU64BE(pkt.payload.data() + 4);
+                if (pkt.payload.Size() < 12) return;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data());
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
                 auto msg = std::make_unique<PlayerLeaveMsg>();
                 msg->player_id = player_id;
                 compute_->PushMessage(room_id, std::move(msg));
                 break;
             }
             case CMD_REALTIME_MOVE: {
-                if (pkt.payload.size() < 24) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.data());
-                uint64_t player_id = ReadU64BE(pkt.payload.data() + 4);
-                float x = *reinterpret_cast<const float*>(pkt.payload.data() + 12);
-                float z = *reinterpret_cast<const float*>(pkt.payload.data() + 16);
-                float yaw = *reinterpret_cast<const float*>(pkt.payload.data() + 20);
+                if (pkt.payload.Size() < 24) return;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data());
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
+                float x = *reinterpret_cast<const float*>(pkt.payload.Data() + 12);
+                float z = *reinterpret_cast<const float*>(pkt.payload.Data() + 16);
+                float yaw = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
                 auto msg = std::make_unique<PlayerMoveMsg>();
                 msg->player_id = player_id;
                 msg->target_pos = {x, 0, z};
@@ -182,12 +182,12 @@ private:
                 break;
             }
             case CMD_REALTIME_ACTION: {
-                if (pkt.payload.size() < 20) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.data());
-                uint64_t player_id = ReadU64BE(pkt.payload.data() + 4);
-                uint32_t action_id = ReadU32BE(pkt.payload.data() + 12);
-                float x = *reinterpret_cast<const float*>(pkt.payload.data() + 16);
-                float z = *reinterpret_cast<const float*>(pkt.payload.data() + 20);
+                if (pkt.payload.Size() < 20) return;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data());
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
+                uint32_t action_id = ReadU32BE(pkt.payload.Data() + 12);
+                float x = *reinterpret_cast<const float*>(pkt.payload.Data() + 16);
+                float z = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
                 auto msg = std::make_unique<PlayerActionMsg>();
                 msg->player_id = player_id;
                 msg->action_id = action_id;
@@ -251,7 +251,7 @@ private:
             pkt.header.cmd_id = CMD_REALTIME_SYNC;
             pkt.header.seq_id = static_cast<uint32_t>(conn_id); // 复用 seq_id 标记目标 conn
             pkt.header.flags = static_cast<uint32_t>(Flag::BROADCAST);
-            pkt.payload = payload;
+            pkt.payload = Buffer::FromVector(payload);
             gateway_pool_->SendPacket(pkt);
         }
     }

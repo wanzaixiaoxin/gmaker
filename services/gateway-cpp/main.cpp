@@ -67,7 +67,7 @@ public:
 private:
     void HandleHandshake(IConnection* conn, Packet& pkt) {
         constexpr size_t kHandshakeV1Size = 1 + 8 + 8 + 16;
-        if (pkt.payload.size() < kHandshakeV1Size) {
+        if (pkt.payload.Size() < kHandshakeV1Size) {
             if (logger_) logger_->Error("Invalid handshake request from client " + std::to_string(conn->ID()));
             conn->Close();
             return;
@@ -80,9 +80,9 @@ private:
             return;
         }
 
-        uint64_t timestamp = ReadU64BE(pkt.payload.data() + 1);
-        std::string nonce(pkt.payload.begin() + 9, pkt.payload.begin() + 17);
-        std::vector<uint8_t> client_random(pkt.payload.begin() + 17, pkt.payload.begin() + 33);
+        uint64_t timestamp = ReadU64BE(pkt.payload.Data() + 1);
+        std::string nonce(pkt.payload.Data() + 9, pkt.payload.Data() + 17);
+        std::vector<uint8_t> client_random(pkt.payload.Data() + 17, pkt.payload.Data() + 33);
 
         auto ts = std::chrono::system_clock::from_time_t(static_cast<time_t>(timestamp));
         if (!replay_checker_->Check(ts, nonce)) {
@@ -116,11 +116,13 @@ private:
         res.header.magic = MAGIC_VALUE;
         res.header.seq_id = pkt.header.seq_id;
         res.header.flags = 0;
-        res.payload.reserve(1 + 16 + encrypted_challenge.size());
-        res.payload.push_back(1); // version
-        res.payload.insert(res.payload.end(), server_random.begin(), server_random.end());
-        res.payload.insert(res.payload.end(), encrypted_challenge.begin(), encrypted_challenge.end());
-        res.header.length = HEADER_SIZE + static_cast<uint32_t>(res.payload.size());
+        std::vector<uint8_t> res_payload;
+        res_payload.reserve(1 + 16 + encrypted_challenge.size());
+        res_payload.push_back(1); // version
+        res_payload.insert(res_payload.end(), server_random.begin(), server_random.end());
+        res_payload.insert(res_payload.end(), encrypted_challenge.begin(), encrypted_challenge.end());
+        res.payload = Buffer::FromVector(std::move(res_payload));
+        res.header.length = HEADER_SIZE + static_cast<uint32_t>(res.payload.Size());
         conn->SendPacket(res);
 
         {
@@ -160,7 +162,7 @@ public:
                 return false;
             }
             try {
-                pkt.payload = DecryptPacketPayload(key, pkt.payload);
+                pkt.payload = DecryptPacketPayload(key, pkt.payload.ToVector());
                 pkt.header.flags &= ~static_cast<uint32_t>(Flag::ENCRYPT);
             } catch (const std::exception& e) {
                 if (gateway_logger_) gateway_logger_->Error("Decrypt failed for client " + std::to_string(conn->ID()) + ": " + e.what());
@@ -329,7 +331,7 @@ private:
         }
 
         // 转发到 Biz（轮询负载均衡）
-        pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.size());
+        pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.Size());
         if (!biz_pool_->SendPacket(pkt)) {
             if (logger_) logger_->Warn("No healthy biz node available to forward packet");
             // TODO: 向客户端返回 SERVICE_UNAVAILABLE 错误包
@@ -352,37 +354,57 @@ private:
                           " seq=" + std::to_string(pkt.header.seq_id));
         }
 
-        // 单次加锁完成所有目标收集和加密发送，避免并发断开导致 UAF
-        std::lock_guard<std::mutex> lk(sessions_mtx_);
-
+        // 阶段 1：加锁收集目标，但不执行加密（避免阻塞事件循环）
         std::vector<IConnection*> targets_plain;
+        // 按 session key 分组收集加密目标
         std::vector<std::pair<IConnection*, std::vector<uint8_t>>> targets_encrypted;
+        size_t total_targets = 0;
+        {
+            std::lock_guard<std::mutex> lk(sessions_mtx_);
+            for (auto& [id, client] : clients_) {
+                if (handshake_mw_->IsHandshaked(id)) {
+                    targets_encrypted.emplace_back(client, handshake_mw_->GetSessionKey(id));
+                } else {
+                    targets_plain.push_back(client);
+                }
+            }
+            total_targets = targets_plain.size() + targets_encrypted.size();
+        }
 
-        for (auto& [id, client] : clients_) {
-            if (handshake_mw_->IsHandshaked(id)) {
-                targets_encrypted.emplace_back(client, handshake_mw_->GetSessionKey(id));
+        // 阶段 2：按 session key 去重，每个唯一 key 只加密一次
+        // key_hash -> (encoded_packet_buffer, list_of_clients)
+        std::unordered_map<size_t, std::pair<Buffer, std::vector<IConnection*>>> encrypted_batches;
+        for (auto& [client, key] : targets_encrypted) {
+            size_t key_hash = std::hash<std::string>{}(
+                std::string(reinterpret_cast<const char*>(key.data()), key.size()));
+            auto it = encrypted_batches.find(key_hash);
+            if (it == encrypted_batches.end()) {
+                // 首次遇到该 key，执行加密并编码
+                try {
+                    Packet enc_pkt = pkt;
+                    enc_pkt.payload = EncryptPacketPayload(key, pkt.payload.ToVector());
+                    enc_pkt.header.flags |= static_cast<uint32_t>(Flag::ENCRYPT);
+                    enc_pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(enc_pkt.payload.Size());
+                    Buffer encoded = EncodePacket(enc_pkt);
+                    encrypted_batches.emplace(key_hash,
+                        std::make_pair(encoded, std::vector<IConnection*>{client}));
+                } catch (const std::exception& e) {
+                    if (logger_) logger_->Error("Encrypt failed: " + std::string(e.what()));
+                }
             } else {
-                targets_plain.push_back(client);
+                it->second.second.push_back(client);
             }
         }
 
-        size_t total_targets = targets_plain.size() + targets_encrypted.size();
-
-        // 明文连接直接通过 coalescer 广播
+        // 阶段 3：发送（明文广播 + 加密批量共享）
         if (!targets_plain.empty()) {
             coalescer_->Broadcast(targets_plain, pkt);
         }
-
-        // 加密连接：各自加密后通过 coalescer 发送
-        for (auto& [client, key] : targets_encrypted) {
-            try {
-                Packet encrypted_pkt = pkt;
-                encrypted_pkt.payload = EncryptPacketPayload(key, pkt.payload);
-                encrypted_pkt.header.flags |= static_cast<uint32_t>(Flag::ENCRYPT);
-                encrypted_pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(encrypted_pkt.payload.size());
-                coalescer_->Enqueue(client, encrypted_pkt);
-            } catch (const std::exception& e) {
-                if (logger_) logger_->Error("Encrypt failed: " + std::string(e.what()));
+        for (auto& [hash, batch] : encrypted_batches) {
+            auto& encoded = batch.first;
+            for (auto* client : batch.second) {
+                // 零拷贝切片：同一份编码数据共享给多个客户端
+                coalescer_->Enqueue(client, encoded.Slice(0, encoded.Size()));
             }
         }
 
@@ -391,7 +413,8 @@ private:
                           " seq=" + std::to_string(pkt.header.seq_id) +
                           " targets=" + std::to_string(total_targets) +
                           " (plain=" + std::to_string(targets_plain.size()) +
-                          ", encrypted=" + std::to_string(targets_encrypted.size()) + ")");
+                          ", encrypted=" + std::to_string(targets_encrypted.size()) +
+                          ", unique_keys=" + std::to_string(encrypted_batches.size()) + ")");
         }
     }
 

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include <stdexcept>
+#include "buffer.hpp"
 
 namespace gs {
 namespace net {
@@ -44,7 +45,7 @@ struct Header {
 
 struct Packet {
     Header header;
-    std::vector<uint8_t> payload;
+    Buffer payload;  // 引用计数缓冲区，支持零拷贝广播
 };
 
 // 工具函数：主机字节序 -> 大端序
@@ -89,18 +90,20 @@ inline uint64_t ReadU64BE(const uint8_t* p) {
             static_cast<uint64_t>(p[7]);
 }
 
-// 编码 Packet 为字节流
-inline std::vector<uint8_t> EncodePacket(const Packet& pkt) {
-    std::vector<uint8_t> buf(pkt.header.length);
-    WriteU32BE(buf.data() + 0, pkt.header.length);
+// 编码 Packet 为字节流（返回 Buffer，支持零拷贝共享）
+inline Buffer EncodePacket(const Packet& pkt) {
+    size_t payload_size = pkt.payload.Size();
+    std::vector<uint8_t> buf(HEADER_SIZE + payload_size);
+    uint32_t total_len = HEADER_SIZE + static_cast<uint32_t>(payload_size);
+    WriteU32BE(buf.data() + 0, total_len);
     WriteU16BE(buf.data() + 4, pkt.header.magic);
     WriteU32BE(buf.data() + 6, pkt.header.cmd_id);
     WriteU32BE(buf.data() + 10, pkt.header.seq_id);
     WriteU32BE(buf.data() + 14, pkt.header.flags);
-    if (!pkt.payload.empty()) {
-        std::memcpy(buf.data() + HEADER_SIZE, pkt.payload.data(), pkt.payload.size());
+    if (payload_size > 0 && pkt.payload.Data()) {
+        std::memcpy(buf.data() + HEADER_SIZE, pkt.payload.Data(), payload_size);
     }
-    return buf;
+    return Buffer::FromVector(std::move(buf));
 }
 
 // 从缓冲区解析包头（假设缓冲区至少有 HEADER_SIZE 字节）

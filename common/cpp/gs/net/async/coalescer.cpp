@@ -48,14 +48,19 @@ void AsyncWriteCoalescer::Stop() {
 void AsyncWriteCoalescer::Enqueue(IConnection* conn, const Packet& pkt) {
     auto data = EncodePacket(pkt);
     std::lock_guard<std::mutex> lk(mtx_);
-    pending_.push_back({conn, std::move(data)});
+    pending_.push_back({conn, data});
+}
+
+void AsyncWriteCoalescer::Enqueue(IConnection* conn, const Buffer& data) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    pending_.push_back({conn, data.Slice(0, data.Size())});
 }
 
 void AsyncWriteCoalescer::Broadcast(const std::vector<IConnection*>& conns, const Packet& pkt) {
     auto data = EncodePacket(pkt);
     std::lock_guard<std::mutex> lk(mtx_);
     for (auto* conn : conns) {
-        pending_.push_back({conn, data});
+        pending_.push_back({conn, data.Slice(0, data.Size())});
     }
 }
 
@@ -69,10 +74,16 @@ void AsyncWriteCoalescer::DoFlush() {
         std::lock_guard<std::mutex> lk(mtx_);
         local.swap(pending_);
     }
+
+    // 按 conn 聚合，批量 SendBatch 减少 syscall 和 Post 次数
+    std::unordered_map<IConnection*, std::vector<Buffer>> batches;
     for (auto& p : local) {
         if (p.conn) {
-            p.conn->Send(std::move(p.data));
+            batches[p.conn].push_back(std::move(p.data));
         }
+    }
+    for (auto& [conn, buffers] : batches) {
+        conn->SendBatch(buffers);
     }
 }
 

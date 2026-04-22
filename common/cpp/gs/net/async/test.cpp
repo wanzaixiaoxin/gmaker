@@ -133,13 +133,13 @@ void TestEchoServer() {
     pkt.header.cmd_id = 0x1234;
     pkt.header.seq_id = 1;
     pkt.header.flags = 0;
-    pkt.payload = {0x01, 0x02, 0x03, 0x04};
-    pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.size());
+    pkt.payload = gs::net::Buffer::FromVector(std::vector<uint8_t>{0x01, 0x02, 0x03, 0x04});
+    pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.Size());
 
     auto data = EncodePacket(pkt);
-    int sent = send(sock, reinterpret_cast<const char*>(data.data()),
-                    static_cast<int>(data.size()), 0);
-    assert(sent == static_cast<int>(data.size()));
+    int sent = send(sock, reinterpret_cast<const char*>(data.Data()),
+                    static_cast<int>(data.Size()), 0);
+    assert(sent == static_cast<int>(data.Size()));
 
 #ifdef _WIN32
     closesocket(sock);

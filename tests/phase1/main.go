@@ -2,7 +2,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -48,7 +47,7 @@ func main() {
 
 	// 3. 启动 Gateway
 	gatewayCmd := exec.Command("./build/Release/gateway-cpp",
-		fmt.Sprintf("%s", extractPort(gatewayAddr)), "127.0.0.1", fmt.Sprintf("%s", extractPort(bizAddr)))
+		extractPort(gatewayAddr), "127.0.0.1:2379", "127.0.0.1:8082")
 	gatewayCmd.Stdout = os.Stdout
 	gatewayCmd.Stderr = os.Stderr
 	if err := gatewayCmd.Start(); err != nil {

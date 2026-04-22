@@ -82,7 +82,7 @@ bool RegistryClient::Register(const ::registry::NodeInfo& node, ::registry::Resu
     if (!Call(CMD_REGISTER, payload, &res_pkt)) {
         return false;
     }
-    return out->ParseFromArray(res_pkt.payload.data(), static_cast<int>(res_pkt.payload.size()));
+    return out->ParseFromArray(res_pkt.payload.Data(), static_cast<int>(res_pkt.payload.Size()));
 }
 
 bool RegistryClient::Heartbeat(const std::string& node_id, ::registry::Result* out) {
@@ -98,7 +98,7 @@ bool RegistryClient::Heartbeat(const std::string& node_id, ::registry::Result* o
     if (!Call(CMD_HEARTBEAT, payload, &res_pkt)) {
         return false;
     }
-    return out->ParseFromArray(res_pkt.payload.data(), static_cast<int>(res_pkt.payload.size()));
+    return out->ParseFromArray(res_pkt.payload.Data(), static_cast<int>(res_pkt.payload.Size()));
 }
 
 bool RegistryClient::Discover(const std::string& service_type, ::registry::NodeList* out) {
@@ -114,7 +114,7 @@ bool RegistryClient::Discover(const std::string& service_type, ::registry::NodeL
     if (!Call(CMD_DISCOVER, payload, &res_pkt)) {
         return false;
     }
-    return out->ParseFromArray(res_pkt.payload.data(), static_cast<int>(res_pkt.payload.size()));
+    return out->ParseFromArray(res_pkt.payload.Data(), static_cast<int>(res_pkt.payload.Size()));
 }
 
 bool RegistryClient::Watch(const std::string& service_type, EventCallback on_event) {
@@ -139,7 +139,7 @@ void RegistryClient::OnPacket(net::IConnection* conn, net::Packet& pkt) {
     // NodeEvent 是服务端推送，不走 pending 映射
     if (pkt.header.cmd_id == CMD_NODE_EVENT) {
         ::registry::NodeEvent ev;
-        if (ev.ParseFromArray(pkt.payload.data(), static_cast<int>(pkt.payload.size()))) {
+        if (ev.ParseFromArray(pkt.payload.Data(), static_cast<int>(pkt.payload.Size()))) {
             std::lock_guard<std::mutex> lk(watch_mtx_);
             if (event_cb_) {
                 event_cb_(ev);
@@ -192,7 +192,7 @@ bool RegistryClient::Call(uint32_t cmd_id, const std::vector<uint8_t>& payload,
     pkt.header.cmd_id = cmd_id;
     pkt.header.seq_id = seq;
     pkt.header.flags  = static_cast<uint32_t>(net::Flag::RPC_REQ);
-    pkt.payload = payload;
+    pkt.payload = net::Buffer::FromVector(payload);
 
     // 发送重试：异步连接可能尚未就绪，最多重试 5 次
     bool sent = false;
@@ -233,7 +233,7 @@ bool RegistryClient::FireForget(uint32_t cmd_id, const std::vector<uint8_t>& pay
     pkt.header.cmd_id = cmd_id;
     pkt.header.seq_id = 0;
     pkt.header.flags  = static_cast<uint32_t>(net::Flag::RPC_FF);
-    pkt.payload = payload;
+    pkt.payload = net::Buffer::FromVector(payload);
     return pool_->SendPacket(pkt);
 }
 

@@ -22,5 +22,7 @@ std::vector<uint8_t> EncryptPacketPayload(const std::vector<uint8_t>& key,
 std::vector<uint8_t> DecryptPacketPayload(const std::vector<uint8_t>& key,
                                             const std::vector<uint8_t>& encryptedPayload);
 
+
+
 } // namespace crypto
 } // namespace gs

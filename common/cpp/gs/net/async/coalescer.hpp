@@ -30,6 +30,9 @@ public:
     // 添加一个包到发送缓冲（线程安全）
     void Enqueue(IConnection* conn, const Packet& pkt);
 
+    // 添加已编码的 Buffer 到发送缓冲（线程安全，零拷贝共享场景）
+    void Enqueue(IConnection* conn, const Buffer& data);
+
     // 广播：将同一包发给多个连接
     void Broadcast(const std::vector<IConnection*>& conns, const Packet& pkt);
 
@@ -41,7 +44,7 @@ private:
 
     struct Pending {
         IConnection* conn = nullptr;
-        std::vector<uint8_t> data; // 已编码的 packet bytes
+        Buffer data; // 已编码的 packet bytes
     };
 
     AsyncEventLoop* loop_ = nullptr;

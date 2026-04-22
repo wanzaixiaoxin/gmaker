@@ -14,7 +14,7 @@ namespace async {
 struct AsyncTCPConnection::WriteReq {
     uv_write_t req;
     std::shared_ptr<AsyncTCPConnection> conn;
-    std::vector<uint8_t> data;
+    std::vector<net::Buffer> buffers;
 };
 
 AsyncTCPConnection::AsyncTCPConnection(AsyncEventLoop* loop, uint64_t id)
@@ -87,20 +87,61 @@ void AsyncTCPConnection::SetSessionKey(const std::vector<uint8_t>& key) {
 }
 
 bool AsyncTCPConnection::Send(std::vector<uint8_t> data) {
+    return Send(net::Buffer::FromVector(std::move(data)));
+}
+
+bool AsyncTCPConnection::Send(const Buffer& data) {
     if (closed_.load() || closing_.load() || !handle_) return false;
 
+    bool should_pause_read = false;
     {
         std::lock_guard<std::mutex> lk(write_mtx_);
-        write_queue_.push(std::move(data));
+        write_queue_.push(data);
+        write_queue_bytes_ += data.Size();
+
+        // 背压：写队列超限，暂停读取
+        if (write_queue_bytes_ > MAX_WRITE_QUEUE_BYTES && !read_paused_) {
+            read_paused_ = true;
+            should_pause_read = true;
+        }
+    }
+
+    if (should_pause_read && handle_) {
+        uv_read_stop((uv_stream_t*)handle_);
     }
 
     // 如果当前没有在写，触发写
     bool expected = false;
     if (writing_.compare_exchange_strong(expected, true)) {
-        if (loop_->IsInLoopThread()) {
-            // 已经在事件循环线程，直接处理
-            // 但 Send 可能在其他线程被调用，所以用 Post
+        loop_->Post([self = shared_from_this()]() {
+            self->ProcessWriteQueue();
+        });
+    }
+    return true;
+}
+
+bool AsyncTCPConnection::SendBatch(const std::vector<Buffer>& buffers) {
+    if (closed_.load() || closing_.load() || !handle_ || buffers.empty()) return false;
+
+    bool should_pause_read = false;
+    {
+        std::lock_guard<std::mutex> lk(write_mtx_);
+        for (const auto& b : buffers) {
+            write_queue_.push(b);
+            write_queue_bytes_ += b.Size();
         }
+        if (write_queue_bytes_ > MAX_WRITE_QUEUE_BYTES && !read_paused_) {
+            read_paused_ = true;
+            should_pause_read = true;
+        }
+    }
+
+    if (should_pause_read && handle_) {
+        uv_read_stop((uv_stream_t*)handle_);
+    }
+
+    bool expected = false;
+    if (writing_.compare_exchange_strong(expected, true)) {
         loop_->Post([self = shared_from_this()]() {
             self->ProcessWriteQueue();
         });
@@ -110,15 +151,15 @@ bool AsyncTCPConnection::Send(std::vector<uint8_t> data) {
 
 bool AsyncTCPConnection::SendPacket(const Packet& pkt) {
     Packet encPkt = pkt;
-    if (!session_key_.empty() && !pkt.payload.empty()) {
+    if (!session_key_.empty() && !pkt.payload.Empty()) {
         try {
-            encPkt.payload = gs::crypto::EncryptPacketPayload(session_key_, pkt.payload);
+            encPkt.payload = gs::crypto::EncryptPacketPayload(session_key_, pkt.payload.ToVector());
             encPkt.header.flags |= static_cast<uint32_t>(Flag::ENCRYPT);
         } catch (const std::exception&) {
             return false;
         }
     }
-    encPkt.header.length = HEADER_SIZE + static_cast<uint32_t>(encPkt.payload.size());
+    encPkt.header.length = HEADER_SIZE + static_cast<uint32_t>(encPkt.payload.Size());
     auto data = EncodePacket(encPkt);
     return Send(std::move(data));
 }
@@ -168,6 +209,12 @@ void AsyncTCPConnection::OnRead(uv_stream_t* stream, ssize_t nread, const uv_buf
             conn->read_buf_.insert(conn->read_buf_.end(),
                                    reinterpret_cast<uint8_t*>(buf->base),
                                    reinterpret_cast<uint8_t*>(buf->base) + nread);
+            // 读缓冲区上限检查（慢连接攻击防护）
+            if (conn->read_buf_.size() - conn->read_consumed_ > MAX_READ_BUF_BYTES) {
+                conn->read_mtx_.unlock();
+                conn->Close();
+                return;
+            }
         }
         conn->ProcessReadBuffer();
     } else if (nread < 0) {
@@ -180,23 +227,25 @@ void AsyncTCPConnection::ProcessReadBuffer() {
     std::lock_guard<std::mutex> lk(read_mtx_);
 
     while (true) {
-        if (read_buf_.size() < 4) break; // 无法读取 length
+        size_t avail = read_buf_.size() - read_consumed_;
+        if (avail < 4) break; // 无法读取 length
 
-        uint32_t length = (static_cast<uint32_t>(read_buf_[0]) << 24) |
-                          (static_cast<uint32_t>(read_buf_[1]) << 16) |
-                          (static_cast<uint32_t>(read_buf_[2]) << 8) |
-                          static_cast<uint32_t>(read_buf_[3]);
+        const uint8_t* p = read_buf_.data() + read_consumed_;
+        uint32_t length = (static_cast<uint32_t>(p[0]) << 24) |
+                          (static_cast<uint32_t>(p[1]) << 16) |
+                          (static_cast<uint32_t>(p[2]) << 8) |
+                          static_cast<uint32_t>(p[3]);
 
         if (length < HEADER_SIZE || length > MAX_PACKET_LEN) {
             Close();
             return;
         }
 
-        if (read_buf_.size() < length) break; // 数据不足
+        if (avail < length) break; // 数据不足
 
         // 解析 header
-        uint16_t magic = (static_cast<uint16_t>(read_buf_[4]) << 8) |
-                         static_cast<uint16_t>(read_buf_[5]);
+        uint16_t magic = (static_cast<uint16_t>(p[4]) << 8) |
+                         static_cast<uint16_t>(p[5]);
         if (magic != MAGIC_VALUE) {
             Close();
             return;
@@ -205,28 +254,37 @@ void AsyncTCPConnection::ProcessReadBuffer() {
         Header h;
         h.length = length;
         h.magic = magic;
-        h.cmd_id = (static_cast<uint32_t>(read_buf_[6]) << 24) |
-                   (static_cast<uint32_t>(read_buf_[7]) << 16) |
-                   (static_cast<uint32_t>(read_buf_[8]) << 8) |
-                   static_cast<uint32_t>(read_buf_[9]);
-        h.seq_id = (static_cast<uint32_t>(read_buf_[10]) << 24) |
-                   (static_cast<uint32_t>(read_buf_[11]) << 16) |
-                   (static_cast<uint32_t>(read_buf_[12]) << 8) |
-                   static_cast<uint32_t>(read_buf_[13]);
-        h.flags = (static_cast<uint32_t>(read_buf_[14]) << 24) |
-                  (static_cast<uint32_t>(read_buf_[15]) << 16) |
-                  (static_cast<uint32_t>(read_buf_[16]) << 8) |
-                  static_cast<uint32_t>(read_buf_[17]);
+        h.cmd_id = (static_cast<uint32_t>(p[6]) << 24) |
+                   (static_cast<uint32_t>(p[7]) << 16) |
+                   (static_cast<uint32_t>(p[8]) << 8) |
+                   static_cast<uint32_t>(p[9]);
+        h.seq_id = (static_cast<uint32_t>(p[10]) << 24) |
+                   (static_cast<uint32_t>(p[11]) << 16) |
+                   (static_cast<uint32_t>(p[12]) << 8) |
+                   static_cast<uint32_t>(p[13]);
+        h.flags = (static_cast<uint32_t>(p[14]) << 24) |
+                  (static_cast<uint32_t>(p[15]) << 16) |
+                  (static_cast<uint32_t>(p[16]) << 8) |
+                  static_cast<uint32_t>(p[17]);
 
         size_t payload_len = length - HEADER_SIZE;
-        std::vector<uint8_t> payload;
+        net::Buffer payload;
         if (payload_len > 0) {
-            payload.assign(read_buf_.begin() + HEADER_SIZE,
-                           read_buf_.begin() + HEADER_SIZE + payload_len);
+            std::vector<uint8_t> tmp(p + HEADER_SIZE, p + HEADER_SIZE + payload_len);
+            payload = net::Buffer::FromVector(std::move(tmp));
         }
 
-        // 移除已处理的数据
-        read_buf_.erase(read_buf_.begin(), read_buf_.begin() + length);
+        read_consumed_ += length;
+
+        // 定期 compact：累积消费超过阈值后，把未消费数据移到前端
+        if (read_consumed_ >= READ_COMPACT_THRESHOLD) {
+            size_t remain = read_buf_.size() - read_consumed_;
+            if (remain > 0) {
+                std::memmove(read_buf_.data(), read_buf_.data() + read_consumed_, remain);
+            }
+            read_buf_.resize(remain);
+            read_consumed_ = 0;
+        }
 
         // 构造 Packet
         Packet pkt;
@@ -236,7 +294,7 @@ void AsyncTCPConnection::ProcessReadBuffer() {
         // 解密
         if (!session_key_.empty() && HasFlag(pkt.header.flags, Flag::ENCRYPT)) {
             try {
-                pkt.payload = gs::crypto::DecryptPacketPayload(session_key_, pkt.payload);
+                pkt.payload = gs::crypto::DecryptPacketPayload(session_key_, pkt.payload.ToVector());
                 pkt.header.flags &= ~static_cast<uint32_t>(Flag::ENCRYPT);
             } catch (const std::exception&) {
                 Close();
@@ -253,28 +311,53 @@ void AsyncTCPConnection::ProcessReadBuffer() {
 void AsyncTCPConnection::ProcessWriteQueue() {
     if (!handle_ || uv_is_closing((uv_handle_t*)handle_)) return;
 
-    std::vector<uint8_t> data;
+    // 批量收集：一次 uv_write 发送多个 buffer，减少 syscall
+    constexpr size_t MAX_BATCH = 64;
+    std::vector<Buffer> batch;
+    std::vector<uv_buf_t> ubufs;
+    batch.reserve(MAX_BATCH);
+    ubufs.reserve(MAX_BATCH);
+
+    bool should_resume_read = false;
     {
         std::lock_guard<std::mutex> lk(write_mtx_);
-        if (write_queue_.empty()) {
+        while (!write_queue_.empty() && batch.size() < MAX_BATCH) {
+            auto& front = write_queue_.front();
+            write_queue_bytes_ -= front.Size();
+            batch.push_back(std::move(front));
+            write_queue_.pop();
+        }
+        if (batch.empty()) {
             writing_.store(false);
             return;
         }
-        data = std::move(write_queue_.front());
-        write_queue_.pop();
+
+        // 背压恢复：写队列下降到阈值以下，恢复读取
+        if (read_paused_ && write_queue_bytes_ < WRITE_RESUME_THRESHOLD) {
+            read_paused_ = false;
+            should_resume_read = true;
+        }
     }
 
-    // 创建 WriteReq
+    if (should_resume_read && handle_) {
+        uv_read_start((uv_stream_t*)handle_, OnAlloc, OnRead);
+    }
+
+    // 创建 WriteReq（批量版本）
     auto* req = new WriteReq;
     req->req.data = this;
     req->conn = shared_from_this();
-    req->data = std::move(data);
+    req->buffers = std::move(batch);
 
-    uv_buf_t buf;
-    buf.base = reinterpret_cast<char*>(req->data.data());
-    buf.len = static_cast<unsigned int>(req->data.size());
+    for (auto& b : req->buffers) {
+        uv_buf_t uvbuf;
+        uvbuf.base = reinterpret_cast<char*>(const_cast<uint8_t*>(b.Data()));
+        uvbuf.len = static_cast<unsigned int>(b.Size());
+        ubufs.push_back(uvbuf);
+    }
 
-    int r = uv_write(&req->req, (uv_stream_t*)handle_, &buf, 1, OnWriteDone);
+    int r = uv_write(&req->req, (uv_stream_t*)handle_, ubufs.data(),
+                     static_cast<unsigned int>(ubufs.size()), OnWriteDone);
     if (r != 0) {
         delete req;
         writing_.store(false);

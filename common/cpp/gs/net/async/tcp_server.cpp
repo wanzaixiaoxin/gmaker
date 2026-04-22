@@ -80,7 +80,7 @@ void AsyncTCPServer::Broadcast(const Packet& pkt) {
     auto data = EncodePacket(pkt);
     std::lock_guard<std::mutex> lk(conn_mtx_);
     for (auto& [id, conn] : conns_) {
-        conn->Send(data);
+        conn->Send(data.Slice(0, data.Size()));
     }
 }
 

@@ -49,6 +49,12 @@ public:
     // 异步发送字节流（线程安全）
     bool Send(std::vector<uint8_t> data);
 
+    // 发送 Buffer（线程安全，支持零拷贝共享）
+    bool Send(const Buffer& data);
+
+    // 批量发送 Buffer（减少跨线程 Post 次数）
+    bool SendBatch(const std::vector<Buffer>& buffers);
+
     // 发送一个 Packet（若有 sessionKey 则自动加密）
     bool SendPacket(const Packet& pkt);
 
@@ -89,12 +95,23 @@ private:
     CloseCallback on_close_;
     ConnectCallback on_connect_;
 
+    // 读缓冲区（连续内存 + 消费偏移，避免每帧 O(n) erase）
     std::mutex read_mtx_;
     std::vector<uint8_t> read_buf_;
+    size_t read_consumed_ = 0;
+    bool read_paused_ = false;
 
+    // 写队列（批量 gather write）
     std::mutex write_mtx_;
-    std::queue<std::vector<uint8_t>> write_queue_;
+    std::queue<Buffer> write_queue_;
+    size_t write_queue_bytes_ = 0;
     std::atomic<bool> writing_{false};
+
+    // 背压 / 安全阈值
+    static constexpr size_t MAX_READ_BUF_BYTES = 64 * 1024 * 1024;   // 64MB
+    static constexpr size_t READ_COMPACT_THRESHOLD = 256 * 1024;       // 256KB
+    static constexpr size_t MAX_WRITE_QUEUE_BYTES = 16 * 1024 * 1024;  // 16MB
+    static constexpr size_t WRITE_RESUME_THRESHOLD = 8 * 1024 * 1024;  // 8MB
 
     std::vector<uint8_t> session_key_;
 
