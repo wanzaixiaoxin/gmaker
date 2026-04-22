@@ -12,34 +12,24 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/gmaker/luffa/services/dbproxy-go/internal/mysql"
-	"github.com/gmaker/luffa/services/dbproxy-go/internal/redis"
 )
 
 // DBProxy 内部命令号
 const (
-	CmdRedisGet       = uint32(0x000E0001)
-	CmdRedisGetRes    = uint32(0x000E0002)
-	CmdRedisSet       = uint32(0x000E0003)
-	CmdRedisSetRes    = uint32(0x000E0004)
-	CmdRedisDel       = uint32(0x000E0005)
-	CmdRedisDelRes    = uint32(0x000E0006)
-	CmdRedisPipeline  = uint32(0x000E0007)
-	CmdRedisPipelineRes = uint32(0x000E0008)
-	CmdMySQLQuery     = uint32(0x000E0011)
-	CmdMySQLQueryRes  = uint32(0x000E0012)
-	CmdMySQLExec      = uint32(0x000E0013)
-	CmdMySQLExecRes   = uint32(0x000E0014)
+	CmdMySQLQuery    = uint32(0x000E0011)
+	CmdMySQLQueryRes = uint32(0x000E0012)
+	CmdMySQLExec     = uint32(0x000E0013)
+	CmdMySQLExecRes  = uint32(0x000E0014)
 )
 
 type Server struct {
 	addr   string
-	redis  *redis.Proxy
 	mysql  *mysql.Proxy
 	server *net.TCPServer
 }
 
-func New(addr string, r *redis.Proxy, m *mysql.Proxy) *Server {
-	return &Server{addr: addr, redis: r, mysql: m}
+func New(addr string, m *mysql.Proxy) *Server {
+	return &Server{addr: addr, mysql: m}
 }
 
 func (s *Server) Start() error {
@@ -61,14 +51,6 @@ func (s *Server) Stop() {
 
 func (s *Server) handlePacket(conn *net.TCPConn, pkt *net.Packet) {
 	switch pkt.CmdID {
-	case CmdRedisGet:
-		s.handleRedisGet(conn, pkt)
-	case CmdRedisSet:
-		s.handleRedisSet(conn, pkt)
-	case CmdRedisDel:
-		s.handleRedisDel(conn, pkt)
-	case CmdRedisPipeline:
-		s.handleRedisPipeline(conn, pkt)
 	case CmdMySQLQuery:
 		s.handleMySQLQuery(conn, pkt)
 	case CmdMySQLExec:
@@ -76,78 +58,6 @@ func (s *Server) handlePacket(conn *net.TCPConn, pkt *net.Packet) {
 	default:
 		s.sendError(conn, pkt.SeqID, fmt.Errorf("unknown cmd_id: %d", pkt.CmdID))
 	}
-}
-
-func (s *Server) handleRedisGet(conn *net.TCPConn, pkt *net.Packet) {
-	var req pb.RedisGetReq
-	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
-		s.sendError(conn, pkt.SeqID, err)
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	val, err := s.redis.Get(ctx, req.Key)
-	res := &pb.RedisGetRes{Ok: err == nil, Value: val}
-	s.sendProto(conn, pkt.SeqID, CmdRedisGetRes, res)
-}
-
-func (s *Server) handleRedisSet(conn *net.TCPConn, pkt *net.Packet) {
-	var req pb.RedisSetReq
-	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
-		s.sendError(conn, pkt.SeqID, err)
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	var ttl time.Duration
-	if req.TtlSec > 0 {
-		ttl = time.Duration(req.TtlSec) * time.Second
-	}
-	err := s.redis.Set(ctx, req.Key, req.Value, ttl)
-	res := &pb.RedisSetRes{Ok: err == nil}
-	s.sendProto(conn, pkt.SeqID, CmdRedisSetRes, res)
-}
-
-func (s *Server) handleRedisDel(conn *net.TCPConn, pkt *net.Packet) {
-	var req pb.RedisDelReq
-	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
-		s.sendError(conn, pkt.SeqID, err)
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	err := s.redis.Del(ctx, req.Keys...)
-	res := &pb.RedisDelRes{Ok: err == nil}
-	s.sendProto(conn, pkt.SeqID, CmdRedisDelRes, res)
-}
-
-func (s *Server) handleRedisPipeline(conn *net.TCPConn, pkt *net.Packet) {
-	var req pb.RedisPipelineReq
-	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
-		s.sendError(conn, pkt.SeqID, err)
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	var cmds []redis.Cmd
-	for _, c := range req.Cmds {
-		cmds = append(cmds, redis.Cmd{
-			Op:  c.Op,
-			Key: c.Key,
-			Val: c.Value,
-			TTL: time.Duration(c.TtlSec) * time.Second,
-		})
-	}
-	results, err := s.redis.PipelineExec(ctx, cmds)
-	res := &pb.RedisPipelineRes{Ok: err == nil}
-	for _, r := range results {
-		if r == nil {
-			res.Results = append(res.Results, []byte("(nil)"))
-		} else {
-			res.Results = append(res.Results, []byte(fmt.Sprintf("%v", r)))
-		}
-	}
-	s.sendProto(conn, pkt.SeqID, CmdRedisPipelineRes, res)
 }
 
 func (s *Server) handleMySQLQuery(conn *net.TCPConn, pkt *net.Packet) {

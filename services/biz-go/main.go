@@ -18,6 +18,7 @@ import (
 	"github.com/gmaker/luffa/common/go/metrics"
 	"github.com/gmaker/luffa/common/go/net"
 	"github.com/gmaker/luffa/common/go/registry"
+	"github.com/gmaker/luffa/common/go/redis"
 	"github.com/gmaker/luffa/common/go/rpc"
 	"github.com/gmaker/luffa/common/go/trace"
 	bizpb "github.com/gmaker/luffa/gen/go/biz"
@@ -38,8 +39,6 @@ const (
 	CmdPing            = uint32(0x00010004)
 	CmdPong            = uint32(0x00010005)
 
-	CmdRedisSet   = uint32(0x000E0003)
-	CmdRedisSetRes = uint32(0x000E0004)
 	CmdMySQLQuery = uint32(0x000E0011)
 	CmdMySQLQueryRes = uint32(0x000E0012)
 	CmdMySQLExec  = uint32(0x000E0013)
@@ -51,6 +50,8 @@ func main() {
 		listenAddr    = flag.String("listen", ":8082", "Biz listen address")
 		registryAddrs = flag.String("registry", "127.0.0.1:2379", "Registry addresses, comma separated")
 		dbproxyAddrs  = flag.String("dbproxy", "127.0.0.1:3307", "DBProxy addresses, comma separated")
+		redisAddrs    = flag.String("redis", "127.0.0.1:6379", "Redis addresses, comma separated")
+		redisPass     = flag.String("redis-pass", "", "Redis password")
 		nodeID        = flag.Int64("node-id", 1, "Snowflake node ID")
 		metricsAddr   = flag.String("metrics", ":9082", "Metrics HTTP address")
 		logFile       = flag.String("log-file", "", "Log file path (stdout if empty)")
@@ -93,6 +94,23 @@ func main() {
 	}
 	log.Info("Biz registered to registry")
 
+	// 初始化 Redis 客户端（直接连接，不经过 DBProxy）
+	var redisClient *redis.Client
+	if *redisAddrs != "" {
+		redisClient = redis.NewClient(redis.Config{
+			Addrs:    strings.Split(*redisAddrs, ","),
+			Password: *redisPass,
+			PoolSize: 20,
+		})
+		if err := redisClient.Ping(context.Background()); err != nil {
+			log.Warnf("connect redis failed: %v, running without redis", err)
+			redisClient.Close()
+			redisClient = nil
+		} else {
+			log.Info("Biz connected to redis")
+		}
+	}
+
 	// 连接 DBProxy（多节点），失败时不阻塞启动（Phase 1 最小链路无需 DBProxy）
 	var playerSvc *PlayerService // 在闭包之前声明
 	dbClient := NewDBProxyClient(strings.Split(*dbproxyAddrs, ","))
@@ -101,7 +119,7 @@ func main() {
 	} else {
 		log.Info("Biz connected to dbproxy")
 		// 业务服务层（与 DBProxy 客户端解耦）
-		playerSvc = NewPlayerService(dbClient, idGen, log)
+		playerSvc = NewPlayerService(dbClient, redisClient, idGen, log)
 		// 确保 player 表存在
 		if err := ensurePlayerTable(playerSvc); err != nil {
 			log.Warnf("ensure player table failed: %v, player service disabled", err)
@@ -344,12 +362,13 @@ func (c *DBProxyClient) Call(ctx context.Context, cmdID uint32, payload []byte) 
 
 type PlayerService struct {
 	db    *DBProxyClient
+	redis *redis.Client
 	idGen *idgen.Snowflake
 	log   *logger.Logger
 }
 
-func NewPlayerService(db *DBProxyClient, idGen *idgen.Snowflake, log *logger.Logger) *PlayerService {
-	return &PlayerService{db: db, idGen: idGen, log: log}
+func NewPlayerService(db *DBProxyClient, r *redis.Client, idGen *idgen.Snowflake, log *logger.Logger) *PlayerService {
+	return &PlayerService{db: db, redis: r, idGen: idGen, log: log}
 }
 
 func (s *PlayerService) QueryPlayerByAccount(ctx context.Context, account string) (*bizpb.PlayerBase, error) {
@@ -459,18 +478,11 @@ func (s *PlayerService) UpdatePlayer(ctx context.Context, playerID uint64, nickn
 }
 
 func (s *PlayerService) SetToken(ctx context.Context, playerID uint64, token string, ttlSec uint64) error {
+	if s.redis == nil {
+		return fmt.Errorf("redis not available")
+	}
 	key := fmt.Sprintf("token:%d", playerID)
-	req := &dbproxypb.RedisSetReq{Key: key, Value: token, TtlSec: ttlSec}
-	data, _ := proto.Marshal(req)
-	resPkt, err := s.db.Call(ctx, CmdRedisSet, data)
-	if err != nil {
-		return err
-	}
-	var res dbproxypb.RedisSetRes
-	if err := proto.Unmarshal(resPkt.Payload, &res); err != nil {
-		return err
-	}
-	return nil
+	return s.redis.Set(ctx, key, token, time.Duration(ttlSec)*time.Second)
 }
 
 func ensurePlayerTable(svc *PlayerService) error {

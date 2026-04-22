@@ -1,4 +1,4 @@
-package limiter
+package redis
 
 import (
 	"sync"
@@ -14,10 +14,11 @@ type HotKeyLimiter struct {
 }
 
 type window struct {
-	count  int
-	start  time.Time
+	count int
+	start time.Time
 }
 
+// NewHotKeyLimiter 创建热 Key 限流器，maxQPS 为单 Key 每秒最大访问次数
 func NewHotKeyLimiter(maxQPS int) *HotKeyLimiter {
 	return &HotKeyLimiter{
 		windows: make(map[string]*window),
@@ -26,6 +27,7 @@ func NewHotKeyLimiter(maxQPS int) *HotKeyLimiter {
 	}
 }
 
+// Allow 检查 key 是否允许通过
 func (l *HotKeyLimiter) Allow(key string) bool {
 	now := time.Now()
 	l.mu.Lock()
@@ -43,6 +45,7 @@ func (l *HotKeyLimiter) Allow(key string) bool {
 	return true
 }
 
+// CleanLoop 定期清理过期窗口，需在后台 goroutine 中运行
 func (l *HotKeyLimiter) CleanLoop() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
