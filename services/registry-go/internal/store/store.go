@@ -17,8 +17,11 @@ type Store interface {
 	// Discover 发现指定类型的节点列表
 	Discover(ctx context.Context, serviceType string) ([]*pb.NodeInfo, error)
 
-	// Watch 监听指定类型的节点变更
+	// Watch 监听指定类型的节点变更（含初始快照推送）
 	Watch(ctx context.Context, serviceType string) (<-chan *pb.NodeEvent, error)
+
+	// Subscribe 订阅指定类型的节点变更（不含初始快照，返回当前全量列表）
+	Subscribe(ctx context.Context, serviceType string) (<-chan *pb.NodeEvent, []*pb.NodeInfo, error)
 
 	// Close 关闭存储连接
 	Close() error

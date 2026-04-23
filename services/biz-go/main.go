@@ -25,24 +25,25 @@ import (
 	commonpb "github.com/gmaker/luffa/gen/go/common"
 	dbproxypb "github.com/gmaker/luffa/gen/go/dbproxy"
 	loginpb "github.com/gmaker/luffa/gen/go/login"
+	protocol "github.com/gmaker/luffa/gen/go/protocol"
 	pb "github.com/gmaker/luffa/gen/go/registry"
 	"google.golang.org/protobuf/proto"
 )
 
 const (
-	CmdLoginReq        = uint32(0x00001000)
-	CmdLoginRes        = uint32(0x00001001)
-	CmdGetPlayerReq    = uint32(0x00010000)
-	CmdGetPlayerRes    = uint32(0x00010001)
-	CmdUpdatePlayerReq = uint32(0x00010006)
-	CmdUpdatePlayerRes = uint32(0x00010007)
-	CmdPing            = uint32(0x00010004)
-	CmdPong            = uint32(0x00010005)
+	CmdLoginReq        = uint32(protocol.CmdCommon_CMD_CMN_LOGIN_REQ)
+	CmdLoginRes        = uint32(protocol.CmdCommon_CMD_CMN_LOGIN_RES)
+	CmdGetPlayerReq    = uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_REQ)
+	CmdGetPlayerRes    = uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_RES)
+	CmdUpdatePlayerReq = uint32(protocol.CmdBiz_CMD_BIZ_UPDATE_PLAYER_REQ)
+	CmdUpdatePlayerRes = uint32(protocol.CmdBiz_CMD_BIZ_UPDATE_PLAYER_RES)
+	CmdPing            = uint32(protocol.CmdBiz_CMD_BIZ_PING)
+	CmdPong            = uint32(protocol.CmdBiz_CMD_BIZ_PONG)
 
-	CmdMySQLQuery = uint32(0x000E0011)
-	CmdMySQLQueryRes = uint32(0x000E0012)
-	CmdMySQLExec  = uint32(0x000E0013)
-	CmdMySQLExecRes = uint32(0x000E0014)
+	CmdMySQLQuery    = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_QUERY)
+	CmdMySQLQueryRes = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_QUERY_RES)
+	CmdMySQLExec     = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_EXEC)
+	CmdMySQLExecRes  = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_EXEC_RES)
 )
 
 func main() {

@@ -8,15 +8,17 @@ import (
 
 	"github.com/gmaker/luffa/common/go/net"
 	pb "github.com/gmaker/luffa/gen/go/registry"
+	protocol "github.com/gmaker/luffa/gen/go/protocol"
 	"google.golang.org/protobuf/proto"
 )
 
 const (
-	CmdRegister  = uint32(0x000F0001)
-	CmdHeartbeat = uint32(0x000F0002)
-	CmdDiscover  = uint32(0x000F0003)
-	CmdWatch     = uint32(0x000F0004)
-	CmdNodeEvent = uint32(0x000F0005)
+	CmdRegister  = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_REGISTER)
+	CmdHeartbeat = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_HEARTBEAT)
+	CmdDiscover  = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_DISCOVER)
+	CmdWatch     = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_WATCH)
+	CmdNodeEvent = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_NODE_EVENT)
+	CmdSubscribe = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_SUBSCRIBE)
 )
 
 // Client Registry TCP 客户端，支持多节点连接池
@@ -134,11 +136,34 @@ func (c *Client) Discover(serviceType string) (*pb.NodeList, error) {
 	return &list, nil
 }
 
-// Watch 监听服务节点变更
+// Watch 监听单个服务类型节点变更（兼容旧接口）
 func (c *Client) Watch(serviceType string, onEvent func(*pb.NodeEvent)) error {
 	c.onEvent = onEvent
 	c.watchTypes.Store(serviceType, struct{}{})
 	return c.sendWatch(serviceType)
+}
+
+// Subscribe 批量订阅多个服务类型，返回当前全量快照，后续增量通过 onEvent 推送
+func (c *Client) Subscribe(serviceTypes []string, onEvent func(*pb.NodeEvent)) (*pb.SubscribeRes, error) {
+	c.onEvent = onEvent
+	for _, svc := range serviceTypes {
+		c.watchTypes.Store(svc, struct{}{})
+	}
+
+	req := &pb.SubscribeReq{ServiceTypes: serviceTypes}
+	data, err := proto.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	pkt, err := c.call(context.Background(), CmdSubscribe, data)
+	if err != nil {
+		return nil, err
+	}
+	var res pb.SubscribeRes
+	if err := proto.Unmarshal(pkt.Payload, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
 }
 
 func (c *Client) sendWatch(serviceType string) error {

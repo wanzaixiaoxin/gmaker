@@ -20,6 +20,8 @@ class ServiceType;
 class Result;
 class NodeList;
 class NodeEvent;
+class SubscribeReq;
+class SubscribeRes;
 }
 
 namespace gs {
@@ -30,6 +32,7 @@ constexpr uint32_t CMD_HEARTBEAT  = 0x000F0002;
 constexpr uint32_t CMD_DISCOVER   = 0x000F0003;
 constexpr uint32_t CMD_WATCH      = 0x000F0004;
 constexpr uint32_t CMD_NODE_EVENT = 0x000F0005;
+constexpr uint32_t CMD_SUBSCRIBE  = 0x000F0006;
 
 using EventCallback = std::function<void(const ::registry::NodeEvent&)>;
 
@@ -55,6 +58,11 @@ public:
 
     // 监听节点变更（建立 Watch 长连接，推送 NodeEvent）
     bool Watch(const std::string& service_type, EventCallback on_event);
+
+    // 批量订阅多个服务类型，返回当前全量快照，后续增量通过 on_event 推送
+    bool Subscribe(const std::vector<std::string>& service_types,
+                   ::registry::SubscribeRes* out_snapshot,
+                   EventCallback on_event);
 
 private:
     void OnPacket(net::IConnection* conn, net::Packet& pkt);

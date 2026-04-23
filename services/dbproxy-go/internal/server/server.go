@@ -9,6 +9,7 @@ import (
 
 	"github.com/gmaker/luffa/common/go/net"
 	pb "github.com/gmaker/luffa/gen/go/dbproxy"
+	protocol "github.com/gmaker/luffa/gen/go/protocol"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/gmaker/luffa/services/dbproxy-go/internal/mysql"
@@ -16,10 +17,10 @@ import (
 
 // DBProxy 内部命令号
 const (
-	CmdMySQLQuery    = uint32(0x000E0011)
-	CmdMySQLQueryRes = uint32(0x000E0012)
-	CmdMySQLExec     = uint32(0x000E0013)
-	CmdMySQLExecRes  = uint32(0x000E0014)
+	CmdMySQLQuery    = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_QUERY)
+	CmdMySQLQueryRes = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_QUERY_RES)
+	CmdMySQLExec     = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_EXEC)
+	CmdMySQLExecRes  = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_EXEC_RES)
 )
 
 type Server struct {

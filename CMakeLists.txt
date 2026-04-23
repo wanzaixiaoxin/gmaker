@@ -107,10 +107,12 @@ set(CPP_RPC_SOURCES
 
 set(CPP_PROTO_SOURCES
     gen/cpp/registry.pb.cc
+    gen/cpp/protocol.pb.cc
 )
 
 set(CPP_REGISTRY_SOURCES
     common/cpp/gs/registry/client.cpp
+    common/cpp/gs/registry/upstream_manager.cpp
 )
 
 set(CPP_CONFIG_SOURCES

@@ -8,17 +8,19 @@ import (
 
 	"github.com/gmaker/luffa/common/go/net"
 	pb "github.com/gmaker/luffa/gen/go/registry"
+	protocol "github.com/gmaker/luffa/gen/go/protocol"
 	"github.com/gmaker/luffa/services/registry-go/internal/store"
 	"google.golang.org/protobuf/proto"
 )
 
 // RegistryCmdID 内部 RPC 命令号
 const (
-	CmdRegister  = uint32(0x000F0001)
-	CmdHeartbeat = uint32(0x000F0002)
-	CmdDiscover  = uint32(0x000F0003)
-	CmdWatch     = uint32(0x000F0004)
-	CmdNodeEvent = uint32(0x000F0005)
+	CmdRegister  = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_REGISTER)
+	CmdHeartbeat = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_HEARTBEAT)
+	CmdDiscover  = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_DISCOVER)
+	CmdWatch     = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_WATCH)
+	CmdNodeEvent = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_NODE_EVENT)
+	CmdSubscribe = uint32(protocol.CmdRegistryInternal_CMD_REG_INT_SUBSCRIBE)
 )
 
 type Server struct {
@@ -30,9 +32,12 @@ type Server struct {
 }
 
 type Watcher struct {
-	conn   *net.TCPConn
-	svcType string
-	cancel context.CancelFunc
+	conn     *net.TCPConn
+	svcTypes []string
+	cancel   context.CancelFunc
+	// 每个服务类型对应一个事件通道和取消函数
+	watchCtx    context.Context
+	watchCancel context.CancelFunc
 }
 
 func New(addr string, store store.Store) *Server {
@@ -79,6 +84,8 @@ func (s *Server) handlePacket(conn *net.TCPConn, pkt *net.Packet) {
 		s.handleDiscover(conn, pkt)
 	case CmdWatch:
 		s.handleWatch(conn, pkt)
+	case CmdSubscribe:
+		s.handleSubscribe(conn, pkt)
 	default:
 		s.sendError(conn, pkt.SeqID, fmt.Errorf("unknown cmd_id: %d", pkt.CmdID))
 	}
@@ -146,45 +153,101 @@ func (s *Server) handleWatch(conn *net.TCPConn, pkt *net.Packet) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	w := &Watcher{
-		conn:    conn,
-		svcType: req.ServiceType,
-		cancel:  cancel,
+		conn:     conn,
+		svcTypes: []string{req.ServiceType},
+		cancel:   cancel,
 	}
 	s.watchers.Store(conn.ID(), w)
 
-	go func() {
-		defer cancel()
-		events, err := s.store.Watch(ctx, req.ServiceType)
+	go s.watchLoop(ctx, conn, req.ServiceType)
+}
+
+func (s *Server) handleSubscribe(conn *net.TCPConn, pkt *net.Packet) {
+	var req pb.SubscribeReq
+	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
+		s.sendError(conn, pkt.SeqID, err)
+		return
+	}
+
+	// 收集全量快照
+	snapshot := make(map[string]*pb.NodeList)
+	for _, svcType := range req.ServiceTypes {
+		nodes, err := s.store.Discover(context.Background(), svcType)
 		if err != nil {
-			log.Printf("watch error: %v", err)
+			s.sendError(conn, pkt.SeqID, err)
 			return
 		}
-		for ev := range events {
-			data, err := proto.Marshal(ev)
-			if err != nil {
-				continue
+		snapshot[svcType] = &pb.NodeList{Nodes: nodes}
+	}
+
+	res := &pb.SubscribeRes{Snapshot: snapshot}
+	s.sendProto(conn, pkt.SeqID, CmdSubscribe, res)
+
+	// 如果该连接已存在 Watcher，追加服务类型；否则新建
+	if v, ok := s.watchers.Load(conn.ID()); ok {
+		w := v.(*Watcher)
+		for _, svcType := range req.ServiceTypes {
+			found := false
+			for _, existing := range w.svcTypes {
+				if existing == svcType {
+					found = true
+					break
+				}
 			}
-			out := &net.Packet{
-				Header: net.Header{
-					Magic:  net.MagicValue,
-					CmdID:  CmdNodeEvent,
-					SeqID:  0,
-					Flags:  0,
-					Length: uint32(net.HeaderSize + len(data)),
-				},
-				Payload: data,
-			}
-			if !conn.SendPacket(out) {
-				return
+			if !found {
+				w.svcTypes = append(w.svcTypes, svcType)
+				go s.watchLoop(w.watchCtx, conn, svcType)
 			}
 		}
-	}()
+	} else {
+		ctx, cancel := context.WithCancel(context.Background())
+		w := &Watcher{
+			conn:        conn,
+			svcTypes:    append([]string{}, req.ServiceTypes...),
+			cancel:      cancel,
+			watchCtx:    ctx,
+			watchCancel: cancel,
+		}
+		s.watchers.Store(conn.ID(), w)
+		for _, svcType := range req.ServiceTypes {
+			go s.watchLoop(ctx, conn, svcType)
+		}
+	}
+}
+
+func (s *Server) watchLoop(ctx context.Context, conn *net.TCPConn, serviceType string) {
+	events, _, err := s.store.Subscribe(ctx, serviceType)
+	if err != nil {
+		log.Printf("subscribe error: %v", err)
+		return
+	}
+	for ev := range events {
+		data, err := proto.Marshal(ev)
+		if err != nil {
+			continue
+		}
+		out := &net.Packet{
+			Header: net.Header{
+				Magic:  net.MagicValue,
+				CmdID:  CmdNodeEvent,
+				SeqID:  0,
+				Flags:  0,
+				Length: uint32(net.HeaderSize + len(data)),
+			},
+			Payload: data,
+		}
+		if !conn.SendPacket(out) {
+			return
+		}
+	}
 }
 
 func (s *Server) onDisconnect(conn *net.TCPConn) {
 	if v, ok := s.watchers.Load(conn.ID()); ok {
 		w := v.(*Watcher)
-		if w.cancel != nil {
+		if w.watchCancel != nil {
+			w.watchCancel()
+		} else if w.cancel != nil {
 			w.cancel()
 		}
 		s.watchers.Delete(conn.ID())

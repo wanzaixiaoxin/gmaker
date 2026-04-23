@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gmaker/luffa/common/go/crypto"
+	protocol "github.com/gmaker/luffa/gen/go/protocol"
 )
 
 // TCPClient TCP 客户端
@@ -77,7 +78,7 @@ func (c *TCPClient) doHandshake() error {
 		Header: Header{
 			Length: HeaderSize + uint32(len(payload)),
 			Magic:  MagicValue,
-			CmdID:  0x00000002, // HANDSHAKE
+			CmdID:  uint32(protocol.CmdSystem_CMD_SYS_HANDSHAKE),
 			SeqID:  1,
 			Flags:  0,
 		},
@@ -95,7 +96,7 @@ func (c *TCPClient) doHandshake() error {
 	done := make(chan result, 1)
 	origOnData := c.onData
 	c.conn.onData = func(conn *TCPConn, pkt *Packet) {
-		if pkt.CmdID == 0x00000002 {
+		if pkt.CmdID == uint32(protocol.CmdSystem_CMD_SYS_HANDSHAKE) {
 			done <- result{pkt: pkt}
 		} else if origOnData != nil {
 			origOnData(conn, pkt)

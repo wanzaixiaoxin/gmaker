@@ -47,6 +47,17 @@ message ServiceType {
     string service_type = 1;
 }
 
+// ==================== 批量订阅请求/响应 ====================
+
+message SubscribeReq {
+    repeated string service_types = 1;  // 关注的服务类型列表
+}
+
+message SubscribeRes {
+    // service_type -> 当前全量节点列表
+    map<string, NodeList> snapshot = 1;
+}
+
 // ==================== Registry 服务接口 ====================
 //
 // 说明：
@@ -71,4 +82,7 @@ service Registry {
 
     // 增量监听。通过长连接实时推送节点变更事件（JOIN / LEAVE / UPDATE）。
     rpc Watch(ServiceType) returns (stream NodeEvent);
+
+    // 批量订阅。一次性关注多个服务类型，返回当前全量快照，后续通过 NodeEvent 推送增量。
+    rpc Subscribe(SubscribeReq) returns (SubscribeRes);
 }

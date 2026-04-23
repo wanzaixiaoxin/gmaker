@@ -13,6 +13,7 @@ import (
 	"github.com/gmaker/luffa/common/go/net"
 	bizpb "github.com/gmaker/luffa/gen/go/biz"
 	loginpb "github.com/gmaker/luffa/gen/go/login"
+	protocol "github.com/gmaker/luffa/gen/go/protocol"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -98,9 +99,9 @@ func main() {
 		Version:  "1.0.0",
 	}
 	lastPkt = nil
-	sendPacket(client, 0x00001000, seq, loginReq)
+	sendPacket(client, uint32(protocol.CmdCommon_CMD_CMN_LOGIN_REQ), seq, loginReq)
 	waitForResponse(&lastPkt, 3*time.Second)
-	if lastPkt == nil || lastPkt.CmdID != 0x00001001 {
+	if lastPkt == nil || lastPkt.CmdID != uint32(protocol.CmdCommon_CMD_CMN_LOGIN_RES) {
 		log.Fatal("Login response not received")
 	}
 	var loginRes loginpb.LoginRes
@@ -118,9 +119,9 @@ func main() {
 	// 7. 获取玩家数据
 	getReq := &bizpb.GetPlayerReq{PlayerId: playerID}
 	lastPkt = nil
-	sendPacket(client, 0x00010000, seq, getReq)
+	sendPacket(client, uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_REQ), seq, getReq)
 	waitForResponse(&lastPkt, 3*time.Second)
-	if lastPkt == nil || lastPkt.CmdID != 0x00010001 {
+	if lastPkt == nil || lastPkt.CmdID != uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_RES) {
 		log.Fatal("GetPlayer response not received")
 	}
 	var getRes bizpb.GetPlayerRes
@@ -142,9 +143,9 @@ func main() {
 		Diamond:  50,
 	}
 	lastPkt = nil
-	sendPacket(client, 0x00010006, seq, updateReq)
+	sendPacket(client, uint32(protocol.CmdBiz_CMD_BIZ_UPDATE_PLAYER_REQ), seq, updateReq)
 	waitForResponse(&lastPkt, 3*time.Second)
-	if lastPkt == nil || lastPkt.CmdID != 0x00010007 {
+	if lastPkt == nil || lastPkt.CmdID != uint32(protocol.CmdBiz_CMD_BIZ_UPDATE_PLAYER_RES) {
 		log.Fatal("UpdatePlayer response not received")
 	}
 	var updateRes bizpb.UpdatePlayerRes
@@ -160,9 +161,9 @@ func main() {
 	// 9. 再次获取玩家数据，验证修改已持久化
 	getReq2 := &bizpb.GetPlayerReq{PlayerId: playerID}
 	lastPkt = nil
-	sendPacket(client, 0x00010000, seq, getReq2)
+	sendPacket(client, uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_REQ), seq, getReq2)
 	waitForResponse(&lastPkt, 3*time.Second)
-	if lastPkt == nil || lastPkt.CmdID != 0x00010001 {
+	if lastPkt == nil || lastPkt.CmdID != uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_RES) {
 		log.Fatal("GetPlayer verification response not received")
 	}
 	var getRes2 bizpb.GetPlayerRes

@@ -17,31 +17,32 @@ import (
 	chatpb "github.com/gmaker/luffa/gen/go/chat"
 	commonpb "github.com/gmaker/luffa/gen/go/common"
 	dbproxypb "github.com/gmaker/luffa/gen/go/dbproxy"
+	protocol "github.com/gmaker/luffa/gen/go/protocol"
 	"google.golang.org/protobuf/proto"
 )
 
 const (
-	CmdChatCreateRoomReq = uint32(0x00030000)
-	CmdChatCreateRoomRes = uint32(0x00030001)
-	CmdChatJoinRoomReq   = uint32(0x00030002)
-	CmdChatJoinRoomRes   = uint32(0x00030003)
-	CmdChatLeaveRoomReq  = uint32(0x00030004)
-	CmdChatLeaveRoomRes  = uint32(0x00030005)
-	CmdChatSendMsgReq    = uint32(0x00030006)
-	CmdChatSendMsgRes    = uint32(0x00030007)
-	CmdChatMsgNotify     = uint32(0x00030008)
-	CmdChatGetHistoryReq = uint32(0x00030009)
-	CmdChatGetHistoryRes = uint32(0x0003000A)
-	CmdChatCloseRoomReq  = uint32(0x0003000B)
-	CmdChatCloseRoomRes  = uint32(0x0003000C)
+	CmdChatCreateRoomReq = uint32(protocol.CmdChat_CMD_CHAT_CREATE_ROOM_REQ)
+	CmdChatCreateRoomRes = uint32(protocol.CmdChat_CMD_CHAT_CREATE_ROOM_RES)
+	CmdChatJoinRoomReq   = uint32(protocol.CmdChat_CMD_CHAT_JOIN_ROOM_REQ)
+	CmdChatJoinRoomRes   = uint32(protocol.CmdChat_CMD_CHAT_JOIN_ROOM_RES)
+	CmdChatLeaveRoomReq  = uint32(protocol.CmdChat_CMD_CHAT_LEAVE_ROOM_REQ)
+	CmdChatLeaveRoomRes  = uint32(protocol.CmdChat_CMD_CHAT_LEAVE_ROOM_RES)
+	CmdChatSendMsgReq    = uint32(protocol.CmdChat_CMD_CHAT_SEND_MSG_REQ)
+	CmdChatSendMsgRes    = uint32(protocol.CmdChat_CMD_CHAT_SEND_MSG_RES)
+	CmdChatMsgNotify     = uint32(protocol.CmdChat_CMD_CHAT_MSG_NOTIFY)
+	CmdChatGetHistoryReq = uint32(protocol.CmdChat_CMD_CHAT_GET_HISTORY_REQ)
+	CmdChatGetHistoryRes = uint32(protocol.CmdChat_CMD_CHAT_GET_HISTORY_RES)
+	CmdChatCloseRoomReq  = uint32(protocol.CmdChat_CMD_CHAT_CLOSE_ROOM_REQ)
+	CmdChatCloseRoomRes  = uint32(protocol.CmdChat_CMD_CHAT_CLOSE_ROOM_RES)
 
-	CmdMySQLExec     = uint32(0x000E0013)
-	CmdMySQLExecRes  = uint32(0x000E0014)
-	CmdMySQLQuery    = uint32(0x000E0011)
-	CmdMySQLQueryRes = uint32(0x000E0012)
+	CmdMySQLExec     = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_EXEC)
+	CmdMySQLExecRes  = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_EXEC_RES)
+	CmdMySQLQuery    = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_QUERY)
+	CmdMySQLQueryRes = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_QUERY_RES)
 
-	CmdGWRoomJoin  = uint32(0x00001010)
-	CmdGWRoomLeave = uint32(0x00001011)
+	CmdGWRoomJoin  = uint32(protocol.CmdGatewayInternal_CMD_GW_ROOM_JOIN)
+	CmdGWRoomLeave = uint32(protocol.CmdGatewayInternal_CMD_GW_ROOM_LEAVE)
 )
 
 type DBProxyClient interface {

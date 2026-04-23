@@ -134,6 +134,34 @@ bool RegistryClient::Watch(const std::string& service_type, EventCallback on_eve
     return FireForget(CMD_WATCH, payload);
 }
 
+bool RegistryClient::Subscribe(const std::vector<std::string>& service_types,
+                               ::registry::SubscribeRes* out_snapshot,
+                               EventCallback on_event) {
+    {
+        std::lock_guard<std::mutex> lk(watch_mtx_);
+        event_cb_ = on_event;
+        for (const auto& t : service_types) {
+            watch_types_.insert(t);
+        }
+    }
+
+    ::registry::SubscribeReq req;
+    for (const auto& t : service_types) {
+        req.add_service_types(t);
+    }
+    std::vector<uint8_t> payload(req.ByteSizeLong());
+    if (!req.SerializeToArray(payload.data(), static_cast<int>(payload.size()))) {
+        std::cerr << "RegistryClient::Subscribe: serialize failed" << std::endl;
+        return false;
+    }
+
+    net::Packet res_pkt;
+    if (!Call(CMD_SUBSCRIBE, payload, &res_pkt)) {
+        return false;
+    }
+    return out_snapshot->ParseFromArray(res_pkt.payload.Data(), static_cast<int>(res_pkt.payload.Size()));
+}
+
 void RegistryClient::OnPacket(net::IConnection* conn, net::Packet& pkt) {
     (void)conn;
     // NodeEvent 是服务端推送，不走 pending 映射

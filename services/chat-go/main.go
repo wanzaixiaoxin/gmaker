@@ -19,35 +19,36 @@ import (
 	"github.com/gmaker/luffa/common/go/redis"
 	"github.com/gmaker/luffa/services/chat-go/internal/chat"
 	commonpb "github.com/gmaker/luffa/gen/go/common"
+	protocol "github.com/gmaker/luffa/gen/go/protocol"
 	pb "github.com/gmaker/luffa/gen/go/registry"
 )
 
 // 命令 ID 定义 (来自 protocol.proto)
 const (
 	// Chat 服务命令 (0x00030000 - 0x0003FFFF)
-	CmdChatCreateRoomReq = uint32(0x00030000)
-	CmdChatCreateRoomRes = uint32(0x00030001)
-	CmdChatJoinRoomReq   = uint32(0x00030002)
-	CmdChatJoinRoomRes   = uint32(0x00030003)
-	CmdChatLeaveRoomReq  = uint32(0x00030004)
-	CmdChatLeaveRoomRes  = uint32(0x00030005)
-	CmdChatSendMsgReq    = uint32(0x00030006)
-	CmdChatSendMsgRes    = uint32(0x00030007)
-	CmdChatMsgNotify     = uint32(0x00030008)
-	CmdChatGetHistoryReq = uint32(0x00030009)
-	CmdChatGetHistoryRes = uint32(0x0003000A)
-	CmdChatCloseRoomReq  = uint32(0x0003000B)
-	CmdChatCloseRoomRes  = uint32(0x0003000C)
+	CmdChatCreateRoomReq = uint32(protocol.CmdChat_CMD_CHAT_CREATE_ROOM_REQ)
+	CmdChatCreateRoomRes = uint32(protocol.CmdChat_CMD_CHAT_CREATE_ROOM_RES)
+	CmdChatJoinRoomReq   = uint32(protocol.CmdChat_CMD_CHAT_JOIN_ROOM_REQ)
+	CmdChatJoinRoomRes   = uint32(protocol.CmdChat_CMD_CHAT_JOIN_ROOM_RES)
+	CmdChatLeaveRoomReq  = uint32(protocol.CmdChat_CMD_CHAT_LEAVE_ROOM_REQ)
+	CmdChatLeaveRoomRes  = uint32(protocol.CmdChat_CMD_CHAT_LEAVE_ROOM_RES)
+	CmdChatSendMsgReq    = uint32(protocol.CmdChat_CMD_CHAT_SEND_MSG_REQ)
+	CmdChatSendMsgRes    = uint32(protocol.CmdChat_CMD_CHAT_SEND_MSG_RES)
+	CmdChatMsgNotify     = uint32(protocol.CmdChat_CMD_CHAT_MSG_NOTIFY)
+	CmdChatGetHistoryReq = uint32(protocol.CmdChat_CMD_CHAT_GET_HISTORY_REQ)
+	CmdChatGetHistoryRes = uint32(protocol.CmdChat_CMD_CHAT_GET_HISTORY_RES)
+	CmdChatCloseRoomReq  = uint32(protocol.CmdChat_CMD_CHAT_CLOSE_ROOM_REQ)
+	CmdChatCloseRoomRes  = uint32(protocol.CmdChat_CMD_CHAT_CLOSE_ROOM_RES)
 
-	// DBProxy 命令 (0x00002000 - 0x00002FFF)
-	CmdDBQuery    = uint32(0x00002000)
-	CmdDBQueryRes = uint32(0x00002001)
-	CmdDBExec     = uint32(0x00002002)
-	CmdDBExecRes  = uint32(0x00002003)
+	// DBProxy 命令
+	CmdDBQuery    = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_QUERY)
+	CmdDBQueryRes = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_QUERY_RES)
+	CmdDBExec     = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_EXEC)
+	CmdDBExecRes  = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_EXEC_RES)
 
-	// Gateway 内部命令 (0x00000100 - 0x000001FF)
-	CmdGWRoomJoin  = uint32(0x00000100)
-	CmdGWRoomLeave = uint32(0x00000101)
+	// Gateway 内部命令
+	CmdGWRoomJoin  = uint32(protocol.CmdGatewayInternal_CMD_GW_ROOM_JOIN)
+	CmdGWRoomLeave = uint32(protocol.CmdGatewayInternal_CMD_GW_ROOM_LEAVE)
 )
 
 // ChatConfig Chat 服务配置
@@ -225,7 +226,7 @@ func main() {
 	if err := srv.Start(); err != nil {
 		log.Fatalf("start chat server failed: %v", err)
 	}
-	log.Infof("Chat server started on %s", *listenAddr)
+	log.Infof("Chat server started on %s", listenAddr)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

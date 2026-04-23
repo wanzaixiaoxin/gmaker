@@ -23,6 +23,7 @@ const (
 	Registry_Heartbeat_FullMethodName = "/registry.Registry/Heartbeat"
 	Registry_Discover_FullMethodName  = "/registry.Registry/Discover"
 	Registry_Watch_FullMethodName     = "/registry.Registry/Watch"
+	Registry_Subscribe_FullMethodName = "/registry.Registry/Subscribe"
 )
 
 // RegistryClient is the client API for Registry service.
@@ -37,6 +38,8 @@ type RegistryClient interface {
 	Discover(ctx context.Context, in *ServiceType, opts ...grpc.CallOption) (*NodeList, error)
 	// 增量监听。通过长连接实时推送节点变更事件（JOIN / LEAVE / UPDATE）。
 	Watch(ctx context.Context, in *ServiceType, opts ...grpc.CallOption) (Registry_WatchClient, error)
+	// 批量订阅。一次性关注多个服务类型，返回当前全量快照，后续通过 NodeEvent 推送增量。
+	Subscribe(ctx context.Context, in *SubscribeReq, opts ...grpc.CallOption) (*SubscribeRes, error)
 }
 
 type registryClient struct {
@@ -106,6 +109,15 @@ func (x *registryWatchClient) Recv() (*NodeEvent, error) {
 	return m, nil
 }
 
+func (c *registryClient) Subscribe(ctx context.Context, in *SubscribeReq, opts ...grpc.CallOption) (*SubscribeRes, error) {
+	out := new(SubscribeRes)
+	err := c.cc.Invoke(ctx, Registry_Subscribe_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RegistryServer is the server API for Registry service.
 // All implementations must embed UnimplementedRegistryServer
 // for forward compatibility
@@ -118,6 +130,8 @@ type RegistryServer interface {
 	Discover(context.Context, *ServiceType) (*NodeList, error)
 	// 增量监听。通过长连接实时推送节点变更事件（JOIN / LEAVE / UPDATE）。
 	Watch(*ServiceType, Registry_WatchServer) error
+	// 批量订阅。一次性关注多个服务类型，返回当前全量快照，后续通过 NodeEvent 推送增量。
+	Subscribe(context.Context, *SubscribeReq) (*SubscribeRes, error)
 	mustEmbedUnimplementedRegistryServer()
 }
 
@@ -136,6 +150,9 @@ func (UnimplementedRegistryServer) Discover(context.Context, *ServiceType) (*Nod
 }
 func (UnimplementedRegistryServer) Watch(*ServiceType, Registry_WatchServer) error {
 	return status.Errorf(codes.Unimplemented, "method Watch not implemented")
+}
+func (UnimplementedRegistryServer) Subscribe(context.Context, *SubscribeReq) (*SubscribeRes, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
 func (UnimplementedRegistryServer) mustEmbedUnimplementedRegistryServer() {}
 
@@ -225,6 +242,24 @@ func (x *registryWatchServer) Send(m *NodeEvent) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _Registry_Subscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubscribeReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegistryServer).Subscribe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Registry_Subscribe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegistryServer).Subscribe(ctx, req.(*SubscribeReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Registry_ServiceDesc is the grpc.ServiceDesc for Registry service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -243,6 +278,10 @@ var Registry_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Discover",
 			Handler:    _Registry_Discover_Handler,
+		},
+		{
+			MethodName: "Subscribe",
+			Handler:    _Registry_Subscribe_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

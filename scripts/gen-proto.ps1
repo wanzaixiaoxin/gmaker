@@ -53,6 +53,18 @@ New-Item -ItemType Directory -Force -Path $genCppDir | Out-Null
     --cpp_out=$genCppDir `
     ($protoFiles | ForEach-Object { $_.Name })
 
+# 额外生成 protocol.proto（命令 ID 定义）
+Write-Host "  Generating protocol.proto..."
+& protoc `
+    --proto_path=proto `
+    --go_out=. --go_opt=module=github.com/gmaker/luffa `
+    --cpp_out=$genCppDir `
+    protocol.proto
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "ERROR: protocol.proto generation failed!"
+    exit $LASTEXITCODE
+}
+
 if ($LASTEXITCODE -ne 0) {
     Write-Error "ERROR: Protobuf generation failed! (exit code $LASTEXITCODE)"
     exit $LASTEXITCODE

@@ -38,83 +38,112 @@ enum ServiceType {
 // - 0x00001000 - 0x00001FFF: Registry 命令
 // - 0x00002000 - 0x00002FFF: DBProxy 命令
 // - 0x00010000 - 0x0001FFFF: Biz 服务命令
-// - 0x00020000 - 0x0002FFFF: Login 服务命令
+// - 0x00020000 - 0x0002FFFF: Login / Realtime 服务命令
 // - 0x00030000 - 0x0003FFFF: Chat 服务命令
 // - 0x00040000 - 0x0004FFFF: LogStats 服务命令
-// - 0x00050000 - 0x0005FFFF: Realtime 服务命令
-// - 0x000F0000 - 0x000FFFFF: 内部控制命令
+// - 0x000E0000 - 0x000EFFFF: DBProxy 内部 RPC 命令
+// - 0x000F0000 - 0x000FFFFF: Registry 内部 RPC 命令
 // ============================================================
 
 enum CmdSystem {
     // 系统命令 (0x00000000 - 0x000000FF)
-    CMD_HANDSHAKE_REQ     = 0;  // 握手请求
-    CMD_HANDSHAKE_RES     = 1;  // 握手响应
-    CMD_HEARTBEAT         = 2;  // 心跳
-    CMD_ERROR             = 3;  // 错误响应
+    CMD_SYS_UNKNOWN       = 0;
+    CMD_SYS_HEARTBEAT     = 0x00000001;  // 心跳
+    CMD_SYS_HANDSHAKE     = 0x00000002;  // 握手
+    CMD_SYS_ERROR_PACKET  = 0x00000003;  // 错误包
 }
 
-enum CmdGateway {
-    // Gateway 内部命令 (0x00000100 - 0x000001FF)
-    CMD_GW_ROOM_JOIN      = 0x00000100;  // 房间加入通知
-    CMD_GW_ROOM_LEAVE     = 0x00000101;  // 房间离开通知
-    CMD_GW_BROADCAST      = 0x00000102;  // 广播消息
+enum CmdCommon {
+    // 公共命令 (0x00001000 - 0x00001FFF)
+    CMD_CMN_UNKNOWN       = 0;
+    CMD_CMN_LOGIN_REQ     = 0x00001000;  // 登录请求
+    CMD_CMN_LOGIN_RES     = 0x00001001;  // 登录响应
+    CMD_CMN_REGISTER_REQ  = 0x00001002;  // 注册请求
+    CMD_CMN_REGISTER_RES  = 0x00001003;  // 注册响应
+    CMD_CMN_GATEWAY_FORWARD = 0x00001004;  // 网关转发
 }
 
-enum CmdRegistry {
-    // Registry 命令 (0x00001000 - 0x00001FFF)
-    CMD_REG_REGISTER      = 0x00001000;  // 注册节点
-    CMD_REG_HEARTBEAT     = 0x00001001;  // 心跳
-    CMD_REG_DISCOVER      = 0x00001002;  // 发现服务
-    CMD_REG_WATCH         = 0x00001003;  // 监听变更
-    CMD_REG_NODE_EVENT    = 0x00001004;  // 节点事件通知
+enum CmdGatewayInternal {
+    // Gateway 内部命令 (0x00000100 - 0x00000FFF)
+    CMD_GW_UNKNOWN        = 0;
+    CMD_GW_ROOM_JOIN      = 0x00001010;  // 房间加入通知
+    CMD_GW_ROOM_LEAVE     = 0x00001011;  // 房间离开通知
 }
 
-enum CmdDBProxy {
-    // DBProxy 命令 (0x00002000 - 0x00002FFF)
-    CMD_DB_QUERY          = 0x00002000;  // 查询
-    CMD_DB_QUERY_RES      = 0x00002001;  // 查询响应
-    CMD_DB_EXEC           = 0x00002002;  // 执行
-    CMD_DB_EXEC_RES       = 0x00002003;  // 执行响应
+enum CmdRegistryInternal {
+    // Registry 内部 RPC 命令 (0x000F0000 - 0x000FFFFF)
+    CMD_REG_INT_UNKNOWN   = 0;
+    CMD_REG_INT_REGISTER  = 0x000F0001;  // 注册节点
+    CMD_REG_INT_HEARTBEAT = 0x000F0002;  // 心跳
+    CMD_REG_INT_DISCOVER  = 0x000F0003;  // 发现服务
+    CMD_REG_INT_WATCH     = 0x000F0004;  // 监听变更
+    CMD_REG_INT_NODE_EVENT = 0x000F0005;  // 节点事件通知
+    CMD_REG_INT_SUBSCRIBE = 0x000F0006;  // 批量订阅
+}
+
+enum CmdDBProxyInternal {
+    // DBProxy 内部 RPC 命令 (0x000E0000 - 0x000EFFFF)
+    CMD_DB_INT_UNKNOWN       = 0;
+    CMD_DB_INT_REDIS_GET     = 0x000E0001;
+    CMD_DB_INT_REDIS_GET_RES = 0x000E0002;
+    CMD_DB_INT_REDIS_SET     = 0x000E0003;
+    CMD_DB_INT_REDIS_SET_RES = 0x000E0004;
+    CMD_DB_INT_REDIS_DEL     = 0x000E0005;
+    CMD_DB_INT_REDIS_DEL_RES = 0x000E0006;
+    CMD_DB_INT_REDIS_PIPELINE = 0x000E0007;
+    CMD_DB_INT_REDIS_PIPELINE_RES = 0x000E0008;
+    CMD_DB_INT_MYSQL_QUERY   = 0x000E0011;
+    CMD_DB_INT_MYSQL_QUERY_RES = 0x000E0012;
+    CMD_DB_INT_MYSQL_EXEC    = 0x000E0013;
+    CMD_DB_INT_MYSQL_EXEC_RES = 0x000E0014;
 }
 
 enum CmdBiz {
     // Biz 服务命令 (0x00010000 - 0x0001FFFF)
-    CMD_BIZ_BASE          = 0x00010000;
-}
-
-enum CmdLogin {
-    // Login 服务命令 (0x00020000 - 0x0002FFFF)
-    CMD_LOGIN_REQ         = 0x00020000;  // 登录请求
-    CMD_LOGIN_RES         = 0x00020001;  // 登录响应
-    CMD_LOGOUT_REQ        = 0x00020002;  // 登出请求
-    CMD_LOGOUT_RES        = 0x00020003;  // 登出响应
+    CMD_BIZ_UNKNOWN       = 0;
+    CMD_BIZ_GET_PLAYER_REQ    = 0x00010000;
+    CMD_BIZ_GET_PLAYER_RES    = 0x00010001;
+    CMD_BIZ_GET_BAG_REQ       = 0x00010002;
+    CMD_BIZ_GET_BAG_RES       = 0x00010003;
+    CMD_BIZ_PING              = 0x00010004;
+    CMD_BIZ_PONG              = 0x00010005;
+    CMD_BIZ_UPDATE_PLAYER_REQ = 0x00010006;
+    CMD_BIZ_UPDATE_PLAYER_RES = 0x00010007;
 }
 
 enum CmdChat {
     // Chat 服务命令 (0x00030000 - 0x0003FFFF)
-    CMD_CHAT_CREATE_ROOM_REQ  = 0x00030000;  // 创建房间请求
-    CMD_CHAT_CREATE_ROOM_RES  = 0x00030001;  // 创建房间响应
-    CMD_CHAT_JOIN_ROOM_REQ    = 0x00030002;  // 加入房间请求
-    CMD_CHAT_JOIN_ROOM_RES    = 0x00030003;  // 加入房间响应
-    CMD_CHAT_LEAVE_ROOM_REQ   = 0x00030004;  // 离开房间请求
-    CMD_CHAT_LEAVE_ROOM_RES   = 0x00030005;  // 离开房间响应
-    CMD_CHAT_SEND_MSG_REQ     = 0x00030006;  // 发送消息请求
-    CMD_CHAT_SEND_MSG_RES     = 0x00030007;  // 发送消息响应
-    CMD_CHAT_MSG_NOTIFY       = 0x00030008;  // 消息通知
-    CMD_CHAT_GET_HISTORY_REQ  = 0x00030009;  // 获取历史请求
-    CMD_CHAT_GET_HISTORY_RES  = 0x0003000A;  // 获取历史响应
-    CMD_CHAT_CLOSE_ROOM_REQ   = 0x0003000B;  // 关闭房间请求
-    CMD_CHAT_CLOSE_ROOM_RES   = 0x0003000C;  // 关闭房间响应
+    CMD_CHAT_UNKNOWN          = 0;
+    CMD_CHAT_CREATE_ROOM_REQ  = 0x00030000;
+    CMD_CHAT_CREATE_ROOM_RES  = 0x00030001;
+    CMD_CHAT_JOIN_ROOM_REQ    = 0x00030002;
+    CMD_CHAT_JOIN_ROOM_RES    = 0x00030003;
+    CMD_CHAT_LEAVE_ROOM_REQ   = 0x00030004;
+    CMD_CHAT_LEAVE_ROOM_RES   = 0x00030005;
+    CMD_CHAT_SEND_MSG_REQ     = 0x00030006;
+    CMD_CHAT_SEND_MSG_RES     = 0x00030007;
+    CMD_CHAT_MSG_NOTIFY       = 0x00030008;
+    CMD_CHAT_GET_HISTORY_REQ  = 0x00030009;
+    CMD_CHAT_GET_HISTORY_RES  = 0x0003000A;
+    CMD_CHAT_CLOSE_ROOM_REQ   = 0x0003000B;
+    CMD_CHAT_CLOSE_ROOM_RES   = 0x0003000C;
 }
 
 enum CmdLogStats {
     // LogStats 服务命令 (0x00040000 - 0x0004FFFF)
+    CMD_LOGSTATS_UNKNOWN  = 0;
     CMD_LOGSTATS_BASE     = 0x00040000;
 }
 
 enum CmdRealtime {
-    // Realtime 服务命令 (0x00050000 - 0x0005FFFF)
-    CMD_REALTIME_BASE     = 0x00050000;
+    // Realtime 服务命令 (0x00020000 - 0x0002FFFF)
+    CMD_RT_UNKNOWN        = 0;
+    CMD_RT_ROOM_ENTER_REQ = 0x00020000;
+    CMD_RT_ROOM_ENTER_RES = 0x00020001;
+    CMD_RT_ROOM_LEAVE_REQ = 0x00020002;
+    CMD_RT_ROOM_LEAVE_RES = 0x00020003;
+    CMD_RT_FRAME_SYNC     = 0x00020004;
+    CMD_RT_STATE_SYNC     = 0x00020005;
 }
 
 // ============================================================

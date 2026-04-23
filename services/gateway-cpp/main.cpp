@@ -14,6 +14,7 @@
 #include "gs/crypto/session.hpp"
 #include "gs/replay/replay.hpp"
 #include "gs/registry/client.hpp"
+#include "gs/registry/upstream_manager.hpp"
 #include "gs/metrics/metrics.hpp"
 #include "gs/errors.hpp"
 #include "gs/logger/logger.hpp"
@@ -102,7 +103,7 @@ private:
     AsyncUpstreamPool* RouteToPool(uint32_t cmd_id);
     
     std::unique_ptr<AsyncTCPServer> server_;
-    std::unordered_map<std::string, std::unique_ptr<AsyncUpstreamPool>> upstream_pools_;  // 按服务类型
+    std::unique_ptr<gs::registry::UpstreamManager> upstream_mgr_;
     std::unique_ptr<AsyncWriteCoalescer> coalescer_;
     std::unique_ptr<gs::registry::RegistryClient> reg_client_;
     
@@ -257,15 +258,7 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
         return false;
     }
 
-    // 初始化上游连接池 (按服务类型)
-    for (const auto& svc_type : cfg.upstream_services) {
-        upstream_pools_[svc_type] = std::make_unique<AsyncUpstreamPool>(
-            server_->EventLoop(),
-            [this](IConnection* c, Packet& p) { OnUpstreamPacket(c, p); }
-        );
-    }
-
-    // 连接 Registry 并发现服务
+    // 连接 Registry 并管理上游连接池
     if (!cfg.registry_nodes.empty()) {
         std::vector<std::pair<std::string, uint16_t>> reg_addrs;
         for (const auto& addr : cfg.registry_nodes) {
@@ -279,46 +272,26 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
         if (reg_client_->Connect()) {
             if (logger_) logger_->Info("Connected to registry");
             
-            // 发现并监听所有配置的服务
+            upstream_mgr_ = std::make_unique<gs::registry::UpstreamManager>(reg_client_.get(), server_->EventLoop());
+            
+            // 声明对所有配置上游服务的兴趣
             for (const auto& svc_type : cfg.upstream_services) {
-                // 初始发现
-                ::registry::NodeList list;
-                if (reg_client_->Discover(svc_type, &list)) {
-                    auto pool = upstream_pools_[svc_type].get();
-                    for (int i = 0; i < list.nodes_size(); ++i) {
-                        const auto& node = list.nodes(i);
-                        pool->AddNode(node.host(), static_cast<uint16_t>(node.port()));
-                        if (logger_) logger_->Info("Registry discovered " + svc_type + " node: " + node.host() + ":" + std::to_string(node.port()));
+                upstream_mgr_->AddInterest(svc_type,
+                    [this](IConnection* c, Packet& p) { OnUpstreamPacket(c, p); });
+            }
+            
+            // 批量订阅：一次性获取全量快照 + 后续增量推送
+            if (upstream_mgr_->Start()) {
+                for (const auto& svc_type : cfg.upstream_services) {
+                    auto* pool = upstream_mgr_->GetPool(svc_type);
+                    if (pool && logger_) {
+                        logger_->Info(svc_type + " upstream pool started, " +
+                            std::to_string(pool->HealthyCount()) + "/" + std::to_string(pool->TotalCount()) + " nodes");
                     }
                 }
-                
-                // 监听变更
-                std::string type = svc_type;
-                reg_client_->Watch(svc_type, [this, type](const ::registry::NodeEvent& ev) {
-                    if (!ev.has_node()) return;
-                    const auto& node = ev.node();
-                    auto pool = upstream_pools_[type].get();
-                    if (!pool) return;
-                    
-                    std::string addr = node.host() + ":" + std::to_string(node.port());
-                    if (ev.type() == ::registry::NodeEvent::JOIN || ev.type() == ::registry::NodeEvent::UPDATE) {
-                        pool->AddNode(node.host(), static_cast<uint16_t>(node.port()));
-                        if (logger_) logger_->Info("Registry event: " + type + " node JOIN/UPDATE " + addr);
-                    } else if (ev.type() == ::registry::NodeEvent::LEAVE) {
-                        pool->RemoveNode(node.host(), static_cast<uint16_t>(node.port()));
-                        if (logger_) logger_->Info("Registry event: " + type + " node LEAVE " + addr);
-                    }
-                });
+            } else if (logger_) {
+                logger_->Warn("UpstreamManager start failed");
             }
-        }
-    }
-
-    // 启动所有上游池
-    for (auto& [svc_type, pool] : upstream_pools_) {
-        if (!pool->Start()) {
-            if (logger_) logger_->Warn("Failed to start upstream pool: " + svc_type);
-        } else if (logger_) {
-            logger_->Info(svc_type + " upstream pool started, " + std::to_string(pool->HealthyCount()) + "/" + std::to_string(pool->TotalCount()) + " nodes");
         }
     }
 
@@ -328,9 +301,7 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
 void Gateway::Stop() {
     if (server_) server_->Stop();
     if (coalescer_) coalescer_->Stop();
-    for (auto& [_, pool] : upstream_pools_) {
-        if (pool) pool->Stop();
-    }
+    if (upstream_mgr_) upstream_mgr_->Stop();
     if (reg_client_) reg_client_->Close();
     
     std::lock_guard<std::mutex> lk(stop_mtx_);
@@ -495,32 +466,27 @@ AsyncUpstreamPool* Gateway::RouteToPool(uint32_t cmd_id) {
     std::string svc_type;
     
     // 使用 proto 中定义的命令范围
-    if (cmd_id >= protocol::CmdBiz_CMD_BIZ_BASE && cmd_id <= 0x0001FFFF) {
+    if (cmd_id >= protocol::CMD_BIZ_BASE && cmd_id <= 0x0001FFFF) {
         svc_type = "biz";
-    } else if (cmd_id >= protocol::CmdLogin_CMD_LOGIN_REQ && cmd_id <= 0x0002FFFF) {
+    } else if (cmd_id >= protocol::CMD_LOGIN_REQ && cmd_id <= 0x0002FFFF) {
         svc_type = "login";
-    } else if (cmd_id >= protocol::CmdChat_CMD_CHAT_CREATE_ROOM_REQ && cmd_id <= 0x0003FFFF) {
+    } else if (cmd_id >= protocol::CMD_CHAT_CREATE_ROOM_REQ && cmd_id <= 0x0003FFFF) {
         svc_type = "chat";
-    } else if (cmd_id >= protocol::CmdLogStats_CMD_LOGSTATS_BASE && cmd_id <= 0x0004FFFF) {
+    } else if (cmd_id >= protocol::CMD_LOGSTATS_BASE && cmd_id <= 0x0004FFFF) {
         svc_type = "logstats";
-    } else if (cmd_id >= protocol::CmdRealtime_CMD_REALTIME_BASE && cmd_id <= 0x0005FFFF) {
+    } else if (cmd_id >= protocol::CMD_REALTIME_BASE && cmd_id <= 0x0005FFFF) {
         svc_type = "realtime";
     }
     
-    // 检查服务是否在配置的上游服务列表中
-    if (!svc_type.empty()) {
-        auto it = upstream_pools_.find(svc_type);
-        if (it != upstream_pools_.end()) {
-            return it->second.get();
-        }
+    // 通过 UpstreamManager 获取连接池
+    if (!svc_type.empty() && upstream_mgr_) {
+        auto* pool = upstream_mgr_->GetPool(svc_type);
+        if (pool) return pool;
     }
     
     // 默认路由到第一个服务
-    if (!cfg_.upstream_services.empty()) {
-        auto it = upstream_pools_.find(cfg_.upstream_services[0]);
-        if (it != upstream_pools_.end()) {
-            return it->second.get();
-        }
+    if (!cfg_.upstream_services.empty() && upstream_mgr_) {
+        return upstream_mgr_->GetPool(cfg_.upstream_services[0]);
     }
     
     return nullptr;

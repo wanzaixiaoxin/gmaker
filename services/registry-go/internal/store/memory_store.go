@@ -76,33 +76,52 @@ func (m *MemoryStore) Discover(ctx context.Context, serviceType string) ([]*pb.N
 }
 
 func (m *MemoryStore) Watch(ctx context.Context, serviceType string) (<-chan *pb.NodeEvent, error) {
+	ch, _, err := m.subscribeInternal(ctx, serviceType, true)
+	return ch, err
+}
+
+func (m *MemoryStore) Subscribe(ctx context.Context, serviceType string) (<-chan *pb.NodeEvent, []*pb.NodeInfo, error) {
+	return m.subscribeInternal(ctx, serviceType, false)
+}
+
+func (m *MemoryStore) subscribeInternal(ctx context.Context, serviceType string, sendSnapshot bool) (chan *pb.NodeEvent, []*pb.NodeInfo, error) {
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
-		return nil, fmt.Errorf("store closed")
+		return nil, nil, fmt.Errorf("store closed")
 	}
 	ch := make(chan *pb.NodeEvent, 16)
 	m.watches[serviceType] = append(m.watches[serviceType], ch)
+
+	// 收集当前全量节点
+	var snapshot []*pb.NodeInfo
+	for _, n := range m.nodes {
+		if n.ServiceType == serviceType {
+			snapshot = append(snapshot, n)
+		}
+	}
 	m.mu.Unlock()
 
-	// 发送当前已有的节点作为初始快照
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		m.mu.RLock()
-		if m.closed {
-			m.mu.RUnlock()
-			return
-		}
-		for _, n := range m.nodes {
-			if n.ServiceType == serviceType {
-				select {
-				case ch <- &pb.NodeEvent{Type: pb.NodeEvent_JOIN, Node: n}:
-				default:
+	if sendSnapshot {
+		// 发送当前已有的节点作为初始快照
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			m.mu.RLock()
+			if m.closed {
+				m.mu.RUnlock()
+				return
+			}
+			for _, n := range m.nodes {
+				if n.ServiceType == serviceType {
+					select {
+					case ch <- &pb.NodeEvent{Type: pb.NodeEvent_JOIN, Node: n}:
+					default:
+					}
 				}
 			}
-		}
-		m.mu.RUnlock()
-	}()
+			m.mu.RUnlock()
+		}()
+	}
 
 	// 清理 goroutine
 	go func() {
@@ -123,7 +142,7 @@ func (m *MemoryStore) Watch(ctx context.Context, serviceType string) (<-chan *pb
 		m.mu.Unlock()
 	}()
 
-	return ch, nil
+	return ch, snapshot, nil
 }
 
 func (m *MemoryStore) broadcast(serviceType string, ev *pb.NodeEvent) {

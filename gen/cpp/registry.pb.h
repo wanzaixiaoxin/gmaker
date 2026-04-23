@@ -89,6 +89,18 @@ class ServiceType;
 struct ServiceTypeDefaultTypeInternal;
 extern ServiceTypeDefaultTypeInternal _ServiceType_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull ServiceType_class_data_;
+class SubscribeReq;
+struct SubscribeReqDefaultTypeInternal;
+extern SubscribeReqDefaultTypeInternal _SubscribeReq_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull SubscribeReq_class_data_;
+class SubscribeRes;
+struct SubscribeResDefaultTypeInternal;
+extern SubscribeResDefaultTypeInternal _SubscribeRes_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull SubscribeRes_class_data_;
+class SubscribeRes_SnapshotEntry_DoNotUse;
+struct SubscribeRes_SnapshotEntry_DoNotUseDefaultTypeInternal;
+extern SubscribeRes_SnapshotEntry_DoNotUseDefaultTypeInternal _SubscribeRes_SnapshotEntry_DoNotUse_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull SubscribeRes_SnapshotEntry_DoNotUse_class_data_;
 }  // namespace registry
 namespace google {
 namespace protobuf {
@@ -144,6 +156,217 @@ template <>
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribeReq final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:registry.SubscribeReq) */ {
+ public:
+  inline SubscribeReq() : SubscribeReq(nullptr) {}
+  ~SubscribeReq() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SubscribeReq* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SubscribeReq));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SubscribeReq(::google::protobuf::internal::ConstantInitialized);
+
+  inline SubscribeReq(const SubscribeReq& from) : SubscribeReq(nullptr, from) {}
+  inline SubscribeReq(SubscribeReq&& from) noexcept
+      : SubscribeReq(nullptr, ::std::move(from)) {}
+  inline SubscribeReq& operator=(const SubscribeReq& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SubscribeReq& operator=(SubscribeReq&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SubscribeReq& default_instance() {
+    return *reinterpret_cast<const SubscribeReq*>(
+        &_SubscribeReq_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 7;
+  friend void swap(SubscribeReq& a, SubscribeReq& b) { a.Swap(&b); }
+  inline void Swap(SubscribeReq* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SubscribeReq* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SubscribeReq* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SubscribeReq>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SubscribeReq& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SubscribeReq& from) { SubscribeReq::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SubscribeReq* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "registry.SubscribeReq"; }
+
+  explicit SubscribeReq(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SubscribeReq(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SubscribeReq& from);
+  SubscribeReq(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SubscribeReq&& from) noexcept
+      : SubscribeReq(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kServiceTypesFieldNumber = 1,
+  };
+  // repeated string service_types = 1;
+  [[nodiscard]] int service_types_size()
+      const;
+  private:
+  int _internal_service_types_size() const;
+
+  public:
+  void clear_service_types() ;
+  [[nodiscard]] const ::std::string& service_types(int index) const;
+  ::std::string* PROTOBUF_NONNULL mutable_service_types(int index);
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_service_types(int index, Arg_&& value, Args_... args);
+  ::std::string* PROTOBUF_NONNULL add_service_types();
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void add_service_types(Arg_&& value, Args_... args);
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::std::string>&
+  service_types() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+  mutable_service_types();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::std::string>& _internal_service_types() const;
+  ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL _internal_mutable_service_types();
+
+  public:
+  // @@protoc_insertion_point(class_scope:registry.SubscribeReq)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<0, 1,
+                                   0, 43,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SubscribeReq& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField<::std::string> service_types_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_registry_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull SubscribeReq_class_data_;
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ServiceType final : public ::google::protobuf::Message
@@ -1540,6 +1763,247 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeEvent final : public ::google::
 };
 
 extern const ::google::protobuf::internal::ClassDataFull NodeEvent_class_data_;
+// -------------------------------------------------------------------
+
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribeRes_SnapshotEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::std::string, ::google::protobuf::Message,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_MESSAGE> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::std::string, ::google::protobuf::Message,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_MESSAGE>;
+  SubscribeRes_SnapshotEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr SubscribeRes_SnapshotEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized);
+  explicit SubscribeRes_SnapshotEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_default_instance() {
+    return &_SubscribeRes_SnapshotEntry_DoNotUse_default_instance_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_();
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_registry_2eproto;
+
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   1, 47,
+                                   2>
+      _table_;
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+};
+extern const ::google::protobuf::internal::ClassDataFull SubscribeRes_SnapshotEntry_DoNotUse_class_data_;
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribeRes final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:registry.SubscribeRes) */ {
+ public:
+  inline SubscribeRes() : SubscribeRes(nullptr) {}
+  ~SubscribeRes() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SubscribeRes* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SubscribeRes));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SubscribeRes(::google::protobuf::internal::ConstantInitialized);
+
+  inline SubscribeRes(const SubscribeRes& from) : SubscribeRes(nullptr, from) {}
+  inline SubscribeRes(SubscribeRes&& from) noexcept
+      : SubscribeRes(nullptr, ::std::move(from)) {}
+  inline SubscribeRes& operator=(const SubscribeRes& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SubscribeRes& operator=(SubscribeRes&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SubscribeRes& default_instance() {
+    return *reinterpret_cast<const SubscribeRes*>(
+        &_SubscribeRes_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(SubscribeRes& a, SubscribeRes& b) { a.Swap(&b); }
+  inline void Swap(SubscribeRes* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SubscribeRes* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SubscribeRes* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SubscribeRes>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SubscribeRes& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SubscribeRes& from) { SubscribeRes::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SubscribeRes* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "registry.SubscribeRes"; }
+
+  explicit SubscribeRes(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SubscribeRes(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SubscribeRes& from);
+  SubscribeRes(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SubscribeRes&& from) noexcept
+      : SubscribeRes(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSnapshotFieldNumber = 1,
+  };
+  // map<string, .registry.NodeList> snapshot = 1;
+  [[nodiscard]] int snapshot_size()
+      const;
+  private:
+  int _internal_snapshot_size() const;
+
+  public:
+  void clear_snapshot() ;
+  [[nodiscard]] const ::google::protobuf::Map<::std::string, ::registry::NodeList>& snapshot() const;
+  [[nodiscard]] ::google::protobuf::Map<::std::string, ::registry::NodeList>* PROTOBUF_NONNULL mutable_snapshot();
+
+  private:
+  const ::google::protobuf::Map<::std::string, ::registry::NodeList>& _internal_snapshot() const;
+  ::google::protobuf::Map<::std::string, ::registry::NodeList>* PROTOBUF_NONNULL _internal_mutable_snapshot();
+
+  public:
+  // @@protoc_insertion_point(class_scope:registry.SubscribeRes)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<0, 1,
+                                   2, 38,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SubscribeRes& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::MapField<SubscribeRes_SnapshotEntry_DoNotUse, ::std::string, ::registry::NodeList> snapshot_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_registry_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull SubscribeRes_class_data_;
 
 // ===================================================================
 
@@ -2304,6 +2768,120 @@ inline void ServiceType::set_allocated_service_type(::std::string* PROTOBUF_NULL
     _impl_.service_type_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:registry.ServiceType.service_type)
+}
+
+// -------------------------------------------------------------------
+
+// SubscribeReq
+
+// repeated string service_types = 1;
+inline int SubscribeReq::_internal_service_types_size() const {
+  return _internal_service_types().size();
+}
+inline int SubscribeReq::service_types_size() const {
+  return _internal_service_types_size();
+}
+inline void SubscribeReq::clear_service_types() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.service_types_.Clear();
+  ClearHasBitForRepeated(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::std::string* PROTOBUF_NONNULL SubscribeReq::add_service_types()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::std::string* _s =
+      _internal_mutable_service_types()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add_mutable:registry.SubscribeReq.service_types)
+  return _s;
+}
+inline const ::std::string& SubscribeReq::service_types(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:registry.SubscribeReq.service_types)
+  return _internal_service_types().Get(index);
+}
+inline ::std::string* PROTOBUF_NONNULL SubscribeReq::mutable_service_types(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:registry.SubscribeReq.service_types)
+  return _internal_mutable_service_types()->Mutable(index);
+}
+template <typename Arg_, typename... Args_>
+inline void SubscribeReq::set_service_types(int index, Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::AssignToString(*_internal_mutable_service_types()->Mutable(index), ::std::forward<Arg_>(value),
+                        args... );
+  // @@protoc_insertion_point(field_set:registry.SubscribeReq.service_types)
+}
+template <typename Arg_, typename... Args_>
+inline void SubscribeReq::add_service_types(Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::google::protobuf::internal::AddToRepeatedPtrField(
+      ::google::protobuf::MessageLite::internal_visibility(), GetArena(),
+      *_internal_mutable_service_types(), ::std::forward<Arg_>(value),
+      args... );
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:registry.SubscribeReq.service_types)
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>& SubscribeReq::service_types()
+    const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:registry.SubscribeReq.service_types)
+  return _internal_service_types();
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+SubscribeReq::mutable_service_types() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:registry.SubscribeReq.service_types)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_service_types();
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>&
+SubscribeReq::_internal_service_types() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.service_types_;
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+SubscribeReq::_internal_mutable_service_types() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.service_types_;
+}
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// SubscribeRes
+
+// map<string, .registry.NodeList> snapshot = 1;
+inline int SubscribeRes::_internal_snapshot_size() const {
+  return _internal_snapshot().size();
+}
+inline int SubscribeRes::snapshot_size() const {
+  return _internal_snapshot_size();
+}
+inline void SubscribeRes::clear_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.snapshot_.Clear();
+  ClearHasBitForRepeated(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::google::protobuf::Map<::std::string, ::registry::NodeList>& SubscribeRes::_internal_snapshot() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.snapshot_.GetMap();
+}
+inline const ::google::protobuf::Map<::std::string, ::registry::NodeList>& SubscribeRes::snapshot() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:registry.SubscribeRes.snapshot)
+  return _internal_snapshot();
+}
+inline ::google::protobuf::Map<::std::string, ::registry::NodeList>* PROTOBUF_NONNULL SubscribeRes::_internal_mutable_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.snapshot_.MutableMap();
+}
+inline ::google::protobuf::Map<::std::string, ::registry::NodeList>* PROTOBUF_NONNULL SubscribeRes::mutable_snapshot()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_map:registry.SubscribeRes.snapshot)
+  return _internal_mutable_snapshot();
 }
 
 #ifdef __GNUC__

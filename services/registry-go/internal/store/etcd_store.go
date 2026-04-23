@@ -128,3 +128,44 @@ func (e *EtcdStore) Watch(ctx context.Context, serviceType string) (<-chan *regi
 
 	return out, nil
 }
+
+func (e *EtcdStore) Subscribe(ctx context.Context, serviceType string) (<-chan *registry.NodeEvent, []*registry.NodeInfo, error) {
+	// 获取当前全量
+	nodes, err := e.Discover(ctx, serviceType)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 创建事件通道并启动 Watch（仅增量，不重复发送全量）
+	out := make(chan *registry.NodeEvent, 16)
+	watchCh := e.client.Watch(ctx, prefixKey(serviceType), clientv3.WithPrefix())
+
+	go func() {
+		defer close(out)
+		for watchResp := range watchCh {
+			if watchResp.Err() != nil {
+				return
+			}
+			for _, ev := range watchResp.Events {
+				var node registry.NodeInfo
+				if err := proto.Unmarshal(ev.Kv.Value, &node); err != nil {
+					continue
+				}
+				var tp registry.NodeEvent_Type
+				switch ev.Type {
+				case clientv3.EventTypePut:
+					tp = registry.NodeEvent_JOIN
+				case clientv3.EventTypeDelete:
+					tp = registry.NodeEvent_LEAVE
+				}
+				select {
+				case out <- &registry.NodeEvent{Type: tp, Node: &node}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	return out, nodes, nil
+}

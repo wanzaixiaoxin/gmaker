@@ -11,6 +11,7 @@ import (
 
 	"github.com/gmaker/luffa/common/go/net"
 	pb "github.com/gmaker/luffa/gen/go/biz"
+	protocol "github.com/gmaker/luffa/gen/go/protocol"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -76,7 +77,7 @@ func main() {
 	pkt := &net.Packet{
 		Header: net.Header{
 			Magic:  net.MagicValue,
-			CmdID:  0x00020001, // CmdPing from cmd_ids.yaml
+			CmdID:  uint32(protocol.CmdBiz_CMD_BIZ_PING),
 			SeqID:  1,
 			Flags:  uint32(net.FlagRPCReq),
 			Length: uint32(net.HeaderSize + len(payload)),
