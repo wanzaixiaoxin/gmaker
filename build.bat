@@ -28,7 +28,7 @@ echo.
 echo [Phase 1/2] Building Go services ...
 echo ------------------------------------------
 
-set GO_SERVICES=registry-go dbproxy-go login-go biz-go logstats-go bot-go
+set GO_SERVICES=registry-go dbproxy-go login-go biz-go chat-go logstats-go bot-go
 set GO_TOOLS=testclient
 
 for %%s in (%GO_SERVICES%) do (

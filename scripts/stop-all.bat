@@ -9,6 +9,7 @@ taskkill /F /IM registry-go.exe 2>nul
 taskkill /F /IM biz-go.exe 2>nul
 taskkill /F /IM dbproxy-go.exe 2>nul
 taskkill /F /IM logstats-go.exe 2>nul
+taskkill /F /IM chat-go.exe 2>nul
 
 echo Stopping C++ services ...
 taskkill /F /IM gateway-cpp.exe 2>nul

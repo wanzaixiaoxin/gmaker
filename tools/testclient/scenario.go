@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -149,13 +150,28 @@ func (s *FloodScenario) Run(bot *Bot, stats *GlobalStats, stopCh <-chan struct{}
 }
 
 // ChatScenario 聊天室测试场景
-type ChatScenario struct{}
+type ChatScenario struct {
+	roomID     uint64
+	roomIDMu   sync.RWMutex
+	roomIDOnce sync.Once
+}
 
 func (s *ChatScenario) Name() string { return "chat" }
 
+func (s *ChatScenario) setRoomID(id uint64) {
+	s.roomIDMu.Lock()
+	s.roomID = id
+	s.roomIDMu.Unlock()
+}
+
+func (s *ChatScenario) getRoomID() uint64 {
+	s.roomIDMu.RLock()
+	defer s.roomIDMu.RUnlock()
+	return s.roomID
+}
+
 func (s *ChatScenario) Run(bot *Bot, stats *GlobalStats, stopCh <-chan struct{}) error {
 	// 创建房间（只有 bot 0 创建）
-	var roomID uint64
 	if bot.id == 0 {
 		start := time.Now()
 		room, err := bot.CreateRoom(fmt.Sprintf("test_room_%d", bot.id), uint64(bot.id))
@@ -163,17 +179,25 @@ func (s *ChatScenario) Run(bot *Bot, stats *GlobalStats, stopCh <-chan struct{})
 		if err != nil {
 			return fmt.Errorf("bot %d create room failed: %w", bot.id, err)
 		}
-		roomID = room.RoomId
-		fmt.Printf("[Chat] Bot %d created room %d\n", bot.id, roomID)
+		s.setRoomID(room.RoomId)
+		fmt.Printf("[Chat] Bot %d created room %d\n", bot.id, room.RoomId)
 	} else {
-		// 其他 bot 等待房间创建（简化：固定 roomID = 1）
-		roomID = 1
-		// 等待一小段时间确保房间已创建
-		select {
-		case <-stopCh:
-			return nil
-		case <-time.After(500 * time.Millisecond):
+		// 其他 bot 等待房间创建
+		for i := 0; i < 10; i++ {
+			if s.getRoomID() != 0 {
+				break
+			}
+			select {
+			case <-stopCh:
+				return nil
+			case <-time.After(100 * time.Millisecond):
+			}
 		}
+	}
+
+	roomID := s.getRoomID()
+	if roomID == 0 {
+		return fmt.Errorf("bot %d: room not created", bot.id)
 	}
 
 	// 加入房间
