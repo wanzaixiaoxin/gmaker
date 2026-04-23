@@ -61,9 +61,17 @@ private:
     void RunEventLoop();
 
     Config cfg_;
+
+    // Accept loop：只负责监听和接受连接
     std::unique_ptr<AsyncEventLoop> loop_;
     std::unique_ptr<AsyncTCPListener> listener_;
     std::thread loop_thread_;
+
+    // Worker loops：按 round-robin 分发连接，每个 worker 独立处理 I/O
+    std::vector<std::unique_ptr<AsyncEventLoop>> worker_loops_;
+    std::vector<std::thread> worker_threads_;
+    std::atomic<size_t> next_worker_{0};
+
     std::atomic<bool> running_{false};
     std::atomic<uint64_t> conn_id_counter_{0};
 

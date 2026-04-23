@@ -211,7 +211,6 @@ void AsyncTCPConnection::OnRead(uv_stream_t* stream, ssize_t nread, const uv_buf
                                    reinterpret_cast<uint8_t*>(buf->base) + nread);
             // 读缓冲区上限检查（慢连接攻击防护）
             if (conn->read_buf_.size() - conn->read_consumed_ > MAX_READ_BUF_BYTES) {
-                conn->read_mtx_.unlock();
                 conn->Close();
                 return;
             }
@@ -270,8 +269,8 @@ void AsyncTCPConnection::ProcessReadBuffer() {
         size_t payload_len = length - HEADER_SIZE;
         net::Buffer payload;
         if (payload_len > 0) {
-            std::vector<uint8_t> tmp(p + HEADER_SIZE, p + HEADER_SIZE + payload_len);
-            payload = net::Buffer::FromVector(std::move(tmp));
+            payload = net::Buffer::Allocate(payload_len);
+            std::memcpy(payload.Data(), p + HEADER_SIZE, payload_len);
         }
 
         read_consumed_ += length;
@@ -367,7 +366,8 @@ void AsyncTCPConnection::ProcessWriteQueue() {
 
 void AsyncTCPConnection::OnWriteDone(uv_write_t* req, int status) {
     auto* wr = reinterpret_cast<WriteReq*>(req);
-    auto* conn = static_cast<AsyncTCPConnection*>(wr->req.data);
+    // 通过 shared_ptr 保持对象存活，防止 OnCloseDone 已销毁对象后出现 use-after-free
+    auto conn = wr->conn;
     delete wr;
 
     if (!conn) return;
@@ -381,18 +381,19 @@ void AsyncTCPConnection::OnWriteDone(uv_write_t* req, int status) {
 }
 
 void AsyncTCPConnection::OnCloseDone(uv_handle_t* handle) {
-    auto* conn = static_cast<AsyncTCPConnection*>(handle->data);
+    auto* raw_conn = static_cast<AsyncTCPConnection*>(handle->data);
     delete (uv_tcp_t*)handle;
-    if (!conn) return;
+    if (!raw_conn) return;
 
-    auto cb = std::move(conn->on_close_);
-    conn->handle_ = nullptr;
-    // 释放 keep_alive，允许对象被销毁
-    conn->keep_alive_.reset();
+    auto cb = std::move(raw_conn->on_close_);
+    raw_conn->handle_ = nullptr;
 
+    // 先执行回调，再释放 keep_alive，避免回调中访问已销毁的对象
     if (cb) {
-        cb(conn);
+        cb(raw_conn);
     }
+
+    raw_conn->keep_alive_.reset();
 }
 
 } // namespace async

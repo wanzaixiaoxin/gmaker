@@ -14,6 +14,8 @@
 #include <thread>
 #include <vector>
 #include <cstring>
+#include <fstream>
+#include <exception>
 
 #include "gs/net/packet.hpp"
 #include "gs/net/async/tcp_server.hpp"
@@ -22,6 +24,30 @@ using namespace gs::net;
 using namespace gs::net::async;
 
 static std::atomic<bool> g_running{true};
+
+static void LogCrash(const char* msg) {
+    std::ofstream f("server_crash_dump.log", std::ios::app);
+    f << "[" << std::chrono::duration_cast<std::chrono::seconds>(
+             std::chrono::steady_clock::now().time_since_epoch()).count()
+      << "] CRASH: " << msg << std::endl;
+    f.flush();
+}
+
+#ifdef _WIN32
+static LONG WINAPI ExceptionFilter(EXCEPTION_POINTERS* ep) {
+    char buf[256];
+    snprintf(buf, sizeof(buf), "Unhandled exception code=0x%08X at address=0x%p",
+             ep->ExceptionRecord->ExceptionCode,
+             ep->ExceptionRecord->ExceptionAddress);
+    LogCrash(buf);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+#endif
+
+static void TerminateHandler() {
+    LogCrash("std::terminate called");
+    std::abort();
+}
 static std::atomic<uint64_t> g_packets_received{0};
 static std::atomic<uint64_t> g_packets_echoed{0};
 static std::atomic<uint64_t> g_packets_broadcast{0};
@@ -54,6 +80,11 @@ Buffer MakeBroadcastPacket(int seq_id, int payload_size) {
 }
 
 int main(int argc, char* argv[]) {
+#ifdef _WIN32
+    SetUnhandledExceptionFilter(ExceptionFilter);
+#endif
+    std::set_terminate(TerminateHandler);
+
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <port> [broadcast_interval_ms] [broadcast_payload_size]" << std::endl;
         std::cerr << "  port: listen port" << std::endl;
@@ -87,7 +118,7 @@ int main(int argc, char* argv[]) {
             g_bytes_received.fetch_add(pkt.header.length);
 
             if (pkt.header.cmd_id == 0xE001) {
-                // Echo
+                // Echo：使用框架标准接口 SendPacket
                 conn->SendPacket(pkt);
                 g_packets_echoed.fetch_add(1);
             }

@@ -16,6 +16,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <csignal>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -29,6 +30,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
 #endif
 
 #include "gs/net/packet.hpp"
@@ -36,6 +39,11 @@
 using namespace gs::net;
 
 static bool g_wsa_initialized = false;
+static std::atomic<bool> g_running{true};
+
+void SignalHandler(int) {
+    g_running.store(false);
+}
 
 bool InitNetwork() {
 #ifdef _WIN32
@@ -61,6 +69,8 @@ int CreateSocket() {
 #else
     if (sock < 0) return -1;
 #endif
+    int nodelay = 1;
+    setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (const char*)&nodelay, sizeof(nodelay));
     return sock;
 }
 
@@ -69,6 +79,32 @@ void CloseSocket(int sock) {
     closesocket(sock);
 #else
     close(sock);
+#endif
+}
+
+int GetSocketError() {
+#ifdef _WIN32
+    return WSAGetLastError();
+#else
+    return errno;
+#endif
+}
+
+bool IsWouldBlock(int err) {
+#ifdef _WIN32
+    return err == WSAEWOULDBLOCK;
+#else
+    return err == EAGAIN || err == EWOULDBLOCK;
+#endif
+}
+
+void SetNonBlocking(int sock) {
+#ifdef _WIN32
+    u_long mode = 1;
+    ioctlsocket(sock, FIONBIO, &mode);
+#else
+    int flags = fcntl(sock, F_GETFL, 0);
+    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
 #endif
 }
 
@@ -277,87 +313,250 @@ bool TestCorrectness(const std::string& host, uint16_t port,
 // ========================================================================
 
 struct ThroughputResult {
-    int packets_sent = 0;
+    std::atomic<int> packets_sent{0};
     double elapsed_sec = 0;
 };
 
 void ThroughputClient(const std::string& host, uint16_t port,
+                      int conn_start, int conn_count,
                       int duration_ms, int payload_size,
                       std::atomic<int>& ready_count,
                       std::atomic<bool>& start_flag,
                       ThroughputResult& out) {
-    int sock = CreateSocket();
-    if (sock < 0 || !ConnectSocket(sock, host, port)) {
-        if (sock >= 0) CloseSocket(sock);
-        ready_count.fetch_add(1);
-        return;
-    }
-    std::mt19937 rng(12345);
-    ready_count.fetch_add(1);
-    while (!start_flag.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    struct Conn {
+        int sock = -1;
+        int seq = 0;
+        int send_offset = 0;
+        std::vector<uint8_t> send_buf;
+    };
+    std::vector<Conn> conns(conn_count);
 
-    // 启动后台读取线程，不断读取并丢弃服务器的 Echo 数据，避免 TCP 窗口阻塞发送
-    std::atomic<bool> stop_read{false};
-    std::thread reader([&sock, &stop_read]() {
-        while (!stop_read.load()) {
-            fd_set fds;
-            FD_ZERO(&fds);
-            FD_SET(sock, &fds);
-            timeval tv{};
-            tv.tv_usec = 10000; // 10ms
-            int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
-            if (ret > 0 && FD_ISSET(sock, &fds)) {
-                uint8_t buf[8192];
-                int n = recv(sock, (char*)buf, sizeof(buf), 0);
-                if (n <= 0) break;
-            } else if (ret < 0) {
-                break;
+    // 预生成随机 payload 模板
+    std::mt19937 rng(12345 + conn_start);
+    std::vector<uint8_t> payload(payload_size);
+    WriteU32BE(payload.data(), 0);
+    WriteU32BE(payload.data() + 4, 0);
+    for (size_t i = 8; i < payload.size(); ++i) {
+        payload[i] = static_cast<uint8_t>(rng());
+    }
+
+    // 创建 socket、连接、切非阻塞、初始化每个连接的独立 send_buf
+    for (int i = 0; i < conn_count; ++i) {
+        conns[i].sock = CreateSocket();
+        if (conns[i].sock < 0) continue;
+
+        // 增大缓冲区，减少部分发送概率
+        int sndbuf = 256 * 1024;
+        int rcvbuf = 256 * 1024;
+        setsockopt(conns[i].sock, SOL_SOCKET, SO_SNDBUF, (char*)&sndbuf, sizeof(sndbuf));
+        setsockopt(conns[i].sock, SOL_SOCKET, SO_RCVBUF, (char*)&rcvbuf, sizeof(rcvbuf));
+
+        if (!ConnectSocket(conns[i].sock, host, port)) {
+            CloseSocket(conns[i].sock);
+            conns[i].sock = -1;
+            continue;
+        }
+        SetNonBlocking(conns[i].sock);
+
+        conns[i].send_buf.resize(HEADER_SIZE + payload_size);
+        WriteU32BE(conns[i].send_buf.data() + 0, HEADER_SIZE + payload_size);
+        WriteU16BE(conns[i].send_buf.data() + 4, MAGIC_VALUE);
+        WriteU32BE(conns[i].send_buf.data() + 6, 0xE001);
+        WriteU32BE(conns[i].send_buf.data() + 14, 0);
+        std::memcpy(conns[i].send_buf.data() + HEADER_SIZE, payload.data(), payload_size);
+        WriteU32BE(conns[i].send_buf.data() + 10, conns[i].seq++);
+    }
+
+    ready_count.fetch_add(1);
+    while (!start_flag.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    bool infinite = (duration_ms <= 0);
+    auto t_start = std::chrono::high_resolution_clock::now();
+
+    while (g_running.load()) {
+        if (!infinite) {
+            auto now = std::chrono::high_resolution_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - t_start).count();
+            if (elapsed >= duration_ms) break;
+        }
+
+        // 重连断开的连接
+        for (auto& conn : conns) {
+            if (conn.sock >= 0) continue;
+            conn.sock = CreateSocket();
+            if (conn.sock < 0) continue;
+            int sndbuf = 256 * 1024;
+            int rcvbuf = 256 * 1024;
+            setsockopt(conn.sock, SOL_SOCKET, SO_SNDBUF, (char*)&sndbuf, sizeof(sndbuf));
+            setsockopt(conn.sock, SOL_SOCKET, SO_RCVBUF, (char*)&rcvbuf, sizeof(rcvbuf));
+            if (!ConnectSocket(conn.sock, host, port)) {
+                CloseSocket(conn.sock);
+                conn.sock = -1;
+                continue;
+            }
+            SetNonBlocking(conn.sock);
+            conn.send_offset = 0;
+            conn.send_buf.resize(HEADER_SIZE + payload_size);
+            WriteU32BE(conn.send_buf.data() + 0, HEADER_SIZE + payload_size);
+            WriteU16BE(conn.send_buf.data() + 4, MAGIC_VALUE);
+            WriteU32BE(conn.send_buf.data() + 6, 0xE001);
+            WriteU32BE(conn.send_buf.data() + 14, 0);
+            std::memcpy(conn.send_buf.data() + HEADER_SIZE, payload.data(), payload_size);
+            WriteU32BE(conn.send_buf.data() + 10, conn.seq++);
+        }
+
+        // 构建 select fd_set
+        fd_set read_fds, write_fds;
+        FD_ZERO(&read_fds);
+        FD_ZERO(&write_fds);
+        int max_fd = -1;
+        int active = 0;
+        for (auto& conn : conns) {
+            if (conn.sock < 0) continue;
+            FD_SET(conn.sock, &read_fds);
+            FD_SET(conn.sock, &write_fds);
+            if (conn.sock > max_fd) max_fd = conn.sock;
+            active++;
+        }
+
+        if (active == 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+
+        timeval tv{};
+        tv.tv_usec = 1000; // 1ms 超时，没有事件时线程挂起
+        int ret = select(max_fd + 1, &read_fds, &write_fds, nullptr, &tv);
+        if (ret <= 0) continue;
+
+        for (auto& conn : conns) {
+            if (conn.sock < 0) continue;
+
+            // 可读
+            if (FD_ISSET(conn.sock, &read_fds)) {
+                while (true) {
+                    uint8_t buf[65536];
+                    int n = recv(conn.sock, (char*)buf, sizeof(buf), 0);
+                    if (n > 0) {
+                        continue;
+                    } else if (n == 0) {
+                        CloseSocket(conn.sock);
+                        conn.sock = -1;
+                        conn.send_offset = 0;
+                        break;
+                    } else {
+                        int err = GetSocketError();
+                        if (IsWouldBlock(err)) {
+                            break;
+                        } else {
+                            CloseSocket(conn.sock);
+                            conn.sock = -1;
+                            conn.send_offset = 0;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (conn.sock < 0) continue;
+
+            // 可写：发送数据（支持部分发送续传）
+            if (FD_ISSET(conn.sock, &write_fds)) {
+                const uint8_t* data = conn.send_buf.data() + conn.send_offset;
+                int len = (int)conn.send_buf.size() - conn.send_offset;
+                int n = send(conn.sock, (char*)data, len, 0);
+                if (n > 0) {
+                    conn.send_offset += n;
+                    if (conn.send_offset >= (int)conn.send_buf.size()) {
+                        // 完整包发送成功，准备下一个包
+                        conn.send_offset = 0;
+                        WriteU32BE(conn.send_buf.data() + 10, conn.seq++);
+                        out.packets_sent++;
+                    }
+                } else if (n < 0) {
+                    int err = GetSocketError();
+                    if (!IsWouldBlock(err)) {
+                        CloseSocket(conn.sock);
+                        conn.sock = -1;
+                        conn.send_offset = 0;
+                    }
+                }
             }
         }
-    });
+    }
 
-    auto t_start = std::chrono::high_resolution_clock::now();
-    int seq = 0;
-    while (true) {
-        auto now = std::chrono::high_resolution_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - t_start).count();
-        if (elapsed >= duration_ms) break;
-        auto buf = BuildTestPacket(0, seq++, payload_size, rng);
-        if (!SendAll(sock, buf.Data(), buf.Size(), 5000)) break;
-        out.packets_sent++;
+    for (auto& conn : conns) {
+        if (conn.sock >= 0) CloseSocket(conn.sock);
     }
     out.elapsed_sec = std::chrono::duration<double>(
         std::chrono::high_resolution_clock::now() - t_start).count();
-
-    stop_read.store(true);
-    // 强制关闭 socket 以打断可能阻塞在 select/recv 的读取线程
-    CloseSocket(sock);
-    if (reader.joinable()) reader.join();
 }
 
 bool TestThroughput(const std::string& host, uint16_t port,
                     int num_clients, int duration_ms, int payload_size) {
+    bool infinite = (duration_ms <= 0);
     std::cout << "\n========== Throughput Test ==========" << std::endl;
     std::cout << "Host: " << host << ":" << port
-              << " | Clients: " << num_clients
-              << " | Duration: " << duration_ms << "ms"
-              << " | Payload: " << payload_size << " bytes" << std::endl;
+              << " | Clients: " << num_clients;
+    if (infinite) {
+        std::cout << " | Duration: INFINITE (Press Ctrl+C to stop)";
+    } else {
+        std::cout << " | Duration: " << duration_ms << "ms";
+    }
+    std::cout << " | Payload: " << payload_size << " bytes" << std::endl;
+
+    // 计算工作线程数：最多 CPU核心×2，避免创建过多线程
+    unsigned hw = std::thread::hardware_concurrency();
+    if (hw == 0) hw = 4;
+    int num_threads = std::min(num_clients, static_cast<int>(hw * 2));
+    if (num_threads < 1) num_threads = 1;
+    int base_conns = num_clients / num_threads;
+    int remainder = num_clients % num_threads;
+    std::cout << "Workers: " << num_threads << " threads x ~"
+              << base_conns << " conns/thread" << std::endl;
 
     std::atomic<int> ready_count{0};
     std::atomic<bool> start_flag{false};
-    std::vector<ThroughputResult> results(num_clients);
+    std::vector<ThroughputResult> results(num_threads);
     std::vector<std::thread> threads;
 
-    for (int i = 0; i < num_clients; ++i) {
-        threads.emplace_back(ThroughputClient, host, port, duration_ms, payload_size,
+    int conn_offset = 0;
+    for (int i = 0; i < num_threads; ++i) {
+        int conn_count = base_conns + (i < remainder ? 1 : 0);
+        threads.emplace_back(ThroughputClient, host, port, conn_offset, conn_count,
+                             duration_ms, payload_size,
                              std::ref(ready_count), std::ref(start_flag), std::ref(results[i]));
+        conn_offset += conn_count;
     }
-    while (ready_count.load() < num_clients) {
+    while (ready_count.load() < num_threads) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     auto t0 = std::chrono::high_resolution_clock::now();
     start_flag.store(true);
-    for (auto& t : threads) t.join();
+
+    if (infinite) {
+        std::cout << "Flooding... Press Ctrl+C to stop." << std::endl;
+        std::vector<int> last_sent(num_threads, 0);
+        while (g_running.load()) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            int total = 0, delta = 0;
+            for (int i = 0; i < num_threads; ++i) {
+                int curr = results[i].packets_sent.load();
+                total += curr;
+                delta += curr - last_sent[i];
+                last_sent[i] = curr;
+            }
+            std::cout << "[CLIENT] total_sent=" << total << " (" << delta << "/s)" << std::endl;
+        }
+        for (auto& t : threads) {
+            if (t.joinable()) t.join();
+        }
+    } else {
+        for (auto& t : threads) t.join();
+    }
     auto t1 = std::chrono::high_resolution_clock::now();
 
     int total_sent = 0;
@@ -584,9 +783,12 @@ void PrintUsage(const char* prog) {
               << "  " << prog << " throughput  <host> <port> <clients> <duration_ms> <payload_size>\n"
               << "  " << prog << " latency     <host> <port> <samples> <payload_size>\n"
               << "  " << prog << " broadcast   <host> <port> <clients> <duration_ms> <payload_size>\n"
+              << "\nNotes:\n"
+              << "  throughput: duration_ms=0 means infinite flood until Ctrl+C\n"
               << "\nExamples:\n"
               << "  " << prog << " correctness 127.0.0.1 19999 50 500 256\n"
               << "  " << prog << " throughput  127.0.0.1 19999 10 5000 256\n"
+              << "  " << prog << " throughput  127.0.0.1 19999 10 0 256       (infinite)\n"
               << "  " << prog << " latency     127.0.0.1 19999 1000 256\n"
               << "  " << prog << " broadcast   127.0.0.1 19999 100 10000 256\n";
 }
@@ -596,6 +798,13 @@ int main(int argc, char* argv[]) {
         PrintUsage(argv[0]);
         return 1;
     }
+
+    std::signal(SIGINT, SignalHandler);
+#ifdef _WIN32
+    std::signal(SIGBREAK, SignalHandler);
+#else
+    std::signal(SIGTERM, SignalHandler);
+#endif
 
     std::string mode = argv[1];
     if (!InitNetwork()) {
