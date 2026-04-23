@@ -9,6 +9,7 @@ import (
 
 	"github.com/gmaker/luffa/common/go/net"
 	"github.com/gmaker/luffa/gen/go/biz"
+	"github.com/gmaker/luffa/gen/go/chat"
 	"github.com/gmaker/luffa/gen/go/login"
 	"google.golang.org/protobuf/proto"
 )
@@ -23,6 +24,20 @@ const (
 	CmdUpdatePlayerRes uint32 = 0x00010007
 	CmdPing            uint32 = 0x00010004
 	CmdPong            uint32 = 0x00010005
+
+	CmdChatCreateRoomReq uint32 = 0x00030000
+	CmdChatCreateRoomRes uint32 = 0x00030001
+	CmdChatJoinRoomReq   uint32 = 0x00030002
+	CmdChatJoinRoomRes   uint32 = 0x00030003
+	CmdChatLeaveRoomReq  uint32 = 0x00030004
+	CmdChatLeaveRoomRes  uint32 = 0x00030005
+	CmdChatSendMsgReq    uint32 = 0x00030006
+	CmdChatSendMsgRes    uint32 = 0x00030007
+	CmdChatMsgNotify     uint32 = 0x00030008
+	CmdChatGetHistoryReq uint32 = 0x00030009
+	CmdChatGetHistoryRes uint32 = 0x0003000A
+	CmdChatCloseRoomReq  uint32 = 0x0003000B
+	CmdChatCloseRoomRes  uint32 = 0x0003000C
 )
 
 // Bot 表示一个模拟客户端
@@ -247,4 +262,126 @@ func (b *Bot) Ping() (*biz.Pong, error) {
 		return nil, err
 	}
 	return res, nil
+}
+
+// ==================== 聊天室方法 ====================
+
+func (b *Bot) CreateRoom(name string, creatorID uint64) (*chat.ChatRoomInfo, error) {
+	req := &chat.ChatCreateRoomReq{Name: name, CreatorId: creatorID}
+	data, err := proto.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	resPkt, err := b.CallWithTimeout(CmdChatCreateRoomReq, data, 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	res := &chat.ChatCreateRoomRes{}
+	if err := proto.Unmarshal(resPkt.Payload, res); err != nil {
+		return nil, err
+	}
+	if res.Result != nil && res.Result.Code != 0 {
+		return nil, fmt.Errorf("create room failed: code=%d", res.Result.Code)
+	}
+	return res.Room, nil
+}
+
+func (b *Bot) JoinRoom(roomID, playerID uint64) (*chat.ChatJoinRoomRes, error) {
+	req := &chat.ChatJoinRoomReq{RoomId: roomID, PlayerId: playerID}
+	data, err := proto.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	resPkt, err := b.CallWithTimeout(CmdChatJoinRoomReq, data, 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	res := &chat.ChatJoinRoomRes{}
+	if err := proto.Unmarshal(resPkt.Payload, res); err != nil {
+		return nil, err
+	}
+	if res.Result != nil && res.Result.Code != 0 {
+		return nil, fmt.Errorf("join room failed: code=%d msg=%s", res.Result.Code, res.Result.Msg)
+	}
+	return res, nil
+}
+
+func (b *Bot) LeaveRoom(roomID, playerID uint64) error {
+	req := &chat.ChatLeaveRoomReq{RoomId: roomID, PlayerId: playerID}
+	data, err := proto.Marshal(req)
+	if err != nil {
+		return err
+	}
+	resPkt, err := b.CallWithTimeout(CmdChatLeaveRoomReq, data, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	res := &chat.ChatLeaveRoomRes{}
+	if err := proto.Unmarshal(resPkt.Payload, res); err != nil {
+		return err
+	}
+	if res.Result != nil && res.Result.Code != 0 {
+		return fmt.Errorf("leave room failed: code=%d", res.Result.Code)
+	}
+	return nil
+}
+
+func (b *Bot) SendMsg(roomID, senderID uint64, content string) (*chat.ChatMessage, error) {
+	req := &chat.ChatSendMsgReq{RoomId: roomID, SenderId: senderID, Content: content}
+	data, err := proto.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	resPkt, err := b.CallWithTimeout(CmdChatSendMsgReq, data, 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	res := &chat.ChatSendMsgRes{}
+	if err := proto.Unmarshal(resPkt.Payload, res); err != nil {
+		return nil, err
+	}
+	if res.Result != nil && res.Result.Code != 0 {
+		return nil, fmt.Errorf("send msg failed: code=%d", res.Result.Code)
+	}
+	return res.Msg, nil
+}
+
+func (b *Bot) GetHistory(roomID uint64, limit uint32) ([]*chat.ChatMessage, error) {
+	req := &chat.ChatGetHistoryReq{RoomId: roomID, Limit: limit}
+	data, err := proto.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	resPkt, err := b.CallWithTimeout(CmdChatGetHistoryReq, data, 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	res := &chat.ChatGetHistoryRes{}
+	if err := proto.Unmarshal(resPkt.Payload, res); err != nil {
+		return nil, err
+	}
+	if res.Result != nil && res.Result.Code != 0 {
+		return nil, fmt.Errorf("get history failed: code=%d", res.Result.Code)
+	}
+	return res.Msgs, nil
+}
+
+func (b *Bot) CloseRoom(roomID, operatorID uint64) error {
+	req := &chat.ChatCloseRoomReq{RoomId: roomID, OperatorId: operatorID}
+	data, err := proto.Marshal(req)
+	if err != nil {
+		return err
+	}
+	resPkt, err := b.CallWithTimeout(CmdChatCloseRoomReq, data, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	res := &chat.ChatCloseRoomRes{}
+	if err := proto.Unmarshal(resPkt.Payload, res); err != nil {
+		return err
+	}
+	if res.Result != nil && res.Result.Code != 0 {
+		return fmt.Errorf("close room failed: code=%d", res.Result.Code)
+	}
+	return nil
 }

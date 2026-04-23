@@ -24,6 +24,7 @@ const (
 	FlagRPCRes    Flag = 1 << 5
 	FlagRPCFF     Flag = 1 << 6
 	FlagHeartbeat Flag = 1 << 7
+	FlagRoomBcast Flag = 1 << 8 // 按聊天室广播，payload 前 8 字节为 room_id（大端序）
 )
 
 // Header 固定 18 字节包头

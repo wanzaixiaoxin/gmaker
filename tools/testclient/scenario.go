@@ -147,3 +147,82 @@ func (s *FloodScenario) Run(bot *Bot, stats *GlobalStats, stopCh <-chan struct{}
 		stats.Record(err == nil, time.Since(start))
 	}
 }
+
+// ChatScenario 聊天室测试场景
+type ChatScenario struct{}
+
+func (s *ChatScenario) Name() string { return "chat" }
+
+func (s *ChatScenario) Run(bot *Bot, stats *GlobalStats, stopCh <-chan struct{}) error {
+	// 创建房间（只有 bot 0 创建）
+	var roomID uint64
+	if bot.id == 0 {
+		start := time.Now()
+		room, err := bot.CreateRoom(fmt.Sprintf("test_room_%d", bot.id), uint64(bot.id))
+		stats.Record(err == nil, time.Since(start))
+		if err != nil {
+			return fmt.Errorf("bot %d create room failed: %w", bot.id, err)
+		}
+		roomID = room.RoomId
+		fmt.Printf("[Chat] Bot %d created room %d\n", bot.id, roomID)
+	} else {
+		// 其他 bot 等待房间创建（简化：固定 roomID = 1）
+		roomID = 1
+		// 等待一小段时间确保房间已创建
+		select {
+		case <-stopCh:
+			return nil
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+
+	// 加入房间
+	start := time.Now()
+	joinRes, err := bot.JoinRoom(roomID, uint64(bot.id))
+	stats.Record(err == nil, time.Since(start))
+	if err != nil {
+		return fmt.Errorf("bot %d join room failed: %w", bot.id, err)
+	}
+	fmt.Printf("[Chat] Bot %d joined room %d, got %d recent msgs\n", bot.id, roomID, len(joinRes.RecentMsgs))
+
+	// 发送消息
+	for i := 0; i < 3; i++ {
+		select {
+		case <-stopCh:
+			return nil
+		default:
+		}
+		start = time.Now()
+		_, err = bot.SendMsg(roomID, uint64(bot.id), fmt.Sprintf("hello from bot %d msg %d", bot.id, i))
+		stats.Record(err == nil, time.Since(start))
+		if err != nil {
+			fmt.Printf("[Chat] Bot %d send msg failed: %v\n", bot.id, err)
+		}
+		select {
+		case <-stopCh:
+			return nil
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+
+	// bot 0 关闭房间
+	if bot.id == 0 {
+		select {
+		case <-stopCh:
+			return nil
+		case <-time.After(1 * time.Second):
+		}
+		start = time.Now()
+		err = bot.CloseRoom(roomID, uint64(bot.id))
+		stats.Record(err == nil, time.Since(start))
+		if err != nil {
+			fmt.Printf("[Chat] Bot %d close room failed: %v\n", bot.id, err)
+		} else {
+			fmt.Printf("[Chat] Bot %d closed room %d\n", bot.id, roomID)
+		}
+	}
+
+	// 等待关闭信号
+	<-stopCh
+	return nil
+}

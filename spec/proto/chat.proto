@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package chat;
+option go_package = "github.com/gmaker/luffa/gen/go/chat";
+
+import "common.proto";
+
+// ==================== 聊天室基础数据 ====================
+
+message ChatRoomInfo {
+    uint64 room_id     = 1;
+    string name        = 2;
+    uint64 creator_id  = 3;
+    uint32 status      = 4;  // 0=active, 1=closed
+    uint64 created_at  = 5;
+    uint64 closed_at   = 6;
+}
+
+message ChatMessage {
+    uint64 msg_id      = 1;
+    uint64 room_id     = 2;
+    uint64 sender_id   = 3;
+    string sender_name = 4;
+    string content     = 5;
+    uint64 sent_at     = 6;
+}
+
+// ==================== 创建聊天室 ====================
+
+message ChatCreateRoomReq {
+    string name       = 1;
+    uint64 creator_id = 2;
+}
+
+message ChatCreateRoomRes {
+    common.Result result = 1;
+    ChatRoomInfo  room   = 2;
+}
+
+// ==================== 加入聊天室 ====================
+
+message ChatJoinRoomReq {
+    uint64 room_id   = 1;
+    uint64 player_id = 2;
+}
+
+message ChatJoinRoomRes {
+    common.Result      result      = 1;
+    ChatRoomInfo       room        = 2;
+    repeated ChatMessage recent_msgs = 3;
+}
+
+// ==================== 离开聊天室 ====================
+
+message ChatLeaveRoomReq {
+    uint64 room_id   = 1;
+    uint64 player_id = 2;
+}
+
+message ChatLeaveRoomRes {
+    common.Result result = 1;
+}
+
+// ==================== 发送消息 ====================
+
+message ChatSendMsgReq {
+    uint64 room_id   = 1;
+    uint64 sender_id = 2;
+    string content   = 3;
+}
+
+message ChatSendMsgRes {
+    common.Result result = 1;
+    ChatMessage   msg    = 2;
+}
+
+// ==================== 消息通知（服务端主动推送） ====================
+
+message ChatMsgNotify {
+    ChatMessage msg = 1;
+}
+
+// ==================== 获取近期记录 ====================
+
+message ChatGetHistoryReq {
+    uint64 room_id = 1;
+    uint32 limit   = 2;  // 默认 50，最大 100
+}
+
+message ChatGetHistoryRes {
+    common.Result        result = 1;
+    repeated ChatMessage msgs   = 2;
+}
+
+// ==================== 关闭聊天室 ====================
+
+message ChatCloseRoomReq {
+    uint64 room_id     = 1;
+    uint64 operator_id = 2;
+}
+
+message ChatCloseRoomRes {
+    common.Result result = 1;
+}

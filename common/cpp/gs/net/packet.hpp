@@ -14,14 +14,15 @@ constexpr uint16_t MAGIC_VALUE = 0x9D7F;
 
 // Flag 位定义
 enum class Flag : uint32_t {
-    ENCRYPT   = 1u << 0,
-    COMPRESS  = 1u << 1,
-    BROADCAST = 1u << 2,
-    TRACE     = 1u << 3,
-    RPC_REQ   = 1u << 4,
-    RPC_RES   = 1u << 5,
-    RPC_FF    = 1u << 6,
-    HEARTBEAT = 1u << 7,
+    ENCRYPT     = 1u << 0,
+    COMPRESS    = 1u << 1,
+    BROADCAST   = 1u << 2,
+    TRACE       = 1u << 3,
+    RPC_REQ     = 1u << 4,
+    RPC_RES     = 1u << 5,
+    RPC_FF      = 1u << 6,
+    HEARTBEAT   = 1u << 7,
+    ROOM_BCAST  = 1u << 8,  // 按聊天室广播，payload 前 8 字节为 room_id（大端序）
 };
 
 inline uint32_t operator|(Flag a, Flag b) {
