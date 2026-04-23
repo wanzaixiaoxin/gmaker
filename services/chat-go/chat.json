@@ -1,0 +1,29 @@
+{
+  "service": {
+    "service_type": "chat",
+    "node_id": "chat-1",
+    "log_level": "info",
+    "log_file": "",
+    "metrics_addr": ":9086"
+  },
+  "network": {
+    "host": "0.0.0.0",
+    "port": 8086,
+    "max_connections": 5000
+  },
+  "registry": {
+    "nodes": [
+      {"host": "127.0.0.1", "port": 2379}
+    ]
+  },
+  "redis": {
+    "addrs": ["192.168.0.85:6379"],
+    "password": "",
+    "pool_size": 20
+  },
+  "dbproxy": {
+    "nodes": [
+      {"host": "127.0.0.1", "port": 3307}
+    ]
+  }
+}

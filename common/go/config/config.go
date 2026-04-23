@@ -2,149 +2,82 @@ package config
 
 import (
 	"encoding/json"
-	"io"
-	"log"
-	"net/http"
+	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-
-	"gopkg.in/yaml.v3"
 )
 
-// Loader 配置加载器，支持 YAML 文件与 HTTP 热重载
-type Loader struct {
-	mu       sync.RWMutex
-	path     string
-	data     map[string]interface{}
-	onReload func()
+// ServiceConfig 服务通用配置
+type ServiceConfig struct {
+	ServiceType string `json:"service_type"` // 服务类型
+	NodeID      string `json:"node_id"`      // 节点 ID
+	LogLevel    string `json:"log_level"`    // 日志级别
+	LogFile     string `json:"log_file"`     // 日志文件
+	MetricsAddr string `json:"metrics_addr"` // Metrics 地址
 }
 
-// NewLoader 创建配置加载器
-func NewLoader(path string) *Loader {
-	return &Loader{path: path, data: make(map[string]interface{})}
+// NetworkConfig 网络配置
+type NetworkConfig struct {
+	Host           string `json:"host"`            // 监听地址
+	Port           int    `json:"port"`            // 监听端口
+	MaxConnections int    `json:"max_connections"` // 最大连接数
 }
 
-// SetOnReload 设置重载回调
-func (l *Loader) SetOnReload(fn func()) {
-	l.onReload = fn
+// RegistryConfig Registry 配置
+type RegistryConfig struct {
+	Nodes []string `json:"nodes"` // Registry 节点地址列表
 }
 
-// Load 从文件加载配置，根据扩展名自动选择 YAML 或 JSON 解析器
-func (l *Loader) Load() error {
-	absPath, err := filepath.Abs(l.path)
-	if err != nil {
-		return err
-	}
-	f, err := os.Open(absPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+// UpstreamNode 上游节点
+type UpstreamNode struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
 
-	bytes, err := io.ReadAll(f)
+// UpstreamConfig 上游服务配置
+type UpstreamConfig struct {
+	Services map[string][]UpstreamNode `json:"services"` // 按服务类型分组
+}
+
+// GetServiceNodes 获取指定服务类型的节点列表
+func (c *UpstreamConfig) GetServiceNodes(serviceType string) []UpstreamNode {
+	if c.Services == nil {
+		return nil
+	}
+	return c.Services[serviceType]
+}
+
+// CmdRangeConfig 命令范围配置
+type CmdRangeConfig struct {
+	Start uint32 `json:"start"`
+	End   uint32 `json:"end"`
+}
+
+// SecurityConfig 安全配置
+type SecurityConfig struct {
+	MasterKeyHex        string `json:"master_key_hex"`         // 主密钥 (十六进制)
+	ReplayWindowSeconds int    `json:"replay_window_seconds"` // 重放检查窗口
+}
+
+// LoadJSON 从 JSON 文件加载配置
+func LoadJSON(path string, v interface{}) error {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("read config file: %w", err)
 	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if strings.HasSuffix(strings.ToLower(absPath), ".json") {
-		if err := json.Unmarshal(bytes, &l.data); err != nil {
-			return err
-		}
-	} else {
-		if err := yaml.Unmarshal(bytes, &l.data); err != nil {
-			return err
-		}
+	if err := json.Unmarshal(data, v); err != nil {
+		return fmt.Errorf("parse config: %w", err)
 	}
-	log.Printf("[config] loaded from %s", absPath)
 	return nil
 }
 
-// Reload 热重载配置
-func (l *Loader) Reload() error {
-	if err := l.Load(); err != nil {
-		return err
+// SaveJSON 保存配置到 JSON 文件
+func SaveJSON(path string, v interface{}) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
 	}
-	if l.onReload != nil {
-		l.onReload()
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("write config file: %w", err)
 	}
 	return nil
-}
-
-// GetString 读取字符串配置
-func (l *Loader) GetString(key string) string {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	if v, ok := l.data[key]; ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
-}
-
-// GetInt 读取整型配置
-func (l *Loader) GetInt(key string) int {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	if v, ok := l.data[key]; ok {
-		switch n := v.(type) {
-		case int:
-			return n
-		case int64:
-			return int(n)
-		case float64:
-			return int(n)
-		}
-	}
-	return 0
-}
-
-// GetBool 读取布尔配置
-func (l *Loader) GetBool(key string) bool {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	if v, ok := l.data[key]; ok {
-		if b, ok := v.(bool); ok {
-			return b
-		}
-	}
-	return false
-}
-
-// ServeReloadHTTP 启动 HTTP /admin/reload 服务（端口隔离）
-// adminToken: Bearer Token，为空时不校验（仅用于开发环境）
-func (l *Loader) ServeReloadHTTP(addr string, adminToken string) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/admin/reload", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		// Bearer Token 校验
-		if adminToken != "" {
-			auth := r.Header.Get("Authorization")
-			if auth != "Bearer "+adminToken {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-		}
-		if err := l.Reload(); err != nil {
-			log.Printf("[config] reload failed from %s: %v", r.RemoteAddr, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		log.Printf("[config] reload success from %s", r.RemoteAddr)
-		w.Write([]byte("reload ok"))
-	})
-	go func() {
-		log.Printf("[config] reload HTTP server started on %s", addr)
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Printf("[config] reload HTTP server error: %v", err)
-		}
-	}()
 }

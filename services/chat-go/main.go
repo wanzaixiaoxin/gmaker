@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gmaker/luffa/common/go/config"
 	"github.com/gmaker/luffa/common/go/idgen"
 	"github.com/gmaker/luffa/common/go/logger"
 	"github.com/gmaker/luffa/common/go/metrics"
@@ -21,7 +22,9 @@ import (
 	pb "github.com/gmaker/luffa/gen/go/registry"
 )
 
+// 命令 ID 定义 (来自 protocol.proto)
 const (
+	// Chat 服务命令 (0x00030000 - 0x0003FFFF)
 	CmdChatCreateRoomReq = uint32(0x00030000)
 	CmdChatCreateRoomRes = uint32(0x00030001)
 	CmdChatJoinRoomReq   = uint32(0x00030002)
@@ -36,53 +39,116 @@ const (
 	CmdChatCloseRoomReq  = uint32(0x0003000B)
 	CmdChatCloseRoomRes  = uint32(0x0003000C)
 
-	CmdMySQLExec    = uint32(0x000E0013)
-	CmdMySQLExecRes = uint32(0x000E0014)
-	CmdMySQLQuery   = uint32(0x000E0011)
-	CmdMySQLQueryRes = uint32(0x000E0012)
+	// DBProxy 命令 (0x00002000 - 0x00002FFF)
+	CmdDBQuery    = uint32(0x00002000)
+	CmdDBQueryRes = uint32(0x00002001)
+	CmdDBExec     = uint32(0x00002002)
+	CmdDBExecRes  = uint32(0x00002003)
 
-	CmdGWRoomJoin  = uint32(0x00001010)
-	CmdGWRoomLeave = uint32(0x00001011)
+	// Gateway 内部命令 (0x00000100 - 0x000001FF)
+	CmdGWRoomJoin  = uint32(0x00000100)
+	CmdGWRoomLeave = uint32(0x00000101)
 )
 
+// ChatConfig Chat 服务配置
+type ChatConfig struct {
+	Service  ServiceConfig  `json:"service"`
+	Network  NetworkConfig  `json:"network"`
+	Registry RegistryConfig `json:"registry"`
+	Redis    RedisConfig    `json:"redis"`
+	DBProxy  DBProxyConfig  `json:"dbproxy"`
+}
+
+type ServiceConfig struct {
+	ServiceType string `json:"service_type"`
+	NodeID      string `json:"node_id"`
+	LogLevel    string `json:"log_level"`
+	LogFile     string `json:"log_file"`
+	MetricsAddr string `json:"metrics_addr"`
+}
+
+type NetworkConfig struct {
+	Host           string `json:"host"`
+	Port           int    `json:"port"`
+	MaxConnections int    `json:"max_connections"`
+}
+
+type RegistryConfig struct {
+	Nodes []config.UpstreamNode `json:"nodes"`
+}
+
+type RedisConfig struct {
+	Addrs    []string `json:"addrs"`
+	Password string   `json:"password"`
+	PoolSize int      `json:"pool_size"`
+}
+
+type DBProxyConfig struct {
+	Nodes []config.UpstreamNode `json:"nodes"`
+}
+
 func main() {
-	var (
-		listenAddr    = flag.String("listen", ":8086", "Chat listen address")
-		registryAddrs = flag.String("registry", "127.0.0.1:2379", "Registry addresses")
-		dbproxyAddrs  = flag.String("dbproxy", "127.0.0.1:3307", "DBProxy addresses")
-		redisAddrs    = flag.String("redis", "127.0.0.1:6379", "Redis addresses")
-		redisPass     = flag.String("redis-pass", "", "Redis password")
-		nodeID        = flag.Int64("node-id", 1, "Snowflake node ID")
-		metricsAddr   = flag.String("metrics", ":9086", "Metrics HTTP address")
-		logFile       = flag.String("log-file", "", "Log file path")
-		logLevel      = flag.String("log-level", "info", "Log level")
-	)
+	configFile := flag.String("config", "chat.json", "Config file path")
+	flag.Parse()
 	flag.Parse()
 
-	log := logger.InitServiceLogger("chat", fmt.Sprintf("chat-%d", *nodeID), *logLevel, *logFile)
+	// 加载配置
+	var cfg ChatConfig
+	if err := config.LoadJSON(*configFile, &cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "[Config] Failed to load %s: %v\n", *configFile, err)
+		os.Exit(1)
+	}
+	fmt.Printf("[Config] Loaded from %s\n", *configFile)
+
+	// 打印配置
+	fmt.Println("=== Chat Configuration ===")
+	fmt.Printf("Node ID:     %s\n", cfg.Service.NodeID)
+	fmt.Printf("Listen:      %s:%d\n", cfg.Network.Host, cfg.Network.Port)
+	fmt.Printf("Metrics:     %s\n", cfg.Service.MetricsAddr)
+	fmt.Printf("Log level:   %s\n", cfg.Service.LogLevel)
+	fmt.Println("==========================")
+
+	// 初始化日志
+	log := logger.InitServiceLogger(cfg.Service.ServiceType, cfg.Service.NodeID, cfg.Service.LogLevel, cfg.Service.LogFile)
 	logger.SetDefault(log)
 
-	metrics.ServeDefaultHTTP(*metricsAddr)
+	// 启动 metrics
+	metrics.ServeDefaultHTTP(cfg.Service.MetricsAddr)
 	reqCounter := metrics.DefaultCounter("chat_requests_total")
 	reqLatency := metrics.DefaultHistogram("chat_request_duration_ms", []int64{1, 5, 10, 25, 50, 100, 250, 500, 1000})
 	connGauge := metrics.DefaultGauge("chat_connections")
 
-	idGen, err := idgen.NewSnowflake(*nodeID)
+	// 解析 node ID
+	nodeIDParts := strings.Split(cfg.Service.NodeID, "-")
+	var nodeID int64 = 1
+	if len(nodeIDParts) > 1 {
+		if n, err := fmt.Sscanf(nodeIDParts[len(nodeIDParts)-1], "%d", &nodeID); err != nil || n != 1 {
+			nodeID = 1
+		}
+	}
+
+	idGen, err := idgen.NewSnowflake(nodeID)
 	if err != nil {
 		log.Fatalf("init snowflake failed: %v", err)
 	}
 
-	regClient := registry.NewClient(strings.Split(*registryAddrs, ","))
+	// 连接 Registry
+	var registryAddrs []string
+	for _, n := range cfg.Registry.Nodes {
+		registryAddrs = append(registryAddrs, fmt.Sprintf("%s:%d", n.Host, n.Port))
+	}
+	regClient := registry.NewClient(registryAddrs)
 	if err := regClient.Connect(); err != nil {
 		log.Fatalf("connect registry failed: %v", err)
 	}
 	defer regClient.Close()
 
+	// 注册到 Registry
 	node := &pb.NodeInfo{
-		ServiceType: "chat",
-		NodeId:      fmt.Sprintf("chat-%d", *nodeID),
-		Host:        "127.0.0.1",
-		Port:        parsePort(*listenAddr),
+		ServiceType: cfg.Service.ServiceType,
+		NodeId:      cfg.Service.NodeID,
+		Host:        cfg.Network.Host,
+		Port:        uint32(cfg.Network.Port),
 		RegisterAt:  uint64(time.Now().Unix()),
 	}
 	if _, err := regClient.RegisterWithRetry(node, 5); err != nil {
@@ -90,12 +156,13 @@ func main() {
 	}
 	log.Info("Chat registered to registry")
 
+	// 连接 Redis
 	var redisClient *redis.Client
-	if *redisAddrs != "" {
+	if len(cfg.Redis.Addrs) > 0 {
 		redisClient = redis.NewClient(redis.Config{
-			Addrs:    strings.Split(*redisAddrs, ","),
-			Password: *redisPass,
-			PoolSize: 20,
+			Addrs:    cfg.Redis.Addrs,
+			Password: cfg.Redis.Password,
+			PoolSize: cfg.Redis.PoolSize,
 		})
 		if err := redisClient.Ping(context.Background()); err != nil {
 			log.Warnf("connect redis failed: %v, running without redis", err)
@@ -106,8 +173,13 @@ func main() {
 		}
 	}
 
+	// 连接 DBProxy
 	var chatSvc *chat.ChatService
-	dbClient := chat.NewDBProxyClient(strings.Split(*dbproxyAddrs, ","))
+	var dbproxyAddrs []string
+	for _, n := range cfg.DBProxy.Nodes {
+		dbproxyAddrs = append(dbproxyAddrs, fmt.Sprintf("%s:%d", n.Host, n.Port))
+	}
+	dbClient := chat.NewDBProxyClient(dbproxyAddrs)
 	if err := dbClient.Connect(); err != nil {
 		log.Warnf("connect dbproxy failed: %v, running without dbproxy", err)
 		dbClient = nil
@@ -124,9 +196,11 @@ func main() {
 		}
 	}
 
+	// 启动 TCP 服务器
+	listenAddr := fmt.Sprintf("%s:%d", cfg.Network.Host, cfg.Network.Port)
 	var srv *net.TCPServer
-	cfg := net.ServerConfig{
-		Addr: *listenAddr,
+	srvCfg := net.ServerConfig{
+		Addr: listenAddr,
 		OnData: func(conn *net.TCPConn, pkt *net.Packet) {
 			start := time.Now()
 			connGauge.Inc()
@@ -144,7 +218,7 @@ func main() {
 			log.Infof("Chat connection closed: %s", conn.ID())
 		},
 	}
-	srv = net.NewTCPServer(cfg)
+	srv = net.NewTCPServer(srvCfg)
 	if chatSvc != nil {
 		chatSvc.SetServer(srv)
 	}

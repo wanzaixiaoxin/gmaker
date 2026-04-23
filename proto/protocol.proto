@@ -1,0 +1,141 @@
+syntax = "proto3";
+package protocol;
+
+option go_package = "github.com/gmaker/luffa/gen/go/protocol";
+
+// ============================================================
+// 服务类型定义
+// ============================================================
+
+enum ServiceType {
+    SERVICE_UNKNOWN   = 0;
+    
+    // 基础设施服务 (1-9)
+    SERVICE_REGISTRY  = 1;   // 注册中心
+    SERVICE_GATEWAY   = 2;   // 网关
+    SERVICE_DBPROXY   = 3;   // 数据库代理
+    
+    // 业务服务 (10-19)
+    SERVICE_BIZ       = 10;  // 业务服务
+    SERVICE_CHAT      = 11;  // 聊天服务
+    SERVICE_LOGIN     = 12;  // 登录服务
+    SERVICE_LOGSTATS  = 13;  // 日志统计服务
+    
+    // 实时服务 (20-29)
+    SERVICE_REALTIME  = 20;  // 实时服务
+    
+    // 工具服务 (30-39)
+    SERVICE_BOT       = 30;  // 机器人服务
+}
+
+// ============================================================
+// 命令 ID 定义 (按服务类型分范围)
+// ============================================================
+// 
+// 命令 ID 分配规则:
+// - 0x00000000 - 0x000000FF: 系统命令 (握手、心跳等)
+// - 0x00000100 - 0x00000FFF: Gateway 内部命令
+// - 0x00001000 - 0x00001FFF: Registry 命令
+// - 0x00002000 - 0x00002FFF: DBProxy 命令
+// - 0x00010000 - 0x0001FFFF: Biz 服务命令
+// - 0x00020000 - 0x0002FFFF: Login 服务命令
+// - 0x00030000 - 0x0003FFFF: Chat 服务命令
+// - 0x00040000 - 0x0004FFFF: LogStats 服务命令
+// - 0x00050000 - 0x0005FFFF: Realtime 服务命令
+// - 0x000F0000 - 0x000FFFFF: 内部控制命令
+// ============================================================
+
+enum CmdSystem {
+    // 系统命令 (0x00000000 - 0x000000FF)
+    CMD_HANDSHAKE_REQ     = 0;  // 握手请求
+    CMD_HANDSHAKE_RES     = 1;  // 握手响应
+    CMD_HEARTBEAT         = 2;  // 心跳
+    CMD_ERROR             = 3;  // 错误响应
+}
+
+enum CmdGateway {
+    // Gateway 内部命令 (0x00000100 - 0x000001FF)
+    CMD_GW_ROOM_JOIN      = 0x00000100;  // 房间加入通知
+    CMD_GW_ROOM_LEAVE     = 0x00000101;  // 房间离开通知
+    CMD_GW_BROADCAST      = 0x00000102;  // 广播消息
+}
+
+enum CmdRegistry {
+    // Registry 命令 (0x00001000 - 0x00001FFF)
+    CMD_REG_REGISTER      = 0x00001000;  // 注册节点
+    CMD_REG_HEARTBEAT     = 0x00001001;  // 心跳
+    CMD_REG_DISCOVER      = 0x00001002;  // 发现服务
+    CMD_REG_WATCH         = 0x00001003;  // 监听变更
+    CMD_REG_NODE_EVENT    = 0x00001004;  // 节点事件通知
+}
+
+enum CmdDBProxy {
+    // DBProxy 命令 (0x00002000 - 0x00002FFF)
+    CMD_DB_QUERY          = 0x00002000;  // 查询
+    CMD_DB_QUERY_RES      = 0x00002001;  // 查询响应
+    CMD_DB_EXEC           = 0x00002002;  // 执行
+    CMD_DB_EXEC_RES       = 0x00002003;  // 执行响应
+}
+
+enum CmdBiz {
+    // Biz 服务命令 (0x00010000 - 0x0001FFFF)
+    CMD_BIZ_BASE          = 0x00010000;
+}
+
+enum CmdLogin {
+    // Login 服务命令 (0x00020000 - 0x0002FFFF)
+    CMD_LOGIN_REQ         = 0x00020000;  // 登录请求
+    CMD_LOGIN_RES         = 0x00020001;  // 登录响应
+    CMD_LOGOUT_REQ        = 0x00020002;  // 登出请求
+    CMD_LOGOUT_RES        = 0x00020003;  // 登出响应
+}
+
+enum CmdChat {
+    // Chat 服务命令 (0x00030000 - 0x0003FFFF)
+    CMD_CHAT_CREATE_ROOM_REQ  = 0x00030000;  // 创建房间请求
+    CMD_CHAT_CREATE_ROOM_RES  = 0x00030001;  // 创建房间响应
+    CMD_CHAT_JOIN_ROOM_REQ    = 0x00030002;  // 加入房间请求
+    CMD_CHAT_JOIN_ROOM_RES    = 0x00030003;  // 加入房间响应
+    CMD_CHAT_LEAVE_ROOM_REQ   = 0x00030004;  // 离开房间请求
+    CMD_CHAT_LEAVE_ROOM_RES   = 0x00030005;  // 离开房间响应
+    CMD_CHAT_SEND_MSG_REQ     = 0x00030006;  // 发送消息请求
+    CMD_CHAT_SEND_MSG_RES     = 0x00030007;  // 发送消息响应
+    CMD_CHAT_MSG_NOTIFY       = 0x00030008;  // 消息通知
+    CMD_CHAT_GET_HISTORY_REQ  = 0x00030009;  // 获取历史请求
+    CMD_CHAT_GET_HISTORY_RES  = 0x0003000A;  // 获取历史响应
+    CMD_CHAT_CLOSE_ROOM_REQ   = 0x0003000B;  // 关闭房间请求
+    CMD_CHAT_CLOSE_ROOM_RES   = 0x0003000C;  // 关闭房间响应
+}
+
+enum CmdLogStats {
+    // LogStats 服务命令 (0x00040000 - 0x0004FFFF)
+    CMD_LOGSTATS_BASE     = 0x00040000;
+}
+
+enum CmdRealtime {
+    // Realtime 服务命令 (0x00050000 - 0x0005FFFF)
+    CMD_REALTIME_BASE     = 0x00050000;
+}
+
+// ============================================================
+// 命令范围定义 (用于路由)
+// ============================================================
+
+message CmdRange {
+    uint32 start = 1;
+    uint32 end = 2;
+}
+
+// 服务命令范围映射
+message ServiceCmdRanges {
+    CmdRange chat = 1;      // Chat 服务命令范围
+    CmdRange biz = 2;       // Biz 服务命令范围
+    CmdRange login = 3;     // Login 服务命令范围
+    CmdRange realtime = 4;  // Realtime 服务命令范围
+}
+
+// 默认命令范围
+// Chat:    0x00030000 - 0x0003FFFF
+// Biz:     0x00010000 - 0x0001FFFF
+// Login:   0x00020000 - 0x0002FFFF
+// Realtime: 0x00050000 - 0x0005FFFF
