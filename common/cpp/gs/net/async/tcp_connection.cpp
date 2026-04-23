@@ -1,3 +1,9 @@
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
 #include "tcp_connection.hpp"
 #include "event_loop.hpp"
 
@@ -17,8 +23,82 @@ struct AsyncTCPConnection::WriteReq {
     std::vector<net::Buffer> buffers;
 };
 
+// ===================== RingBuffer 实现 =====================
+
+AsyncTCPConnection::RingBuffer::RingBuffer(size_t cap) : buf_(cap) {}
+
+void AsyncTCPConnection::RingBuffer::Append(const uint8_t* data, size_t len) {
+    EnsureSpace(len);
+    size_t pos = wpos_;
+    size_t remaining = len;
+    while (remaining > 0) {
+        size_t chunk = std::min(remaining, buf_.size() - pos);
+        std::memcpy(buf_.data() + pos, data + (len - remaining), chunk);
+        pos = (pos + chunk) % buf_.size();
+        remaining -= chunk;
+    }
+    wpos_ = pos;
+    size_ += len;
+}
+
+size_t AsyncTCPConnection::RingBuffer::Readable() const {
+    return size_;
+}
+
+bool AsyncTCPConnection::RingBuffer::IsContiguous(size_t offset, size_t len) const {
+    if (offset + len > size_) return false;
+    size_t start = (rpos_ + offset) % buf_.size();
+    return start + len <= buf_.size();
+}
+
+const uint8_t* AsyncTCPConnection::RingBuffer::DataAt(size_t offset) const {
+    return buf_.data() + (rpos_ + offset) % buf_.size();
+}
+
+void AsyncTCPConnection::RingBuffer::ReadAt(size_t offset, uint8_t* out, size_t len) const {
+    size_t start = (rpos_ + offset) % buf_.size();
+    size_t copied = 0;
+    while (copied < len) {
+        size_t chunk = std::min(len - copied, buf_.size() - start);
+        std::memcpy(out + copied, buf_.data() + start, chunk);
+        copied += chunk;
+        start = 0;
+    }
+}
+
+void AsyncTCPConnection::RingBuffer::Consume(size_t len) {
+    len = std::min(len, size_);
+    rpos_ = (rpos_ + len) % buf_.size();
+    size_ -= len;
+}
+
+void AsyncTCPConnection::RingBuffer::EnsureSpace(size_t len) {
+    if (size_ + len <= buf_.size()) return;
+
+    size_t new_cap = buf_.size();
+    while (new_cap < size_ + len) new_cap *= 2;
+
+    std::vector<uint8_t> new_buf(new_cap);
+    if (size_ > 0) {
+        size_t pos = rpos_;
+        size_t copied = 0;
+        while (copied < size_) {
+            size_t chunk = std::min(size_ - copied, buf_.size() - pos);
+            std::memcpy(new_buf.data() + copied, buf_.data() + pos, chunk);
+            copied += chunk;
+            pos = 0;
+        }
+    }
+
+    buf_ = std::move(new_buf);
+    rpos_ = 0;
+    wpos_ = size_;
+}
+
+// ==========================================================
+
 AsyncTCPConnection::AsyncTCPConnection(AsyncEventLoop* loop, uint64_t id)
-    : loop_(loop), id_(id) {}
+    : loop_(loop), id_(id), write_req_(std::make_unique<WriteReq>()) {}
 
 AsyncTCPConnection::~AsyncTCPConnection() {
     if (handle_ && !closing_.load()) {
@@ -206,11 +286,9 @@ void AsyncTCPConnection::OnRead(uv_stream_t* stream, ssize_t nread, const uv_buf
     if (nread > 0) {
         {
             std::lock_guard<std::mutex> lk(conn->read_mtx_);
-            conn->read_buf_.insert(conn->read_buf_.end(),
-                                   reinterpret_cast<uint8_t*>(buf->base),
-                                   reinterpret_cast<uint8_t*>(buf->base) + nread);
+            conn->read_ring_buf_.Append(reinterpret_cast<uint8_t*>(buf->base), nread);
             // 读缓冲区上限检查（慢连接攻击防护）
-            if (conn->read_buf_.size() - conn->read_consumed_ > MAX_READ_BUF_BYTES) {
+            if (conn->read_ring_buf_.Readable() > MAX_READ_BUF_BYTES) {
                 conn->Close();
                 return;
             }
@@ -226,83 +304,144 @@ void AsyncTCPConnection::ProcessReadBuffer() {
     std::lock_guard<std::mutex> lk(read_mtx_);
 
     while (true) {
-        size_t avail = read_buf_.size() - read_consumed_;
-        if (avail < 4) break; // 无法读取 length
+        if (read_ring_buf_.Readable() < 4) break;
 
-        const uint8_t* p = read_buf_.data() + read_consumed_;
-        uint32_t length = (static_cast<uint32_t>(p[0]) << 24) |
-                          (static_cast<uint32_t>(p[1]) << 16) |
-                          (static_cast<uint32_t>(p[2]) << 8) |
-                          static_cast<uint32_t>(p[3]);
+        uint8_t len_bytes[4];
+        read_ring_buf_.ReadAt(0, len_bytes, 4);
+        uint32_t length = ReadU32BE(len_bytes);
 
         if (length < HEADER_SIZE || length > MAX_PACKET_LEN) {
             Close();
             return;
         }
 
-        if (avail < length) break; // 数据不足
+        if (read_ring_buf_.Readable() < length) break; // 数据不足
 
-        // 解析 header
-        uint16_t magic = (static_cast<uint16_t>(p[4]) << 8) |
-                         static_cast<uint16_t>(p[5]);
-        if (magic != MAGIC_VALUE) {
-            Close();
-            return;
-        }
+        // 快速路径：数据在连续区域，直接指针访问
+        if (read_ring_buf_.IsContiguous(0, length)) {
+            const uint8_t* p = read_ring_buf_.DataAt(0);
 
-        Header h;
-        h.length = length;
-        h.magic = magic;
-        h.cmd_id = (static_cast<uint32_t>(p[6]) << 24) |
-                   (static_cast<uint32_t>(p[7]) << 16) |
-                   (static_cast<uint32_t>(p[8]) << 8) |
-                   static_cast<uint32_t>(p[9]);
-        h.seq_id = (static_cast<uint32_t>(p[10]) << 24) |
-                   (static_cast<uint32_t>(p[11]) << 16) |
-                   (static_cast<uint32_t>(p[12]) << 8) |
-                   static_cast<uint32_t>(p[13]);
-        h.flags = (static_cast<uint32_t>(p[14]) << 24) |
-                  (static_cast<uint32_t>(p[15]) << 16) |
-                  (static_cast<uint32_t>(p[16]) << 8) |
-                  static_cast<uint32_t>(p[17]);
-
-        size_t payload_len = length - HEADER_SIZE;
-        net::Buffer payload;
-        if (payload_len > 0) {
-            payload = net::Buffer::Allocate(payload_len);
-            std::memcpy(payload.Data(), p + HEADER_SIZE, payload_len);
-        }
-
-        read_consumed_ += length;
-
-        // 定期 compact：累积消费超过阈值后，把未消费数据移到前端
-        if (read_consumed_ >= READ_COMPACT_THRESHOLD) {
-            size_t remain = read_buf_.size() - read_consumed_;
-            if (remain > 0) {
-                std::memmove(read_buf_.data(), read_buf_.data() + read_consumed_, remain);
-            }
-            read_buf_.resize(remain);
-            read_consumed_ = 0;
-        }
-
-        // 构造 Packet
-        Packet pkt;
-        pkt.header = h;
-        pkt.payload = std::move(payload);
-
-        // 解密
-        if (!session_key_.empty() && HasFlag(pkt.header.flags, Flag::ENCRYPT)) {
-            try {
-                pkt.payload = gs::crypto::DecryptPacketPayload(session_key_, pkt.payload.ToVector());
-                pkt.header.flags &= ~static_cast<uint32_t>(Flag::ENCRYPT);
-            } catch (const std::exception&) {
+            uint16_t magic = ReadU16BE(p + 4);
+            if (magic != MAGIC_VALUE) {
                 Close();
                 return;
             }
-        }
 
-        if (on_data_) {
-            on_data_(this, pkt);
+            Header h;
+            h.length = length;
+            h.magic = magic;
+            h.cmd_id = ReadU32BE(p + 6);
+            h.seq_id = ReadU32BE(p + 10);
+            h.flags = ReadU32BE(p + 14);
+
+            size_t payload_len = length - HEADER_SIZE;
+            net::Buffer payload;
+            if (payload_len > 0) {
+                payload = net::Buffer::Allocate(payload_len);
+                std::memcpy(payload.Data(), p + HEADER_SIZE, payload_len);
+            }
+
+            read_ring_buf_.Consume(length);
+
+            Packet pkt;
+            pkt.header = h;
+            pkt.payload = std::move(payload);
+
+            if (!session_key_.empty() && HasFlag(pkt.header.flags, Flag::ENCRYPT)) {
+                try {
+                    pkt.payload = gs::crypto::DecryptPacketPayload(session_key_, pkt.payload.ToVector());
+                    pkt.header.flags &= ~static_cast<uint32_t>(Flag::ENCRYPT);
+                } catch (const std::exception&) {
+                    Close();
+                    return;
+                }
+            }
+
+            if (on_data_) {
+                on_data_(this, pkt);
+            }
+        } else {
+            // 慢路径：数据跨越环形缓冲区末尾，读取到临时缓冲区
+            uint8_t temp_buf[64 * 1024];
+            if (length > sizeof(temp_buf)) {
+                std::vector<uint8_t> large_buf(length);
+                read_ring_buf_.ReadAt(0, large_buf.data(), length);
+                read_ring_buf_.Consume(length);
+
+                uint16_t magic = ReadU16BE(large_buf.data() + 4);
+                if (magic != MAGIC_VALUE) { Close(); return; }
+
+                Header h;
+                h.length = length;
+                h.magic = magic;
+                h.cmd_id = ReadU32BE(large_buf.data() + 6);
+                h.seq_id = ReadU32BE(large_buf.data() + 10);
+                h.flags = ReadU32BE(large_buf.data() + 14);
+
+                size_t payload_len = length - HEADER_SIZE;
+                net::Buffer payload;
+                if (payload_len > 0) {
+                    payload = net::Buffer::Allocate(payload_len);
+                    std::memcpy(payload.Data(), large_buf.data() + HEADER_SIZE, payload_len);
+                }
+
+                Packet pkt;
+                pkt.header = h;
+                pkt.payload = std::move(payload);
+
+                if (!session_key_.empty() && HasFlag(pkt.header.flags, Flag::ENCRYPT)) {
+                    try {
+                        pkt.payload = gs::crypto::DecryptPacketPayload(session_key_, pkt.payload.ToVector());
+                        pkt.header.flags &= ~static_cast<uint32_t>(Flag::ENCRYPT);
+                    } catch (const std::exception&) {
+                        Close();
+                        return;
+                    }
+                }
+
+                if (on_data_) {
+                    on_data_(this, pkt);
+                }
+                continue;
+            }
+
+            read_ring_buf_.ReadAt(0, temp_buf, length);
+            read_ring_buf_.Consume(length);
+
+            uint16_t magic = ReadU16BE(temp_buf + 4);
+            if (magic != MAGIC_VALUE) { Close(); return; }
+
+            Header h;
+            h.length = length;
+            h.magic = magic;
+            h.cmd_id = ReadU32BE(temp_buf + 6);
+            h.seq_id = ReadU32BE(temp_buf + 10);
+            h.flags = ReadU32BE(temp_buf + 14);
+
+            size_t payload_len = length - HEADER_SIZE;
+            net::Buffer payload;
+            if (payload_len > 0) {
+                payload = net::Buffer::Allocate(payload_len);
+                std::memcpy(payload.Data(), temp_buf + HEADER_SIZE, payload_len);
+            }
+
+            Packet pkt;
+            pkt.header = h;
+            pkt.payload = std::move(payload);
+
+            if (!session_key_.empty() && HasFlag(pkt.header.flags, Flag::ENCRYPT)) {
+                try {
+                    pkt.payload = gs::crypto::DecryptPacketPayload(session_key_, pkt.payload.ToVector());
+                    pkt.header.flags &= ~static_cast<uint32_t>(Flag::ENCRYPT);
+                } catch (const std::exception&) {
+                    Close();
+                    return;
+                }
+            }
+
+            if (on_data_) {
+                on_data_(this, pkt);
+            }
         }
     }
 }
@@ -313,9 +452,9 @@ void AsyncTCPConnection::ProcessWriteQueue() {
     // 批量收集：一次 uv_write 发送多个 buffer，减少 syscall
     constexpr size_t MAX_BATCH = 64;
     std::vector<Buffer> batch;
-    std::vector<uv_buf_t> ubufs;
     batch.reserve(MAX_BATCH);
-    ubufs.reserve(MAX_BATCH);
+    static thread_local std::vector<uv_buf_t> tls_ubufs;
+    tls_ubufs.clear();
 
     bool should_resume_read = false;
     {
@@ -342,8 +481,8 @@ void AsyncTCPConnection::ProcessWriteQueue() {
         uv_read_start((uv_stream_t*)handle_, OnAlloc, OnRead);
     }
 
-    // 创建 WriteReq（批量版本）
-    auto* req = new WriteReq;
+    // 复用预分配的 WriteReq，避免每次 new/delete
+    auto* req = write_req_.get();
     req->req.data = this;
     req->conn = shared_from_this();
     req->buffers = std::move(batch);
@@ -352,13 +491,13 @@ void AsyncTCPConnection::ProcessWriteQueue() {
         uv_buf_t uvbuf;
         uvbuf.base = reinterpret_cast<char*>(const_cast<uint8_t*>(b.Data()));
         uvbuf.len = static_cast<unsigned int>(b.Size());
-        ubufs.push_back(uvbuf);
+        tls_ubufs.push_back(uvbuf);
     }
 
-    int r = uv_write(&req->req, (uv_stream_t*)handle_, ubufs.data(),
-                     static_cast<unsigned int>(ubufs.size()), OnWriteDone);
+    int r = uv_write(&req->req, (uv_stream_t*)handle_, tls_ubufs.data(),
+                     static_cast<unsigned int>(tls_ubufs.size()), OnWriteDone);
     if (r != 0) {
-        delete req;
+        req->buffers.clear();
         writing_.store(false);
         Close();
     }
@@ -368,7 +507,7 @@ void AsyncTCPConnection::OnWriteDone(uv_write_t* req, int status) {
     auto* wr = reinterpret_cast<WriteReq*>(req);
     // 通过 shared_ptr 保持对象存活，防止 OnCloseDone 已销毁对象后出现 use-after-free
     auto conn = wr->conn;
-    delete wr;
+    wr->buffers.clear();  // 释放 Buffer 引用，保留 vector capacity 供下次复用
 
     if (!conn) return;
     if (status < 0) {

@@ -26,7 +26,7 @@ public:
     using ConnectCallback = std::function<void(bool success)>;
 
     AsyncTCPConnection(AsyncEventLoop* loop, uint64_t id);
-    ~AsyncTCPConnection();
+    ~AsyncTCPConnection();  // 定义在 cpp 中，因为 unique_ptr<WriteReq> 需要完整类型
 
     // 禁止拷贝
     AsyncTCPConnection(const AsyncTCPConnection&) = delete;
@@ -82,6 +82,7 @@ private:
 
     // 内部写请求结构（定义在 cpp 中，避免暴露 libuv 细节）
     struct WriteReq;
+    std::unique_ptr<WriteReq> write_req_;  // 预分配，避免每次 new/delete
 
     AsyncEventLoop* loop_ = nullptr;
     uv_tcp_t* handle_ = nullptr;
@@ -95,10 +96,26 @@ private:
     CloseCallback on_close_;
     ConnectCallback on_connect_;
 
-    // 读缓冲区（连续内存 + 消费偏移，避免每帧 O(n) erase）
+    // 环形读缓冲区：替代 vector + memmove compact
+    class RingBuffer {
+    public:
+        explicit RingBuffer(size_t cap = 1024 * 1024);  // 1MB 初始容量，减少扩容
+        void Append(const uint8_t* data, size_t len);
+        size_t Readable() const;
+        bool IsContiguous(size_t offset, size_t len) const;
+        const uint8_t* DataAt(size_t offset) const;
+        void ReadAt(size_t offset, uint8_t* out, size_t len) const;
+        void Consume(size_t len);
+    private:
+        void EnsureSpace(size_t len);
+        std::vector<uint8_t> buf_;
+        size_t rpos_ = 0;
+        size_t wpos_ = 0;
+        size_t size_ = 0;
+    };
+
     std::mutex read_mtx_;
-    std::vector<uint8_t> read_buf_;
-    size_t read_consumed_ = 0;
+    RingBuffer read_ring_buf_;
     bool read_paused_ = false;
 
     // 写队列（批量 gather write）
@@ -109,7 +126,6 @@ private:
 
     // 背压 / 安全阈值
     static constexpr size_t MAX_READ_BUF_BYTES = 64 * 1024 * 1024;   // 64MB
-    static constexpr size_t READ_COMPACT_THRESHOLD = 256 * 1024;       // 256KB
     static constexpr size_t MAX_WRITE_QUEUE_BYTES = 16 * 1024 * 1024;  // 16MB
     static constexpr size_t WRITE_RESUME_THRESHOLD = 8 * 1024 * 1024;  // 8MB
 
@@ -118,6 +134,8 @@ private:
     // 用于在 uv_close 完成前保持对象存活
     std::shared_ptr<AsyncTCPConnection> keep_alive_;
 };
+
+// unique_ptr<WriteReq> 的析构在 AsyncTCPConnection 的 cpp 析构函数中实例化
 
 } // namespace async
 } // namespace net
