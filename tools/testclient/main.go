@@ -39,6 +39,8 @@ func main() {
 		sc = &HeartbeatScenario{Interval: 5 * time.Second}
 	case "flood":
 		sc = &FloodScenario{Rate: *rate}
+	case "chat":
+		sc = &ChatScenario{}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown scenario: %s\n", *scenario)
 		os.Exit(1)

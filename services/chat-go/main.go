@@ -118,7 +118,9 @@ func main() {
 	chatSvc = chat.NewChatService(dbClient, redisClient, idGen, log)
 	if dbClient != nil {
 		if err := chat.EnsureChatRoomTable(chatSvc); err != nil {
-			log.Warnf("ensure chat room table failed: %v", err)
+			log.Warnf("ensure chat room table failed: %v, running without dbproxy", err)
+			dbClient = nil
+			chatSvc = chat.NewChatService(nil, redisClient, idGen, log)
 		}
 	}
 
