@@ -495,6 +495,28 @@ void ThroughputClient(const std::string& host, uint16_t port,
         std::chrono::high_resolution_clock::now() - t_start).count();
 }
 
+// 格式化大数字：1234 -> "1.23K", 1234567 -> "1.23M"
+static std::string FormatNumber(double n) {
+    if (n < 1000.0) {
+        char buf[32];
+        if (n == static_cast<uint64_t>(n)) {
+            snprintf(buf, sizeof(buf), "%.0f", n);
+        } else {
+            snprintf(buf, sizeof(buf), "%.2f", n);
+        }
+        return std::string(buf);
+    }
+    const char* units[] = {"K", "M", "G", "T"};
+    int unit_idx = -1;
+    while (n >= 1000.0 && unit_idx < 3) {
+        n /= 1000.0;
+        unit_idx++;
+    }
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%.2f%s", n, units[unit_idx]);
+    return std::string(buf);
+}
+
 bool TestThroughput(const std::string& host, uint16_t port,
                     int num_clients, int duration_ms, int payload_size) {
     bool infinite = (duration_ms <= 0);
@@ -549,7 +571,12 @@ bool TestThroughput(const std::string& host, uint16_t port,
                 delta += curr - last_sent[i];
                 last_sent[i] = curr;
             }
-            std::cout << "[CLIENT] total_sent=" << total << " (" << delta << "/s)" << std::endl;
+            uint64_t total_bytes = static_cast<uint64_t>(total) * (HEADER_SIZE + payload_size);
+            uint64_t delta_bytes = static_cast<uint64_t>(delta) * (HEADER_SIZE + payload_size);
+            std::cout << "[CLIENT] pkts=" << FormatNumber(total)
+                      << " (" << FormatNumber(delta) << "/s) | bytes="
+                      << FormatNumber(total_bytes)
+                      << " (" << FormatNumber(delta_bytes) << "/s)" << std::endl;
         }
         for (auto& t : threads) {
             if (t.joinable()) t.join();
@@ -566,10 +593,12 @@ bool TestThroughput(const std::string& host, uint16_t port,
     double mbps = (total_sent * packet_bytes * 8.0) / (elapsed * 1024.0 * 1024.0);
     double pps = total_sent / elapsed;
 
-    std::cout << "Total sent: " << total_sent << " packets" << std::endl;
-    std::cout << "Elapsed: " << elapsed << " s" << std::endl;
-    std::cout << "PPS: " << pps << " packets/s" << std::endl;
-    std::cout << "Bandwidth: " << mbps << " Mbps" << std::endl;
+    uint64_t total_bytes = static_cast<uint64_t>(total_sent) * (HEADER_SIZE + payload_size);
+    std::cout << "Total: " << FormatNumber(total_sent) << " pkts, "
+              << FormatNumber(total_bytes) << " bytes" << std::endl;
+    std::cout << "Elapsed: " << FormatNumber(elapsed) << " s" << std::endl;
+    std::cout << "PPS: " << FormatNumber(pps) << " pkts/s" << std::endl;
+    std::cout << "Bandwidth: " << FormatNumber(mbps) << " Mbps" << std::endl;
     return true;
 }
 
