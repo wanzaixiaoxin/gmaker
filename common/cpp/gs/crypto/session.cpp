@@ -17,6 +17,19 @@ namespace gs {
 namespace crypto {
 
 std::vector<uint8_t> DeriveSessionKey(const std::vector<uint8_t>& masterKey,
+                                       const std::vector<uint8_t>& clientRandom) {
+    if (masterKey.size() != 32) {
+        throw std::invalid_argument("master key must be 32 bytes");
+    }
+    std::vector<uint8_t> label = {'g','m','a','k','e','r','-','s','e','s','s','i','o','n','-','v','1'};
+    std::vector<uint8_t> data;
+    data.reserve(label.size() + clientRandom.size());
+    data.insert(data.end(), label.begin(), label.end());
+    data.insert(data.end(), clientRandom.begin(), clientRandom.end());
+    return HMACSHA256Raw(masterKey, data);
+}
+
+std::vector<uint8_t> DeriveSessionKey(const std::vector<uint8_t>& masterKey,
                                        const std::vector<uint8_t>& clientRandom,
                                        const std::vector<uint8_t>& serverRandom) {
     if (masterKey.size() != 32) {

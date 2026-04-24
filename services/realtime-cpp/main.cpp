@@ -5,16 +5,15 @@
 #include <thread>
 #include <chrono>
 #include "gs/net/async/tcp_server.hpp"
-#include "gs/net/async/upstream.hpp"
 #include "gs/net/packet.hpp"
 #include "gs/net/address.hpp"
 #include "gs/registry/client.hpp"
-#include "gs/registry/upstream_manager.hpp"
 #include "registry.pb.h"
 #include "gs/realtime/compute_thread.hpp"
 #include "gs/realtime/message.hpp"
 #include "gs/metrics/metrics.hpp"
 #include "gs/logger/logger.hpp"
+#include "protocol.pb.h"
 
 using namespace gs::net;
 using namespace gs::net::async;
@@ -27,12 +26,12 @@ constexpr uint32_t CMD_REALTIME_ACTION = protocol::CMD_RT_FRAME_SYNC;
 constexpr uint32_t CMD_REALTIME_SYNC   = protocol::CMD_RT_STATE_SYNC;
 
 // RealtimeServer 实时服
+// Gateway 主动连接到 Realtime，Realtime 通过已有连接回推 Snapshot
 struct RealtimeServer {
     void SetLogger(std::shared_ptr<gs::logger::Logger> logger) { logger_ = logger; }
 
     bool Start(uint16_t listen_port,
-               const std::vector<std::pair<std::string, uint16_t>>& registry_addrs,
-               const std::vector<std::pair<std::string, uint16_t>>& fallback_gateway_addrs) {
+               const std::vector<std::pair<std::string, uint16_t>>& registry_addrs) {
 
         // 启动 metrics
         gs::metrics::ServeDefaultHTTP(":9090");
@@ -74,41 +73,26 @@ struct RealtimeServer {
         }
         if (logger_) logger_->Info("Realtime server started on port " + std::to_string(listen_port));
 
-        // 连接 Registry 并管理 Gateway 上游连接池
-        AsyncUpstreamPool* gateway_pool = nullptr;
+        // 注册到 Registry（让 Gateway 能发现自己）
         if (!registry_addrs.empty()) {
             reg_client_ = std::make_unique<gs::registry::RegistryClient>(nullptr, registry_addrs);
-            if (reg_client_->Connect()) {
-                upstream_mgr_ = std::make_unique<gs::registry::UpstreamManager>(reg_client_.get(), server_->EventLoop());
-                gateway_pool = upstream_mgr_->AddInterest("gateway",
-                    [this](IConnection* c, Packet& p) { OnGatewayPacket(c, p); });
-                
-                if (upstream_mgr_->Start()) {
-                    if (logger_) logger_->Info("Subscribed to gateway upstream via Registry");
-                } else {
-                    if (logger_) logger_->Warn("UpstreamManager start failed, using fallback");
-                    gateway_pool = nullptr;
-                }
-            }
-        }
-
-        // 如果 Registry 未就绪或没有可用节点，使用 fallback
-        if (!gateway_pool) {
-            gateway_pool_ = std::make_unique<AsyncUpstreamPool>(
-                server_->EventLoop(),
-                [this](IConnection* c, Packet& p) { OnGatewayPacket(c, p); }
-            );
-            for (const auto& [host, port] : fallback_gateway_addrs) {
-                gateway_pool_->AddNode(host, port);
-            }
-            if (!gateway_pool_->Start()) {
-                if (logger_) logger_->Error("Failed to start gateway upstream pool");
+            if (!reg_client_->Connect()) {
+                if (logger_) logger_->Error("Failed to connect registry, exiting");
                 return false;
             }
-            gateway_pool = gateway_pool_.get();
-        } else if (gateway_pool->TotalCount() == 0) {
-            for (const auto& [host, port] : fallback_gateway_addrs) {
-                gateway_pool->AddNode(host, port);
+            // 注册自身节点
+            registry::NodeInfo node;
+            node.set_service_type("realtime");
+            node.set_node_id("realtime-1");
+            node.set_host("127.0.0.1");
+            node.set_port(listen_port);
+            node.set_register_at(static_cast<uint64_t>(
+                std::chrono::system_clock::now().time_since_epoch().count()));
+            registry::Result res;
+            if (reg_client_->Register(node, &res)) {
+                if (logger_) logger_->Info("Realtime registered to registry");
+            } else {
+                if (logger_) logger_->Warn("Realtime register to registry failed: " + res.msg());
             }
         }
 
@@ -119,8 +103,6 @@ struct RealtimeServer {
     void Stop() {
         if (server_) server_->Stop();
         if (compute_) compute_->Stop();
-        if (upstream_mgr_) upstream_mgr_->Stop();
-        if (gateway_pool_) gateway_pool_->Stop();
         if (reg_client_) reg_client_->Close();
     }
 
@@ -207,13 +189,8 @@ private:
         conns_.erase(conn->ID());
     }
 
-    void OnGatewayPacket(IConnection* conn, Packet& pkt) {
-        (void)conn;
-        (void)pkt;
-        // Gateway -> Realtime 的响应（当前 Realtime 主动发消息给 Gateway，不需要处理响应）
-    }
-
-    // Room 广播：将 Snapshot 编码为 Packet，发送到 Gateway
+    // Room 广播：将 Snapshot 编码为 Packet，通过 Gateway 已有连接发送
+    // 每个 target_conn 对应一个定向包（seq_id = conn_id），由 Gateway 转发给对应客户端
     void OnRoomBroadcast(const RoomSnapshot& snap, const std::vector<uint64_t>& target_conns) {
         // 编码 RoomSnapshot 为二进制 payload
         // [frame_seq: 4 BE][timestamp: 8 BE][player_count: 4 BE]
@@ -245,26 +222,26 @@ private:
             append_u32(p.anim_state);
         }
 
-        // 每个 target_conn 发送一个定向包
+        std::lock_guard<std::mutex> lk(conn_mtx_);
+        // 为每个 target_conn 发送定向包；通过所有 Gateway 连接广播，
+        // Gateway 会根据 seq_id（即 conn_id）转发给对应客户端
         for (uint64_t conn_id : target_conns) {
             Packet pkt;
             pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(payload.size());
             pkt.header.magic = MAGIC_VALUE;
             pkt.header.cmd_id = CMD_REALTIME_SYNC;
-            pkt.header.seq_id = static_cast<uint32_t>(conn_id); // 复用 seq_id 标记目标 conn
+            pkt.header.seq_id = static_cast<uint32_t>(conn_id);
             pkt.header.flags = static_cast<uint32_t>(Flag::BROADCAST);
             pkt.payload = Buffer::FromVector(payload);
-            if (upstream_mgr_) {
-                auto* pool = upstream_mgr_->GetPool("gateway");
-                if (pool) pool->SendPacket(pkt);
+            for (const auto& [_, conn] : conns_) {
+                (void)_;
+                conn->SendPacket(pkt);
             }
         }
     }
 
     std::shared_ptr<gs::logger::Logger> logger_;
     std::unique_ptr<AsyncTCPServer> server_;
-    std::unique_ptr<AsyncUpstreamPool> gateway_pool_;  // fallback 时独立持有
-    std::unique_ptr<gs::registry::UpstreamManager> upstream_mgr_;
     std::unique_ptr<gs::registry::RegistryClient> reg_client_;
     std::unique_ptr<ComputeThread> compute_;
 
@@ -279,7 +256,6 @@ private:
 int main(int argc, char* argv[]) {
     uint16_t port = 8084;
     std::vector<std::pair<std::string, uint16_t>> registry_addrs = {{"127.0.0.1", 2379}};
-    std::vector<std::pair<std::string, uint16_t>> fallback_gw = {{"127.0.0.1", 8081}};
 
     std::string log_file;
     std::string log_level = "info";
@@ -297,9 +273,6 @@ int main(int argc, char* argv[]) {
         } else if (pos_idx == 2) {
             registry_addrs = gs::net::ParseAddrList(arg);
             pos_idx++;
-        } else if (pos_idx == 3) {
-            fallback_gw = gs::net::ParseAddrList(arg);
-            pos_idx++;
         }
     }
 
@@ -311,7 +284,7 @@ int main(int argc, char* argv[]) {
 
     RealtimeServer srv;
     srv.SetLogger(logger);
-    if (!srv.Start(port, registry_addrs, fallback_gw)) {
+    if (!srv.Start(port, registry_addrs)) {
         return 1;
     }
     srv.Wait();

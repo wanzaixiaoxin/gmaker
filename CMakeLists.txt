@@ -150,6 +150,7 @@ set(CPP_REALTIME_SOURCES
 # ==================== 网关服务 ====================
 add_executable(gateway-cpp
     services/gateway-cpp/main.cpp
+    services/gateway-cpp/gateway_config.cpp
     ${CPP_ASYNC_NET_SOURCES}
     ${CPP_RPC_SOURCES}
     ${CPP_REGISTRY_SOURCES}

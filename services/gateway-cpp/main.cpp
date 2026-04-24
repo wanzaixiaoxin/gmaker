@@ -1,6 +1,7 @@
 #include <iostream>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <mutex>
 #include <condition_variable>
 #include <thread>
@@ -24,6 +25,8 @@
 using namespace gs::net;
 using namespace gs::net::async;
 using namespace gs::crypto;
+
+std::string ToHex(uint32_t v);
 
 // HandshakeMiddleware 处理 Gateway-Client 握手
 class HandshakeMiddleware : public Middleware {
@@ -162,7 +165,7 @@ void HandshakeMiddleware::HandleHandshake(IConnection* conn, Packet& pkt) {
         return;
     }
 
-    auto session_key = Session::DeriveKey(master_key_, client_random);
+    auto session_key = DeriveSessionKey(master_key_, client_random);
     
     {
         std::lock_guard<std::mutex> lk(mtx_);
@@ -176,14 +179,12 @@ void HandshakeMiddleware::HandleHandshake(IConnection* conn, Packet& pkt) {
     res.header.seq_id = pkt.header.seq_id;
     res.header.flags = 0;
     
-    std::vector<uint8_t> server_random(16);
-    std::random_device rd;
-    for (auto& b : server_random) b = static_cast<uint8_t>(rd());
+    std::vector<uint8_t> server_random = RandomBytes(16);
     
-    res.payload = Buffer(server_random);
+    res.payload = Buffer::FromVector(server_random);
     res.header.length = HEADER_SIZE + static_cast<uint32_t>(res.payload.Size());
     
-    conn->Send(res);
+    conn->SendPacket(res);
     if (logger_) logger_->Info("Handshake completed for client " + std::to_string(conn->ID()));
 }
 
@@ -204,9 +205,9 @@ bool EncryptionMiddleware::OnPacket(IConnection* conn, Packet& pkt) {
     if (pkt.payload.Size() == 0) return true;
 
     try {
-        auto decrypted = Session::Decrypt(session_key, 
+        auto decrypted = DecryptPacketPayload(session_key, 
             std::vector<uint8_t>(pkt.payload.Data(), pkt.payload.Data() + pkt.payload.Size()));
-        pkt.payload = Buffer(std::move(decrypted));
+        pkt.payload = Buffer::FromVector(decrypted);
     } catch (const std::exception& e) {
         if (logger_) logger_->Error("Decryption failed for client " + std::to_string(conn->ID()) + ": " + e.what());
         conn->Close();
@@ -234,7 +235,7 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
     server_ = std::make_unique<AsyncTCPServer>(server_cfg);
 
     // 初始化中间件
-    handshake_mw_ = std::make_shared<HandshakeMiddleware>(master_key_, replay_checker_.get(), logger_, protocol::CMD_HANDSHAKE_REQ);
+    handshake_mw_ = std::make_shared<HandshakeMiddleware>(master_key_, replay_checker_.get(), logger_, protocol::CMD_SYS_HANDSHAKE);
     encryption_mw_ = std::make_shared<EncryptionMiddleware>(handshake_mw_.get(), logger_);
     
     server_->SetCallbacks(
@@ -258,7 +259,7 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
         return false;
     }
 
-    // 连接 Registry 并管理上游连接池
+    // 连接 Registry 并管理上游连接池（Registry 必须可用）
     if (!cfg.registry_nodes.empty()) {
         std::vector<std::pair<std::string, uint16_t>> reg_addrs;
         for (const auto& addr : cfg.registry_nodes) {
@@ -269,28 +270,30 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
         }
         
         reg_client_ = std::make_unique<gs::registry::RegistryClient>(nullptr, reg_addrs);
-        if (reg_client_->Connect()) {
-            if (logger_) logger_->Info("Connected to registry");
-            
-            upstream_mgr_ = std::make_unique<gs::registry::UpstreamManager>(reg_client_.get(), server_->EventLoop());
-            
-            // 声明对所有配置上游服务的兴趣
-            for (const auto& svc_type : cfg.upstream_services) {
-                upstream_mgr_->AddInterest(svc_type,
-                    [this](IConnection* c, Packet& p) { OnUpstreamPacket(c, p); });
-            }
-            
-            // 批量订阅：一次性获取全量快照 + 后续增量推送
-            if (upstream_mgr_->Start()) {
-                for (const auto& svc_type : cfg.upstream_services) {
-                    auto* pool = upstream_mgr_->GetPool(svc_type);
-                    if (pool && logger_) {
-                        logger_->Info(svc_type + " upstream pool started, " +
-                            std::to_string(pool->HealthyCount()) + "/" + std::to_string(pool->TotalCount()) + " nodes");
-                    }
-                }
-            } else if (logger_) {
-                logger_->Warn("UpstreamManager start failed");
+        if (!reg_client_->Connect()) {
+            if (logger_) logger_->Error("Failed to connect registry, exiting");
+            return false;
+        }
+        if (logger_) logger_->Info("Connected to registry");
+        
+        upstream_mgr_ = std::make_unique<gs::registry::UpstreamManager>(reg_client_.get(), server_->EventLoop());
+        
+        // 声明对所有配置上游服务的兴趣
+        for (const auto& svc_type : cfg.upstream_services) {
+            upstream_mgr_->AddInterest(svc_type,
+                [this](IConnection* c, Packet& p) { OnUpstreamPacket(c, p); });
+        }
+        
+        // 批量订阅：一次性获取全量快照 + 后续增量推送
+        if (!upstream_mgr_->Start()) {
+            if (logger_) logger_->Error("UpstreamManager start failed, exiting");
+            return false;
+        }
+        for (const auto& svc_type : cfg.upstream_services) {
+            auto* pool = upstream_mgr_->GetPool(svc_type);
+            if (pool && logger_) {
+                logger_->Info(svc_type + " upstream pool started, " +
+                    std::to_string(pool->HealthyCount()) + "/" + std::to_string(pool->TotalCount()) + " nodes");
             }
         }
     }
@@ -330,6 +333,7 @@ void Gateway::OnClientPacket(AsyncTCPConnection* conn, Packet& pkt) {
     if (!pool) {
         if (logger_) logger_->Warn("No upstream pool for cmd=0x" + ToHex(pkt.header.cmd_id));
         return;
+        return;
     }
 
     // 转发到上游
@@ -344,7 +348,7 @@ void Gateway::OnClientPacket(AsyncTCPConnection* conn, Packet& pkt) {
     pkt.payload = Buffer(std::move(extended_payload));
     pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.Size());
 
-    if (!pool->SendPacket(&pkt)) {
+    if (!pool->SendPacket(pkt)) {
         if (logger_) logger_->Warn("Failed to forward packet to upstream");
     }
 
@@ -427,16 +431,16 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
     res.header = pkt.header;
     res.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.Size() - 8);
     if (pkt.payload.Size() > 8) {
-        res.payload = Buffer(pkt.payload.Data() + 8, pkt.payload.Size() - 8);
+        res.payload = Buffer(std::vector<uint8_t>(pkt.payload.Data() + 8, pkt.payload.Data() + pkt.payload.Size()));
     }
 
     // 加密
     auto session_key = handshake_mw_->GetSessionKey(conn_id);
     if (!session_key.empty() && res.payload.Size() > 0) {
         try {
-            auto encrypted = Session::Encrypt(session_key,
+            auto encrypted = EncryptPacketPayload(session_key,
                 std::vector<uint8_t>(res.payload.Data(), res.payload.Data() + res.payload.Size()));
-            res.payload = Buffer(std::move(encrypted));
+            res.payload = Buffer::FromVector(encrypted);
             res.header.length = HEADER_SIZE + static_cast<uint32_t>(res.payload.Size());
         } catch (const std::exception& e) {
             if (logger_) logger_->Error("Encryption failed: " + std::string(e.what()));
@@ -466,15 +470,15 @@ AsyncUpstreamPool* Gateway::RouteToPool(uint32_t cmd_id) {
     std::string svc_type;
     
     // 使用 proto 中定义的命令范围
-    if (cmd_id >= protocol::CMD_BIZ_BASE && cmd_id <= 0x0001FFFF) {
+    if (cmd_id >= 0x00010000 && cmd_id <= 0x0001FFFF) {
         svc_type = "biz";
-    } else if (cmd_id >= protocol::CMD_LOGIN_REQ && cmd_id <= 0x0002FFFF) {
+    } else if (cmd_id >= protocol::CMD_CMN_LOGIN_REQ && cmd_id <= 0x0002FFFF) {
         svc_type = "login";
     } else if (cmd_id >= protocol::CMD_CHAT_CREATE_ROOM_REQ && cmd_id <= 0x0003FFFF) {
         svc_type = "chat";
     } else if (cmd_id >= protocol::CMD_LOGSTATS_BASE && cmd_id <= 0x0004FFFF) {
         svc_type = "logstats";
-    } else if (cmd_id >= protocol::CMD_REALTIME_BASE && cmd_id <= 0x0005FFFF) {
+    } else if (cmd_id >= 0x00020000 && cmd_id <= 0x0002FFFF) {
         svc_type = "realtime";
     }
     
@@ -492,7 +496,7 @@ AsyncUpstreamPool* Gateway::RouteToPool(uint32_t cmd_id) {
     return nullptr;
 }
 
-inline std::string ToHex(uint32_t v) {
+std::string ToHex(uint32_t v) {
     std::stringstream ss;
     ss << std::hex << std::uppercase << v;
     return ss.str();

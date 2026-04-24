@@ -38,5 +38,10 @@ struct Config {
     std::string log_level = "info";
 };
 
+std::vector<uint8_t> ParseMasterKey(const Config& cfg);
+
+Config LoadConfig(const std::string& path);
+void PrintConfig(const Config& cfg);
+
 } // namespace gateway
 } // namespace gs

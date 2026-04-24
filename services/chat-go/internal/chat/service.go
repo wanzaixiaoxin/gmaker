@@ -46,6 +46,7 @@ const (
 )
 
 type DBProxyClient interface {
+	Connect() error
 	Call(ctx context.Context, cmdID uint32, payload []byte) (*net.Packet, error)
 }
 
@@ -636,9 +637,16 @@ func SendProto(conn *net.TCPConn, seqID uint32, cmdID uint32, msg proto.Message)
 	sendProto(conn, seqID, cmdID, msg)
 }
 
-// NewDBProxyClient 创建 DBProxy 客户端
+// NewDBProxyClient 创建 DBProxy 客户端（兼容旧接口：传入地址列表自建 pool）
 func NewDBProxyClient(addrs []string) *dbProxyClient {
 	return &dbProxyClient{addrs: addrs}
+}
+
+// NewDBProxyClientWithPool 使用外部 pool 创建 DBProxy 客户端（Registry 发现模式）
+func NewDBProxyClientWithPool(pool *net.UpstreamPool) *dbProxyClient {
+	c := &dbProxyClient{pool: pool}
+	c.rpc = rpc.NewClientWithPool(pool)
+	return c
 }
 
 type dbProxyClient struct {
@@ -648,6 +656,10 @@ type dbProxyClient struct {
 }
 
 func (c *dbProxyClient) Connect() error {
+	if c.pool != nil {
+		// 外部 pool 模式：rpc 已在构造时创建
+		return nil
+	}
 	c.pool = net.NewUpstreamPool(func(_ *net.TCPConn, pkt *net.Packet) {
 		if c.rpc != nil {
 			c.rpc.OnPacket(pkt)
@@ -662,7 +674,8 @@ func (c *dbProxyClient) Connect() error {
 }
 
 func (c *dbProxyClient) Close() {
-	if c.pool != nil {
+	if c.pool != nil && len(c.addrs) > 0 {
+		// 仅自建 pool 时才停止
 		c.pool.Stop()
 	}
 }

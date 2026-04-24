@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/gmaker/luffa/common/go/logger"
 	"github.com/gmaker/luffa/common/go/net"
 	pb "github.com/gmaker/luffa/gen/go/registry"
 )
@@ -60,6 +61,8 @@ func (m *UpstreamManager) Start() error {
 		return nil
 	}
 
+	logger.Infof("[UpstreamManager] Subscribing to services: %v", types)
+
 	res, err := m.client.Subscribe(types, m.onNodeEvent)
 	if err != nil {
 		return fmt.Errorf("subscribe failed: %w", err)
@@ -75,11 +78,13 @@ func (m *UpstreamManager) Start() error {
 		for _, node := range list.Nodes {
 			addr := fmt.Sprintf("%s:%d", node.Host, node.Port)
 			pool.AddNode(addr)
+			logger.Infof("[UpstreamManager] Snapshot add node: %s/%s @ %s", svcType, node.NodeId, addr)
 		}
 	}
 	// 启动所有连接池
-	for _, pool := range m.pools {
+	for svcType, pool := range m.pools {
 		pool.Start()
+		logger.Infof("[UpstreamManager] Pool started: %s (healthy=%d/%d)", svcType, pool.HealthyCount(), pool.TotalCount())
 	}
 	m.mu.Unlock()
 
@@ -90,8 +95,9 @@ func (m *UpstreamManager) Start() error {
 func (m *UpstreamManager) Stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, pool := range m.pools {
+	for svcType, pool := range m.pools {
 		pool.Stop()
+		logger.Infof("[UpstreamManager] Pool stopped: %s", svcType)
 	}
 }
 
@@ -119,9 +125,14 @@ func (m *UpstreamManager) onNodeEvent(ev *pb.NodeEvent) {
 	}
 
 	switch ev.Type {
-	case pb.NodeEvent_JOIN, pb.NodeEvent_UPDATE:
+	case pb.NodeEvent_JOIN:
+		logger.Infof("[UpstreamManager] Node JOIN: %s/%s @ %s", svcType, node.NodeId, addr)
+		pool.AddNode(addr)
+	case pb.NodeEvent_UPDATE:
+		logger.Infof("[UpstreamManager] Node UPDATE: %s/%s @ %s", svcType, node.NodeId, addr)
 		pool.AddNode(addr)
 	case pb.NodeEvent_LEAVE:
+		logger.Infof("[UpstreamManager] Node LEAVE: %s/%s @ %s", svcType, node.NodeId, addr)
 		pool.RemoveNode(addr)
 	}
 }

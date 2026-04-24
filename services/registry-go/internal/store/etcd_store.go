@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gmaker/luffa/common/go/logger"
 	"github.com/gmaker/luffa/gen/go/registry"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/protobuf/proto"
@@ -49,6 +50,7 @@ func prefixKey(serviceType string) string {
 func (e *EtcdStore) Register(ctx context.Context, node *registry.NodeInfo) (int64, error) {
 	resp, err := e.client.Grant(ctx, DefaultTTL)
 	if err != nil {
+		logger.Errorf("[EtcdStore] Grant lease failed: %s/%s, err=%v", node.ServiceType, node.NodeId, err)
 		return 0, err
 	}
 
@@ -60,21 +62,29 @@ func (e *EtcdStore) Register(ctx context.Context, node *registry.NodeInfo) (int6
 	key := nodeKey(node)
 	_, err = e.client.Put(ctx, key, string(data), clientv3.WithLease(resp.ID))
 	if err != nil {
+		logger.Errorf("[EtcdStore] Put node failed: %s/%s, err=%v", node.ServiceType, node.NodeId, err)
 		return 0, err
 	}
 
 	e.leases.Store(node.NodeId, resp.ID)
+	logger.Infof("[EtcdStore] Node registered: %s/%s @ %s:%d, lease=%d", node.ServiceType, node.NodeId, node.Host, node.Port, resp.ID)
 	return int64(resp.ID), nil
 }
 
 func (e *EtcdStore) Heartbeat(ctx context.Context, nodeID string) error {
 	v, ok := e.leases.Load(nodeID)
 	if !ok {
+		logger.Warnf("[EtcdStore] Heartbeat failed: lease not found for node=%s", nodeID)
 		return fmt.Errorf("lease not found for node: %s", nodeID)
 	}
 	leaseID := v.(clientv3.LeaseID)
 	_, err := e.client.KeepAliveOnce(ctx, leaseID)
-	return err
+	if err != nil {
+		logger.Warnf("[EtcdStore] Heartbeat failed: node=%s, lease=%d, err=%v", nodeID, leaseID, err)
+		return err
+	}
+	logger.Debugf("[EtcdStore] Heartbeat ok: node=%s, lease=%d", nodeID, leaseID)
+	return nil
 }
 
 func (e *EtcdStore) Discover(ctx context.Context, serviceType string) ([]*registry.NodeInfo, error) {
@@ -133,8 +143,10 @@ func (e *EtcdStore) Subscribe(ctx context.Context, serviceType string) (<-chan *
 	// 获取当前全量
 	nodes, err := e.Discover(ctx, serviceType)
 	if err != nil {
+		logger.Errorf("[EtcdStore] Discover failed for %s: %v", serviceType, err)
 		return nil, nil, err
 	}
+	logger.Infof("[EtcdStore] Subscribe snapshot: %s has %d nodes", serviceType, len(nodes))
 
 	// 创建事件通道并启动 Watch（仅增量，不重复发送全量）
 	out := make(chan *registry.NodeEvent, 16)
@@ -144,6 +156,7 @@ func (e *EtcdStore) Subscribe(ctx context.Context, serviceType string) (<-chan *
 		defer close(out)
 		for watchResp := range watchCh {
 			if watchResp.Err() != nil {
+				logger.Errorf("[EtcdStore] Watch error: %s, err=%v", serviceType, watchResp.Err())
 				return
 			}
 			for _, ev := range watchResp.Events {
@@ -155,8 +168,10 @@ func (e *EtcdStore) Subscribe(ctx context.Context, serviceType string) (<-chan *
 				switch ev.Type {
 				case clientv3.EventTypePut:
 					tp = registry.NodeEvent_JOIN
+					logger.Infof("[EtcdStore] Node JOIN: %s/%s", node.ServiceType, node.NodeId)
 				case clientv3.EventTypeDelete:
 					tp = registry.NodeEvent_LEAVE
+					logger.Infof("[EtcdStore] Node LEAVE: %s/%s", node.ServiceType, node.NodeId)
 				}
 				select {
 				case out <- &registry.NodeEvent{Type: tp, Node: &node}:

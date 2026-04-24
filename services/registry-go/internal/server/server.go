@@ -3,9 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
+	"strings"
 	"sync"
 
+	"github.com/gmaker/luffa/common/go/logger"
 	"github.com/gmaker/luffa/common/go/net"
 	pb "github.com/gmaker/luffa/gen/go/registry"
 	protocol "github.com/gmaker/luffa/gen/go/protocol"
@@ -100,12 +101,12 @@ func (s *Server) handleRegister(conn *net.TCPConn, pkt *net.Packet) {
 
 	leaseID, err := s.store.Register(context.Background(), &req)
 	if err != nil {
+		logger.Errorf("[Registry] Register failed: %s/%s @ %s:%d, err=%v", req.ServiceType, req.NodeId, req.Host, req.Port, err)
 		s.sendError(conn, pkt.SeqID, err)
 		return
 	}
 
-	// 记录 leaseID 到本地（可选：用于心跳校验）
-	_ = leaseID
+	logger.Infof("[Registry] Node registered: %s/%s @ %s:%d, lease=%d", req.ServiceType, req.NodeId, req.Host, req.Port, leaseID)
 
 	res := &pb.Result{Ok: true, Code: 0, Msg: "registered"}
 	s.sendProto(conn, pkt.SeqID, CmdRegister, res)
@@ -119,9 +120,12 @@ func (s *Server) handleHeartbeat(conn *net.TCPConn, pkt *net.Packet) {
 	}
 
 	if err := s.store.Heartbeat(context.Background(), req.NodeId); err != nil {
+		logger.Warnf("[Registry] Heartbeat failed: node=%s, err=%v", req.NodeId, err)
 		s.sendError(conn, pkt.SeqID, err)
 		return
 	}
+
+	logger.Debugf("[Registry] Heartbeat ok: node=%s", req.NodeId)
 
 	res := &pb.Result{Ok: true, Code: 0, Msg: "heartbeat ok"}
 	s.sendProto(conn, pkt.SeqID, CmdHeartbeat, res)
@@ -169,6 +173,8 @@ func (s *Server) handleSubscribe(conn *net.TCPConn, pkt *net.Packet) {
 		return
 	}
 
+	logger.Infof("[Registry] Subscribe from conn=%s, services=%s", conn.ID(), strings.Join(req.ServiceTypes, ","))
+
 	// 收集全量快照
 	snapshot := make(map[string]*pb.NodeList)
 	for _, svcType := range req.ServiceTypes {
@@ -178,6 +184,7 @@ func (s *Server) handleSubscribe(conn *net.TCPConn, pkt *net.Packet) {
 			return
 		}
 		snapshot[svcType] = &pb.NodeList{Nodes: nodes}
+		logger.Infof("[Registry] Subscribe snapshot: %s has %d nodes", svcType, len(nodes))
 	}
 
 	res := &pb.SubscribeRes{Snapshot: snapshot}
@@ -215,13 +222,30 @@ func (s *Server) handleSubscribe(conn *net.TCPConn, pkt *net.Packet) {
 	}
 }
 
+func nodeEventTypeString(t pb.NodeEvent_Type) string {
+	switch t {
+	case pb.NodeEvent_JOIN:
+		return "JOIN"
+	case pb.NodeEvent_LEAVE:
+		return "LEAVE"
+	case pb.NodeEvent_UPDATE:
+		return "UPDATE"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 func (s *Server) watchLoop(ctx context.Context, conn *net.TCPConn, serviceType string) {
 	events, _, err := s.store.Subscribe(ctx, serviceType)
 	if err != nil {
-		log.Printf("subscribe error: %v", err)
+		logger.Errorf("[Registry] watchLoop subscribe error: service=%s, err=%v", serviceType, err)
 		return
 	}
 	for ev := range events {
+		if ev.Node != nil {
+			logger.Infof("[Registry] Node event -> conn=%s: %s %s/%s @ %s:%d",
+				conn.ID(), nodeEventTypeString(ev.Type), ev.Node.ServiceType, ev.Node.NodeId, ev.Node.Host, ev.Node.Port)
+		}
 		data, err := proto.Marshal(ev)
 		if err != nil {
 			continue
@@ -237,6 +261,7 @@ func (s *Server) watchLoop(ctx context.Context, conn *net.TCPConn, serviceType s
 			Payload: data,
 		}
 		if !conn.SendPacket(out) {
+			logger.Warnf("[Registry] Node event send failed, conn=%s disconnected", conn.ID())
 			return
 		}
 	}
@@ -245,6 +270,7 @@ func (s *Server) watchLoop(ctx context.Context, conn *net.TCPConn, serviceType s
 func (s *Server) onDisconnect(conn *net.TCPConn) {
 	if v, ok := s.watchers.Load(conn.ID()); ok {
 		w := v.(*Watcher)
+		logger.Infof("[Registry] Subscriber disconnected: conn=%s, watched=%s", conn.ID(), strings.Join(w.svcTypes, ","))
 		if w.watchCancel != nil {
 			w.watchCancel()
 		} else if w.cancel != nil {

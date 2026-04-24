@@ -1,6 +1,7 @@
 #include "upstream_manager.hpp"
 #include "registry.pb.h"
 #include <iostream>
+#include <sstream>
 
 namespace gs {
 namespace registry {
@@ -42,6 +43,13 @@ bool UpstreamManager::Start() {
         return true;
     }
 
+    std::stringstream ss;
+    for (size_t i = 0; i < types.size(); ++i) {
+        if (i > 0) ss << ",";
+        ss << types[i];
+    }
+    std::cout << "[UpstreamManager] Subscribing to services: " << ss.str() << std::endl;
+
     ::registry::SubscribeRes res;
     if (!client_->Subscribe(types, &res,
                             [this](const ::registry::NodeEvent& ev) { OnNodeEvent(ev); })) {
@@ -58,14 +66,18 @@ bool UpstreamManager::Start() {
 
             for (int i = 0; i < list.nodes_size(); ++i) {
                 const auto& node = list.nodes(i);
+                std::string addr = node.host() + ":" + std::to_string(node.port());
                 it->second->AddNode(node.host(), static_cast<uint16_t>(node.port()));
+                std::cout << "[UpstreamManager] Snapshot add node: " << svc_type << "/" << node.node_id() << " @ " << addr << std::endl;
             }
         }
 
         // 启动所有连接池
-        for (auto& [_, pool] : pools_) {
+        for (auto& [svc_type, pool] : pools_) {
             if (!pool->Start()) {
-                std::cerr << "UpstreamManager::Start: failed to start pool" << std::endl;
+                std::cerr << "UpstreamManager::Start: failed to start pool: " << svc_type << std::endl;
+            } else {
+                std::cout << "[UpstreamManager] Pool started: " << svc_type << " (healthy=" << pool->HealthyCount() << "/" << pool->TotalCount() << ")" << std::endl;
             }
         }
     }
@@ -75,8 +87,9 @@ bool UpstreamManager::Start() {
 
 void UpstreamManager::Stop() {
     std::lock_guard<std::mutex> lk(mtx_);
-    for (auto& [_, pool] : pools_) {
+    for (auto& [svc_type, pool] : pools_) {
         pool->Stop();
+        std::cout << "[UpstreamManager] Pool stopped: " << svc_type << std::endl;
     }
 }
 
@@ -93,15 +106,21 @@ void UpstreamManager::OnNodeEvent(const ::registry::NodeEvent& ev) {
     if (!ev.has_node()) return;
     const auto& node = ev.node();
     const std::string& svc_type = node.service_type();
+    std::string addr = node.host() + ":" + std::to_string(node.port());
 
     std::lock_guard<std::mutex> lk(mtx_);
     auto it = pools_.find(svc_type);
     if (it == pools_.end()) return;
 
     auto* pool = it->second.get();
-    if (ev.type() == ::registry::NodeEvent::JOIN || ev.type() == ::registry::NodeEvent::UPDATE) {
+    if (ev.type() == ::registry::NodeEvent::JOIN) {
+        std::cout << "[UpstreamManager] Node JOIN: " << svc_type << "/" << node.node_id() << " @ " << addr << std::endl;
+        pool->AddNode(node.host(), static_cast<uint16_t>(node.port()));
+    } else if (ev.type() == ::registry::NodeEvent::UPDATE) {
+        std::cout << "[UpstreamManager] Node UPDATE: " << svc_type << "/" << node.node_id() << " @ " << addr << std::endl;
         pool->AddNode(node.host(), static_cast<uint16_t>(node.port()));
     } else if (ev.type() == ::registry::NodeEvent::LEAVE) {
+        std::cout << "[UpstreamManager] Node LEAVE: " << svc_type << "/" << node.node_id() << " @ " << addr << std::endl;
         pool->RemoveNode(node.host(), static_cast<uint16_t>(node.port()));
     }
 }

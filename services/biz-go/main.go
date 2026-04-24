@@ -112,9 +112,30 @@ func main() {
 		}
 	}
 
-	// 连接 DBProxy（多节点），失败时不阻塞启动（Phase 1 最小链路无需 DBProxy）
+	// 通过 Registry 发现 DBProxy
 	var playerSvc *PlayerService // 在闭包之前声明
-	dbClient := NewDBProxyClient(strings.Split(*dbproxyAddrs, ","))
+	dbproxyOnData := func(_ *net.TCPConn, pkt *net.Packet) {
+		// DBProxy 响应由 rpc.Client 处理，此回调在 NewDBProxyClient 中通过 pool 绑定
+	}
+	upstreamMgr := registry.NewUpstreamManager(regClient)
+	upstreamMgr.AddInterest("dbproxy", dbproxyOnData)
+	if err := upstreamMgr.Start(); err != nil {
+		log.Warnf("subscribe dbproxy upstream failed: %v", err)
+	}
+
+	dbproxyPool := upstreamMgr.GetPool("dbproxy")
+	if dbproxyPool == nil || dbproxyPool.TotalCount() == 0 {
+		log.Warnf("no dbproxy found in registry, using fallback addrs: %s", *dbproxyAddrs)
+		dbproxyPool = net.NewUpstreamPool(dbproxyOnData)
+		for _, addr := range strings.Split(*dbproxyAddrs, ",") {
+			dbproxyPool.AddNode(addr)
+		}
+		dbproxyPool.Start()
+	} else {
+		log.Infof("Biz discovered dbproxy from registry, nodes=%d", dbproxyPool.TotalCount())
+	}
+
+	dbClient := NewDBProxyClient(dbproxyPool)
 	if err := dbClient.Connect(); err != nil {
 		log.Warnf("connect dbproxy failed: %v, running without dbproxy", err)
 	} else {
@@ -325,33 +346,26 @@ func generateToken(playerID uint64) string {
 // ==================== DBProxy 通用客户端（零业务耦合） ====================
 
 type DBProxyClient struct {
-	addrs []string
-	pool  *net.UpstreamPool
-	rpc   *rpc.Client
+	pool *net.UpstreamPool
+	rpc  *rpc.Client
 }
 
-func NewDBProxyClient(addrs []string) *DBProxyClient {
-	return &DBProxyClient{addrs: addrs}
+func NewDBProxyClient(pool *net.UpstreamPool) *DBProxyClient {
+	c := &DBProxyClient{pool: pool}
+	c.rpc = rpc.NewClientWithPool(pool)
+	return c
 }
 
 func (c *DBProxyClient) Connect() error {
-	c.pool = net.NewUpstreamPool(func(_ *net.TCPConn, pkt *net.Packet) {
-		if c.rpc != nil {
-			c.rpc.OnPacket(pkt)
-		}
-	})
-	for _, addr := range c.addrs {
-		c.pool.AddNode(addr)
+	if c.pool == nil {
+		return fmt.Errorf("dbproxy pool is nil")
 	}
-	c.pool.Start()
-	c.rpc = rpc.NewClientWithPool(c.pool)
+	// rpc 已在构造时创建，pool 由外部管理
 	return nil
 }
 
 func (c *DBProxyClient) Close() {
-	if c.pool != nil {
-		c.pool.Stop()
-	}
+	// pool 由外部 UpstreamManager 管理，此处不停止
 }
 
 // Call 通用 RPC 调用，业务层通过此接口访问 DBProxy

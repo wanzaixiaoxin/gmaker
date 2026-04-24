@@ -91,7 +91,6 @@ type DBProxyConfig struct {
 func main() {
 	configFile := flag.String("config", "chat.json", "Config file path")
 	flag.Parse()
-	flag.Parse()
 
 	// 加载配置
 	var cfg ChatConfig
@@ -174,13 +173,30 @@ func main() {
 		}
 	}
 
-	// 连接 DBProxy
+	// 通过 Registry 发现 DBProxy
 	var chatSvc *chat.ChatService
-	var dbproxyAddrs []string
-	for _, n := range cfg.DBProxy.Nodes {
-		dbproxyAddrs = append(dbproxyAddrs, fmt.Sprintf("%s:%d", n.Host, n.Port))
+	dbproxyOnData := func(_ *net.TCPConn, pkt *net.Packet) {
+		// DBProxy 响应由 rpc.Client 处理
 	}
-	dbClient := chat.NewDBProxyClient(dbproxyAddrs)
+	upstreamMgr := registry.NewUpstreamManager(regClient)
+	upstreamMgr.AddInterest("dbproxy", dbproxyOnData)
+	if err := upstreamMgr.Start(); err != nil {
+		log.Warnf("subscribe dbproxy upstream failed: %v", err)
+	}
+
+	var dbClient chat.DBProxyClient
+	dbproxyPool := upstreamMgr.GetPool("dbproxy")
+	if dbproxyPool == nil || dbproxyPool.TotalCount() == 0 {
+		log.Warnf("no dbproxy found in registry, using fallback config")
+		var dbproxyAddrs []string
+		for _, n := range cfg.DBProxy.Nodes {
+			dbproxyAddrs = append(dbproxyAddrs, fmt.Sprintf("%s:%d", n.Host, n.Port))
+		}
+		dbClient = chat.NewDBProxyClient(dbproxyAddrs)
+	} else {
+		log.Infof("Chat discovered dbproxy from registry, nodes=%d", dbproxyPool.TotalCount())
+		dbClient = chat.NewDBProxyClientWithPool(dbproxyPool)
+	}
 	if err := dbClient.Connect(); err != nil {
 		log.Warnf("connect dbproxy failed: %v, running without dbproxy", err)
 		dbClient = nil

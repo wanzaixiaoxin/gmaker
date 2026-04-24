@@ -4,6 +4,8 @@
 #include <vector>
 #include <cstdint>
 #include <unordered_map>
+#include <mutex>
+#include <functional>
 
 namespace gs {
 namespace config {
@@ -58,6 +60,27 @@ struct SecurityConfig {
 // Registry 配置
 struct RegistryConfig {
     std::vector<UpstreamNode> nodes;
+};
+
+// 配置加载器（支持 TOML / JSON）
+class Loader {
+public:
+    explicit Loader(const std::string& path);
+
+    void SetOnReload(std::function<void()> fn);
+
+    bool Load();
+    bool Reload();
+
+    std::string GetString(const std::string& key, const std::string& def = "");
+    int GetInt(const std::string& key, int def = 0);
+    bool GetBool(const std::string& key, bool def = false);
+
+private:
+    std::string path_;
+    std::unordered_map<std::string, std::string> data_;
+    std::function<void()> on_reload_;
+    std::mutex mtx_;
 };
 
 } // namespace config

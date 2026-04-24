@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gmaker/luffa/common/go/logger"
 	pb "github.com/gmaker/luffa/gen/go/registry"
 )
 
@@ -43,6 +44,9 @@ func (m *MemoryStore) Register(ctx context.Context, node *pb.NodeInfo) (int64, e
 	}
 	m.mu.Unlock()
 
+	logger.Infof("[MemoryStore] Node JOIN: %s/%s @ %s:%d, lease=%d, watchers=%d",
+		node.ServiceType, node.NodeId, node.Host, node.Port, leaseID, len(watchers))
+
 	for _, ch := range watchers {
 		select {
 		case ch <- &pb.NodeEvent{Type: pb.NodeEvent_JOIN, Node: node}:
@@ -57,8 +61,10 @@ func (m *MemoryStore) Heartbeat(ctx context.Context, nodeID string) error {
 	_, ok := m.leases[nodeID]
 	m.mu.RUnlock()
 	if !ok {
+		logger.Warnf("[MemoryStore] Heartbeat failed: node=%s not found", nodeID)
 		return fmt.Errorf("node not found: %s", nodeID)
 	}
+	logger.Debugf("[MemoryStore] Heartbeat ok: node=%s", nodeID)
 	return nil
 }
 
@@ -149,6 +155,10 @@ func (m *MemoryStore) broadcast(serviceType string, ev *pb.NodeEvent) {
 	m.mu.RLock()
 	arr := m.watches[serviceType]
 	m.mu.RUnlock()
+	if len(arr) > 0 && ev.Node != nil {
+		logger.Infof("[MemoryStore] Broadcast %s to %d watchers: %s/%s",
+			serviceType, len(arr), ev.Node.ServiceType, ev.Node.NodeId)
+	}
 	for _, ch := range arr {
 		select {
 		case ch <- ev:

@@ -8,6 +8,8 @@ namespace crypto {
 
 // 使用 HMAC-SHA256 派生 session key（返回 32 字节）
 std::vector<uint8_t> DeriveSessionKey(const std::vector<uint8_t>& masterKey,
+                                       const std::vector<uint8_t>& clientRandom);
+std::vector<uint8_t> DeriveSessionKey(const std::vector<uint8_t>& masterKey,
                                        const std::vector<uint8_t>& clientRandom,
                                        const std::vector<uint8_t>& serverRandom);
 
