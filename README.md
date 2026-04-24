@@ -243,7 +243,7 @@ docker compose up -d
 | Phase 5 | 实时服基础设施 | 🚧 骨架阶段 |
 | Phase 6 | 部署与 CI/CD | ✅ 已完成子项 |
 
-详见 [IMPLEMENTATION.md](IMPLEMENTATION.md) 了解各 Phase 详细验收标准。
+详见 [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) 了解各 Phase 详细验收标准。
 
 ---
 
@@ -264,10 +264,10 @@ docker compose up -d
 
 ## 相关文档
 
-- [DESIGN.md](DESIGN.md) — 完整架构设计文档
-- [IMPLEMENTATION.md](IMPLEMENTATION.md) — 落地实施计划与验收标准
-- [DESIGN_REVIEW.md](DESIGN_REVIEW.md) — 设计评审记录
-- [AGENTS.md](AGENTS.md) — 面向 AI Coding Agent 的项目指南
+- [docs/DESIGN.md](docs/DESIGN.md) — 完整架构设计文档
+- [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) — 落地实施计划与验收标准
+- [docs/DESIGN_REVIEW.md](docs/DESIGN_REVIEW.md) — 设计评审记录
+- [docs/AGENTS.md](docs/AGENTS.md) — 面向 AI Coding Agent 的项目指南
 
 ---
 

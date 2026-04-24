@@ -21,7 +21,7 @@ const (
 )
 
 // Packet 是通用包体消息，用于调试工具、日志落盘、网关内部异步透传等场景。
-// 实际网络通信时，包头采用 18 字节固定二进制格式（详见 DESIGN.md 4.1 节），
+// 实际网络通信时，包头采用 18 字节固定二进制格式（详见 docs/DESIGN.md 4.1 节），
 // 仅 Payload 字段为 protobuf 序列化后的 bytes。
 type Packet struct {
 	state         protoimpl.MessageState
@@ -31,7 +31,7 @@ type Packet struct {
 	Magic   uint32 `protobuf:"varint,1,opt,name=magic,proto3" json:"magic,omitempty"`              // 0x9D7F
 	CmdId   uint32 `protobuf:"varint,2,opt,name=cmd_id,json=cmdId,proto3" json:"cmd_id,omitempty"` // 全局命令号，见 spec/cmd_ids.yaml
 	SeqId   uint32 `protobuf:"varint,3,opt,name=seq_id,json=seqId,proto3" json:"seq_id,omitempty"` // 请求序列号，Req/Res 配对使用；Push 填 0
-	Flag    uint32 `protobuf:"varint,4,opt,name=flag,proto3" json:"flag,omitempty"`                // 位标志，见 DESIGN.md 4.1.3
+	Flag    uint32 `protobuf:"varint,4,opt,name=flag,proto3" json:"flag,omitempty"`                // 位标志，见 docs/DESIGN.md 4.1.3
 	Payload []byte `protobuf:"bytes,5,opt,name=payload,proto3" json:"payload,omitempty"`           // 具体业务消息的 protobuf 序列化 bytes
 }
 

@@ -1007,7 +1007,12 @@ service BroadcastRouter {
 
 ```
 luffa/
-├── DESIGN.md                  # 本设计文档
+├── docs/                      # 项目文档
+│   ├── DESIGN.md              # 本设计文档
+│   ├── IMPLEMENTATION.md      # 落地实施计划
+│   ├── DESIGN_REVIEW.md       # 设计评审记录
+│   └── AGENTS.md              # AI Coding Agent 指南
+├── README.md                  # 项目简介与快速开始
 ├── spec/                      # 规范与协议定义
 │   ├── proto/                 # 所有 protobuf 文件
 │   ├── cmd_ids.yaml           # 全局命令号表
