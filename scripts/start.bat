@@ -72,7 +72,7 @@ goto :eof
 
 :start_testclient
 echo Starting TestClient (heartbeat daemon) ...
-start "TestClient" cmd /c "bin\testclient.exe -addr 127.0.0.1:8081 -bots 1 -scenario heartbeat -duration 0 -rate 0 -interval 5s -log-file logs\testclient_%LOG_TS%.log ^& pause"
+start "TestClient" cmd /c "bin\testclient.exe -addr 127.0.0.1:8081 -bots 1 -scenario heartbeat -duration 0 -rate 0 -interval 5s ^& pause"
 goto :eof
 
 :start_minimal
@@ -85,6 +85,8 @@ timeout /t 2 /nobreak >nul
 call :start_biz
 timeout /t 2 /nobreak >nul
 call :start_gateway
+timeout /t 2 /nobreak >nul
+call :start_testclient
 timeout /t 2 /nobreak >nul
 echo.
 echo Minimal link started: Registry + Biz + Gateway
