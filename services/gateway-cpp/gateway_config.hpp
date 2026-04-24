@@ -20,8 +20,9 @@ struct Config {
     // Metrics 配置
     std::string metrics_addr = ":9081";
     
-    // Registry 配置
-    std::vector<std::string> registry_nodes;
+    // 服务发现配置
+    std::string discovery_type = "registry";
+    std::vector<std::string> discovery_addrs;
     
     // 上游服务类型列表 (只需要类型，节点从 Registry 发现)
     std::vector<std::string> upstream_services;

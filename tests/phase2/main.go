@@ -38,7 +38,7 @@ func main() {
 
 	// 2. 启动 DBProxy
 	mysqlDSN := "root:123456@tcp(127.0.0.1:3306)/gmaker"
-	dbproxyCmd := exec.Command("./bin/dbproxy-go.exe", "-listen", dbproxyAddr, "-mysql", mysqlDSN)
+	dbproxyCmd := exec.Command("./bin/dbproxy-go.exe", "-config", "dbproxy.json", "-listen", dbproxyAddr, "-mysql", mysqlDSN)
 	dbproxyCmd.Stdout = os.Stdout
 	dbproxyCmd.Stderr = os.Stderr
 	if err := dbproxyCmd.Start(); err != nil {
@@ -49,7 +49,7 @@ func main() {
 	log.Println("DBProxy started")
 
 	// 3. 启动 Biz
-	bizCmd := exec.Command("./bin/biz-go.exe", "-listen", bizAddr, "-registry", registryAddr, "-dbproxy", dbproxyAddr)
+	bizCmd := exec.Command("./bin/biz-go.exe", "-config", "biz.json", "-listen", bizAddr, "-dbproxy", dbproxyAddr)
 	bizCmd.Stdout = os.Stdout
 	bizCmd.Stderr = os.Stderr
 	if err := bizCmd.Start(); err != nil {

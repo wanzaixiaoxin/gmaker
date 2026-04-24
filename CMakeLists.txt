@@ -87,6 +87,25 @@ target_link_libraries(protobuf::libprotobuf INTERFACE
 # 若后续需要编译 .proto 文件，可复用此变量
 set(CMAKE_PROTOC_EXECUTABLE ${PROTOC_EXECUTABLE})
 
+# ==================== etcd-cpp-apiv3（可选）====================
+# C++ 服务直接连接 etcd 需要此库。
+# Windows 上默认关闭，因为需要 grpc/protobuf 开发包；
+# Linux/Docker 上可开启（需先 apt install libgrpc++-dev protobuf-compiler-grpc）。
+option(ENABLE_ETCD_DISCOVERY "Enable etcd direct discovery for C++ services" OFF)
+
+if(ENABLE_ETCD_DISCOVERY)
+    message(STATUS "etcd discovery enabled: fetching etcd-cpp-apiv3...")
+    FetchContent_Declare(
+        etcd-cpp-apiv3
+        GIT_REPOSITORY https://github.com/etcd-cpp-apiv3/etcd-cpp-apiv3.git
+        GIT_TAG        v0.15.3
+    )
+    # 仅编译同步核心，避免 cpprestsdk 依赖
+    set(BUILD_ETCD_CORE_ONLY ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(etcd-cpp-apiv3)
+    message(STATUS "etcd-cpp-apiv3 ready")
+endif()
+
 # ==================== 源文件 ====================
 # libuv 异步网络封装层（已统一替代阻塞模型）
 set(CPP_ASYNC_NET_SOURCES
@@ -113,6 +132,12 @@ set(CPP_PROTO_SOURCES
 set(CPP_REGISTRY_SOURCES
     common/cpp/gs/registry/client.cpp
     common/cpp/gs/registry/upstream_manager.cpp
+)
+
+set(CPP_DISCOVERY_SOURCES
+    common/cpp/gs/discovery/registry_impl.cpp
+    common/cpp/gs/discovery/upstream_manager.cpp
+    common/cpp/gs/discovery/factory.cpp
 )
 
 set(CPP_CONFIG_SOURCES
@@ -154,6 +179,7 @@ add_executable(gateway-cpp
     ${CPP_ASYNC_NET_SOURCES}
     ${CPP_RPC_SOURCES}
     ${CPP_REGISTRY_SOURCES}
+    ${CPP_DISCOVERY_SOURCES}
     ${CPP_PROTO_SOURCES}
     ${CPP_CONFIG_SOURCES}
     ${CPP_CRYPTO_SOURCES}
@@ -171,6 +197,10 @@ target_include_directories(gateway-cpp PRIVATE
     ${RAPIDJSON_INCLUDE_DIR}
 )
 target_link_libraries(gateway-cpp toml11::toml11 protobuf::libprotobuf ${UV_LIB} hiredis)
+if(ENABLE_ETCD_DISCOVERY)
+    target_compile_definitions(gateway-cpp PRIVATE ENABLE_ETCD_DISCOVERY=1)
+    target_link_libraries(gateway-cpp etcd-cpp-api)
+endif()
 if(WIN32)
     target_link_libraries(gateway-cpp ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
 elseif(UNIX AND NOT APPLE)
@@ -185,6 +215,7 @@ add_executable(realtime-cpp
     ${CPP_ASYNC_NET_SOURCES}
     ${CPP_RPC_SOURCES}
     ${CPP_REGISTRY_SOURCES}
+    ${CPP_DISCOVERY_SOURCES}
     ${CPP_PROTO_SOURCES}
     ${CPP_CONFIG_SOURCES}
     ${CPP_CRYPTO_SOURCES}
@@ -203,6 +234,10 @@ target_include_directories(realtime-cpp PRIVATE
     ${RAPIDJSON_INCLUDE_DIR}
 )
 target_link_libraries(realtime-cpp toml11::toml11 protobuf::libprotobuf ${UV_LIB} hiredis)
+if(ENABLE_ETCD_DISCOVERY)
+    target_compile_definitions(realtime-cpp PRIVATE ENABLE_ETCD_DISCOVERY=1)
+    target_link_libraries(realtime-cpp etcd-cpp-api)
+endif()
 if(WIN32)
     target_link_libraries(realtime-cpp ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
 elseif(UNIX AND NOT APPLE)

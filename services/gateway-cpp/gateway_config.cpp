@@ -20,9 +20,10 @@ Config LoadConfig(const std::string& path) {
     cfg.listen_port = static_cast<uint16_t>(network.GetInt("port", 8081));
     cfg.max_connections = static_cast<int>(network.GetInt("max_connections", 10000));
     
-    auto registry = json.GetObject("registry");
-    for (const auto& node : registry.GetNodeArray("nodes")) {
-        cfg.registry_nodes.push_back(node.host + ":" + std::to_string(node.port));
+    auto discovery = json.GetObject("discovery");
+    cfg.discovery_type = discovery.GetString("type", "registry");
+    for (const auto& addr : discovery.GetStringArray("addrs")) {
+        cfg.discovery_addrs.push_back(addr);
     }
     
     auto upstream = json.GetObject("upstream");
@@ -45,8 +46,9 @@ void PrintConfig(const Config& cfg) {
     std::cout << "Max connections:  " << cfg.max_connections << std::endl;
     std::cout << "Metrics addr:     " << cfg.metrics_addr << std::endl;
     std::cout << "Log level:        " << cfg.log_level << std::endl;
-    std::cout << "Registry nodes:   ";
-    for (const auto& addr : cfg.registry_nodes) std::cout << addr << " ";
+    std::cout << "Discovery type:   " << cfg.discovery_type << std::endl;
+    std::cout << "Discovery addrs:  ";
+    for (const auto& addr : cfg.discovery_addrs) std::cout << addr << " ";
     std::cout << std::endl;
     std::cout << "Upstream services:";
     for (const auto& svc : cfg.upstream_services) std::cout << " " << svc;

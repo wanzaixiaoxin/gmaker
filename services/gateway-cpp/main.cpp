@@ -16,8 +16,8 @@
 #include "gs/net/address.hpp"
 #include "gs/crypto/session.hpp"
 #include "gs/replay/replay.hpp"
-#include "gs/registry/client.hpp"
-#include "gs/registry/upstream_manager.hpp"
+#include "gs/discovery/factory.hpp"
+#include "gs/discovery/upstream_manager.hpp"
 #include "gs/metrics/metrics.hpp"
 #include "gs/errors.hpp"
 #include "gs/logger/logger.hpp"
@@ -110,9 +110,9 @@ private:
     void HeartbeatLoop();
     
     std::unique_ptr<AsyncTCPServer> server_;
-    std::unique_ptr<gs::registry::UpstreamManager> upstream_mgr_;
+    std::unique_ptr<gs::discovery::UpstreamManager> upstream_mgr_;
     std::unique_ptr<AsyncWriteCoalescer> coalescer_;
-    std::unique_ptr<gs::registry::RegistryClient> reg_client_;
+    std::unique_ptr<gs::discovery::ServiceDiscovery> sd_;
     
     std::mutex sessions_mtx_;
     std::unordered_map<uint64_t, AsyncTCPConnection*> clients_;
@@ -274,44 +274,24 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
         return false;
     }
 
-    // 连接 Registry 并管理上游连接池（Registry 必须可用）
-    if (!cfg.registry_nodes.empty()) {
-        std::vector<std::pair<std::string, uint16_t>> reg_addrs;
-        for (const auto& addr : cfg.registry_nodes) {
-            auto pos = addr.find(':');
-            if (pos != std::string::npos) {
-                reg_addrs.emplace_back(addr.substr(0, pos), static_cast<uint16_t>(std::stoi(addr.substr(pos + 1))));
-            }
+    // 连接服务发现后端并管理上游连接池
+    if (!cfg.discovery_addrs.empty()) {
+        sd_ = gs::discovery::CreateDiscovery(cfg.discovery_type, cfg.discovery_addrs);
+        
+        gs::discovery::NodeInfo node;
+        node.service_type = "gateway";
+        node.node_id = cfg.node_id;
+        node.host = "127.0.0.1";
+        node.port = cfg.listen_port;
+        node.register_at = static_cast<uint64_t>(
+            std::chrono::system_clock::now().time_since_epoch().count());
+        if (sd_->Register(node)) {
+            if (logger_) logger_->Info("Gateway registered to registry");
+        } else {
+            if (logger_) logger_->Warn("Gateway register to registry failed");
         }
         
-        reg_client_ = std::make_unique<gs::registry::RegistryClient>(nullptr, reg_addrs);
-        if (!reg_client_->Connect()) {
-            if (logger_) logger_->Error("Failed to connect registry, exiting");
-            return false;
-        }
-        if (logger_) logger_->Info("Connected to registry");
-        
-        // 注册 Gateway 自身节点
-        {
-            registry::NodeInfo node;
-            node.set_service_type("gateway");
-            node.set_node_id(cfg.node_id);
-            node.set_host("127.0.0.1");
-            node.set_port(cfg.listen_port);
-            node.set_register_at(static_cast<uint64_t>(
-                std::chrono::system_clock::now().time_since_epoch().count()));
-            registry::Result res;
-            if (reg_client_->Register(node, &res)) {
-                if (logger_) logger_->Info("Gateway registered to registry");
-            } else {
-                if (logger_) logger_->Warn("Gateway register to registry failed: " + res.msg());
-            }
-        }
-        
-        // 启动心跳线程
-        heartbeat_thread_ = std::thread([this]() { HeartbeatLoop(); });
-        
-        upstream_mgr_ = std::make_unique<gs::registry::UpstreamManager>(reg_client_.get(), server_->EventLoop());
+        upstream_mgr_ = std::make_unique<gs::discovery::UpstreamManager>(sd_.get(), server_->EventLoop());
         
         // 声明对所有配置上游服务的兴趣
         for (const auto& svc_type : cfg.upstream_services) {
@@ -343,7 +323,7 @@ void Gateway::Stop() {
     if (server_) server_->Stop();
     if (coalescer_) coalescer_->Stop();
     if (upstream_mgr_) upstream_mgr_->Stop();
-    if (reg_client_) reg_client_->Close();
+    if (sd_) sd_->Close();
     
     std::lock_guard<std::mutex> lk(stop_mtx_);
     stop_flag_ = true;
@@ -351,14 +331,9 @@ void Gateway::Stop() {
 }
 
 void Gateway::HeartbeatLoop() {
+    // 心跳已由 discovery::RegistryImpl 内部自动管理，此处保留空实现以兼容旧代码
     while (!heartbeat_stop_.load()) {
         std::this_thread::sleep_for(std::chrono::seconds(5));
-        if (reg_client_ && !cfg_.node_id.empty()) {
-            registry::Result res;
-            if (!reg_client_->Heartbeat(cfg_.node_id, &res)) {
-                if (logger_) logger_->Warn("Registry heartbeat failed");
-            }
-        }
     }
 }
 

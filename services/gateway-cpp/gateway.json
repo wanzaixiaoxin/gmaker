@@ -10,10 +10,9 @@
     "port": 8081,
     "max_connections": 10000
   },
-  "registry": {
-    "nodes": [
-      {"host": "127.0.0.1", "port": 2379}
-    ]
+  "discovery": {
+    "type": "registry",
+    "addrs": ["127.0.0.1:2379"]
   },
   "upstream": {
     "services": ["biz", "chat", "login"]

@@ -16,29 +16,80 @@ import (
 	"github.com/gmaker/luffa/common/go/logger"
 	"github.com/gmaker/luffa/common/go/metrics"
 	"github.com/gmaker/luffa/common/go/net"
-	"github.com/gmaker/luffa/common/go/registry"
+	"github.com/gmaker/luffa/common/go/config"
+	"github.com/gmaker/luffa/common/go/discovery"
 	"github.com/gmaker/luffa/common/go/redis"
 	"github.com/gmaker/luffa/services/biz-go/internal/dbproxy"
 	"github.com/gmaker/luffa/services/biz-go/internal/handler"
 	"github.com/gmaker/luffa/services/biz-go/internal/service"
 
 	commonpb "github.com/gmaker/luffa/gen/go/common"
-	pb "github.com/gmaker/luffa/gen/go/registry"
 )
+
+type BizConfig struct {
+	Service struct {
+		ServiceType string `json:"service_type"`
+		NodeID      string `json:"node_id"`
+		LogLevel    string `json:"log_level"`
+		LogFile     string `json:"log_file"`
+		MetricsAddr string `json:"metrics_addr"`
+	} `json:"service"`
+	Network struct {
+		Host string `json:"host"`
+		Port int    `json:"port"`
+	} `json:"network"`
+	Discovery struct {
+		Type  string   `json:"type"`
+		Addrs []string `json:"addrs"`
+	} `json:"discovery"`
+}
 
 func main() {
 	var (
-		listenAddr    = flag.String("listen", ":8082", "Biz listen address")
-		registryAddrs = flag.String("registry", "127.0.0.1:2379", "Registry addresses, comma separated")
+		configFile    = flag.String("config", "biz.json", "Config file path")
+		listenAddr    = flag.String("listen", "", "Biz listen address (overrides config)")
 		dbproxyAddrs  = flag.String("dbproxy", "127.0.0.1:3307", "DBProxy addresses, comma separated")
 		redisAddrs    = flag.String("redis", "127.0.0.1:6379", "Redis addresses, comma separated")
 		redisPass     = flag.String("redis-pass", "", "Redis password")
-		nodeID        = flag.Int64("node-id", 1, "Snowflake node ID")
-		metricsAddr   = flag.String("metrics", ":9082", "Metrics HTTP address")
-		logFile       = flag.String("log-file", "", "Log file path (stdout if empty)")
-		logLevel      = flag.String("log-level", "info", "Log level: debug | info | warn | error | fatal")
+		nodeID        = flag.Int64("node-id", 0, "Snowflake node ID (overrides config)")
+		metricsAddr   = flag.String("metrics", "", "Metrics HTTP address (overrides config)")
+		logFile       = flag.String("log-file", "", "Log file path (overrides config)")
+		logLevel      = flag.String("log-level", "", "Log level (overrides config)")
 	)
 	flag.Parse()
+
+	// 加载配置文件
+	var cfg BizConfig
+	if err := config.LoadJSON(*configFile, &cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "[Config] Failed to load %s: %v\n", *configFile, err)
+		os.Exit(1)
+	}
+
+	// 命令行参数覆盖配置文件
+	host := cfg.Network.Host
+	port := cfg.Network.Port
+	if *listenAddr != "" {
+		host, port = parseHostPort(*listenAddr)
+	}
+	if *nodeID == 0 {
+		parts := strings.Split(cfg.Service.NodeID, "-")
+		if len(parts) > 1 {
+			fmt.Sscanf(parts[len(parts)-1], "%d", nodeID)
+		}
+		if *nodeID == 0 {
+			*nodeID = 1
+		}
+	}
+	if *metricsAddr == "" {
+		*metricsAddr = cfg.Service.MetricsAddr
+	}
+	if *logFile == "" {
+		*logFile = cfg.Service.LogFile
+	}
+	if *logLevel == "" {
+		*logLevel = cfg.Service.LogLevel
+	}
+	listen := fmt.Sprintf("%s:%d", host, port)
 
 	// 初始化结构化日志
 	log := logger.InitServiceLogger("biz", fmt.Sprintf("biz-%d", *nodeID), *logLevel, *logFile)
@@ -56,39 +107,24 @@ func main() {
 		log.Fatalf("init snowflake failed: %v", err)
 	}
 
-	// 注册到 Registry（多节点）
-	regClient := registry.NewClient(strings.Split(*registryAddrs, ","))
-	if err := regClient.Connect(); err != nil {
-		log.Fatalf("connect registry failed: %v", err)
+	// 初始化服务发现（Registry 或 etcd，从配置读取）
+	sd, err := discovery.New(cfg.Discovery.Type, cfg.Discovery.Addrs)
+	if err != nil {
+		log.Fatalf("init discovery failed: %v", err)
 	}
-	defer regClient.Close()
+	defer sd.Close()
 
-	node := &pb.NodeInfo{
+	node := discovery.NodeInfo{
 		ServiceType: "biz",
-		NodeId:      fmt.Sprintf("biz-%d", *nodeID),
-		Host:        "127.0.0.1",
-		Port:        parsePort(*listenAddr),
+		NodeID:      fmt.Sprintf("biz-%d", *nodeID),
+		Host:        host,
+		Port:        uint32(port),
 		RegisterAt:  uint64(time.Now().Unix()),
 	}
-	if _, err := regClient.RegisterWithRetry(node, 5); err != nil {
+	if err := sd.Register(context.Background(), node); err != nil {
 		log.Fatalf("register failed: %v", err)
 	}
-	log.Info("Biz registered to registry")
-
-	// 启动 Registry 心跳保活
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				_, err := regClient.Heartbeat(node.NodeId)
-				if err != nil {
-					log.Warnf("registry heartbeat failed: %v", err)
-				}
-			}
-		}
-	}()
+	log.Infof("Biz registered to %s", cfg.Discovery.Type)
 
 	// 初始化 Redis 客户端（直接连接，不经过 DBProxy）
 	var redisClient *redis.Client
@@ -107,12 +143,12 @@ func main() {
 		}
 	}
 
-	// 通过 Registry 发现 DBProxy
+	// 通过服务发现订阅 DBProxy
 	var playerSvc *service.PlayerService
 	dbproxyOnData := func(_ *net.TCPConn, pkt *net.Packet) {
 		// DBProxy 响应由 rpc.Client 处理，此回调在 NewDBProxyClient 中通过 pool 绑定
 	}
-	upstreamMgr := registry.NewUpstreamManager(regClient)
+	upstreamMgr := discovery.NewUpstreamManager(sd)
 	upstreamMgr.AddInterest("dbproxy", dbproxyOnData)
 	if err := upstreamMgr.Start(); err != nil {
 		log.Warnf("subscribe dbproxy upstream failed: %v", err)
@@ -142,8 +178,8 @@ func main() {
 	}
 
 	// 启动 TCP 服务
-	cfg := net.ServerConfig{
-		Addr: *listenAddr,
+	srvCfg := net.ServerConfig{
+		Addr: listen,
 		OnConnect: func(conn *net.TCPConn) {
 			connGauge.Inc()
 			log.Infof("Biz connection opened: %s", conn.ID())
@@ -169,11 +205,11 @@ func main() {
 			log.Infof("Biz connection closed: %s", conn.ID())
 		},
 	}
-	srv := net.NewTCPServer(cfg)
+	srv := net.NewTCPServer(srvCfg)
 	if err := srv.Start(); err != nil {
 		log.Fatalf("start biz server failed: %v", err)
 	}
-	log.Infof("Biz server started on %s", *listenAddr)
+	log.Infof("Biz server started on %s", listen)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -183,12 +219,18 @@ func main() {
 	srv.Stop()
 }
 
-func parsePort(addr string) uint32 {
+func parseHostPort(addr string) (string, int) {
 	parts := strings.Split(addr, ":")
 	if len(parts) >= 2 {
-		if p, err := strconv.ParseUint(parts[len(parts)-1], 10, 32); err == nil {
-			return uint32(p)
+		host := strings.Join(parts[:len(parts)-1], ":")
+		if port, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
+			return host, port
 		}
 	}
-	return 0
+	return "127.0.0.1", 8082
+}
+
+func parsePort(addr string) uint32 {
+	_, port := parseHostPort(addr)
+	return uint32(port)
 }

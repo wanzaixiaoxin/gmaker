@@ -50,7 +50,7 @@ Start-Sleep -Seconds 1
 
 # 启动 Chat
 Write-Host "[2/3] Starting Chat Service..." -ForegroundColor Green
-$chat = Start-Process -FilePath "$BinDir\chat-go.exe" -ArgumentList "-listen", ":8086", "-registry", "127.0.0.1:2379", "-redis", $RedisAddr, "-node-id", "1" -PassThru -WindowStyle Hidden
+$chat = Start-Process -FilePath "$BinDir\chat-go.exe" -ArgumentList "-config", "chat.json", "-listen", ":8086", "-redis", $RedisAddr, "-node-id", "1" -PassThru -WindowStyle Hidden
 Start-Sleep -Seconds 2
 
 # 启动 Gateway

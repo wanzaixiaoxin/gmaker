@@ -9,24 +9,60 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gmaker/luffa/common/go/config"
+	"github.com/gmaker/luffa/common/go/discovery"
 	"github.com/gmaker/luffa/common/go/logger"
-	"github.com/gmaker/luffa/common/go/registry"
-	pb "github.com/gmaker/luffa/gen/go/registry"
 	"github.com/gmaker/luffa/services/dbproxy-go/internal/mysql"
 	"github.com/gmaker/luffa/services/dbproxy-go/internal/server"
 )
 
+type DBProxyConfig struct {
+	Service struct {
+		ServiceType string `json:"service_type"`
+		NodeID      string `json:"node_id"`
+		LogLevel    string `json:"log_level"`
+		LogFile     string `json:"log_file"`
+	} `json:"service"`
+	Network struct {
+		Host string `json:"host"`
+		Port int    `json:"port"`
+	} `json:"network"`
+	Discovery struct {
+		Type  string   `json:"type"`
+		Addrs []string `json:"addrs"`
+	} `json:"discovery"`
+}
+
 func main() {
 	var (
-		listenAddr    = flag.String("listen", ":3307", "DBProxy listen address")
+		configFile    = flag.String("config", "dbproxy.json", "Config file path")
+		listenAddr    = flag.String("listen", "", "DBProxy listen address (overrides config)")
 		mysqlDSNs     = flag.String("mysql", "", "MySQL DSNs, comma separated")
-		registryAddrs = flag.String("registry", "127.0.0.1:2379", "Registry addresses, comma separated")
-		logFile       = flag.String("log-file", "", "Log file path (stdout if empty)")
-		logLevel      = flag.String("log-level", "info", "Log level: debug | info | warn | error | fatal")
+		logFile       = flag.String("log-file", "", "Log file path (overrides config)")
+		logLevel      = flag.String("log-level", "", "Log level (overrides config)")
 	)
 	flag.Parse()
 
-	log := logger.InitServiceLogger("dbproxy", "dbproxy-1", *logLevel, *logFile)
+	// 加载配置文件
+	var cfg DBProxyConfig
+	if err := config.LoadJSON(*configFile, &cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "[Config] Failed to load %s: %v\n", *configFile, err)
+		os.Exit(1)
+	}
+
+	// 命令行参数覆盖配置文件
+	listen := fmt.Sprintf("%s:%d", cfg.Network.Host, cfg.Network.Port)
+	if *listenAddr != "" {
+		listen = *listenAddr
+	}
+	if *logFile == "" {
+		*logFile = cfg.Service.LogFile
+	}
+	if *logLevel == "" {
+		*logLevel = cfg.Service.LogLevel
+	}
+
+	log := logger.InitServiceLogger("dbproxy", cfg.Service.NodeID, *logLevel, *logFile)
 	logger.SetDefault(log)
 
 	// MySQL
@@ -48,48 +84,30 @@ func main() {
 		defer mproxy.Close()
 	}
 
-	// 注册到 Registry
-	regClient := registry.NewClient(strings.Split(*registryAddrs, ","))
-	if err := regClient.Connect(); err != nil {
-		log.Fatalf("connect registry failed: %v", err)
+	// 初始化服务发现（从配置读取）
+	sd, err := discovery.New(cfg.Discovery.Type, cfg.Discovery.Addrs)
+	if err != nil {
+		log.Fatalf("init discovery failed: %v", err)
 	}
-	defer regClient.Close()
+	defer sd.Close()
 
-	node := &pb.NodeInfo{
+	node := discovery.NodeInfo{
 		ServiceType: "dbproxy",
-		NodeId:      "dbproxy-1",
-		Host:        "127.0.0.1",
-		Port:        parsePort(*listenAddr),
+		NodeID:      cfg.Service.NodeID,
+		Host:        cfg.Network.Host,
+		Port:        uint32(cfg.Network.Port),
 		RegisterAt:  uint64(time.Now().Unix()),
 	}
-	if _, err := regClient.RegisterWithRetry(node, 5); err != nil {
+	if err := sd.Register(nil, node); err != nil {
 		log.Fatalf("register failed: %v", err)
 	}
-	log.Info("DBProxy registered to registry")
+	log.Infof("DBProxy registered to %s", cfg.Discovery.Type)
 
-	// 启动心跳（每 5 秒）
-	heartbeatStop := make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				if _, err := regClient.Heartbeat(node.NodeId); err != nil {
-					log.Warnf("heartbeat failed: %v", err)
-				}
-			case <-heartbeatStop:
-				return
-			}
-		}
-	}()
-	defer close(heartbeatStop)
-
-	srv := server.New(*listenAddr, mproxy)
+	srv := server.New(listen, mproxy)
 	if err := srv.Start(); err != nil {
 		log.Fatalf("start dbproxy failed: %v", err)
 	}
-	log.Infof("DBProxy started on %s", *listenAddr)
+	log.Infof("DBProxy started on %s", listen)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

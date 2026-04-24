@@ -26,6 +26,7 @@ jobs:
           go build -o bin/registry-go ./services/registry-go
           go build -o bin/dbproxy-go ./services/dbproxy-go
           go build -o bin/biz-go ./services/biz-go
+          go build -o bin/chat-go ./services/chat-go
           go build -o bin/logstats-go ./services/logstats-go
       - name: Run Go tests
         run: go test ./common/go/...

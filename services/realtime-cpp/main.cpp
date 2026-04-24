@@ -9,8 +9,7 @@
 #include "gs/net/async/tcp_server.hpp"
 #include "gs/net/packet.hpp"
 #include "gs/net/address.hpp"
-#include "gs/registry/client.hpp"
-#include "registry.pb.h"
+#include "gs/discovery/factory.hpp"
 #include "gs/realtime/compute_thread.hpp"
 #include "gs/realtime/message.hpp"
 #include "gs/metrics/metrics.hpp"
@@ -33,7 +32,8 @@ struct RealtimeServer {
     void SetLogger(std::shared_ptr<gs::logger::Logger> logger) { logger_ = logger; }
 
     bool Start(uint16_t listen_port,
-               const std::vector<std::pair<std::string, uint16_t>>& registry_addrs) {
+               const std::string& discovery_type,
+               const std::vector<std::string>& discovery_addrs) {
 
         // 启动 metrics
         gs::metrics::ServeDefaultHTTP(":9090");
@@ -75,28 +75,25 @@ struct RealtimeServer {
         }
         if (logger_) logger_->Info("Realtime server started on port " + std::to_string(listen_port));
 
-        // 注册到 Registry（让 Gateway 能发现自己）
-        if (!registry_addrs.empty()) {
-            reg_client_ = std::make_unique<gs::registry::RegistryClient>(nullptr, registry_addrs);
-            if (!reg_client_->Connect()) {
-                if (logger_) logger_->Error("Failed to connect registry, exiting");
+        // 注册到服务发现后端，使用 discovery 封装层
+        if (!discovery_addrs.empty()) {
+            sd_ = gs::discovery::CreateDiscovery(discovery_type, discovery_addrs);
+            if (!sd_) {
+                if (logger_) logger_->Error("Failed to create discovery, exiting");
                 return false;
             }
-            // 注册自身节点
-            registry::NodeInfo node;
-            node.set_service_type("realtime");
-            node.set_node_id("realtime-1");
-            node.set_host("127.0.0.1");
-            node.set_port(listen_port);
-            node.set_register_at(static_cast<uint64_t>(
-                std::chrono::system_clock::now().time_since_epoch().count()));
-            registry::Result res;
-            if (reg_client_->Register(node, &res)) {
-                if (logger_) logger_->Info("Realtime registered to registry");
-                // 启动心跳线程
+            gs::discovery::NodeInfo node;
+            node.service_type = "realtime";
+            node.node_id = "realtime-1";
+            node.host = "127.0.0.1";
+            node.port = listen_port;
+            node.register_at = static_cast<uint64_t>(
+                std::chrono::system_clock::now().time_since_epoch().count());
+            if (sd_->Register(node)) {
+                if (logger_) logger_->Info("Realtime registered to " + discovery_type);
                 heartbeat_thread_ = std::thread([this]() { HeartbeatLoop(); });
             } else {
-                if (logger_) logger_->Warn("Realtime register to registry failed: " + res.msg());
+                if (logger_) logger_->Warn("Realtime register failed");
             }
         }
 
@@ -109,18 +106,13 @@ struct RealtimeServer {
         if (heartbeat_thread_.joinable()) heartbeat_thread_.join();
         if (server_) server_->Stop();
         if (compute_) compute_->Stop();
-        if (reg_client_) reg_client_->Close();
+        if (sd_) sd_->Close();
     }
 
     void HeartbeatLoop() {
+        // 心跳已由 discovery::RegistryImpl 内部自动管理，此处保留空实现
         while (!heartbeat_stop_.load()) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
-            if (reg_client_) {
-                registry::Result res;
-                if (!reg_client_->Heartbeat("realtime-1", &res)) {
-                    if (logger_) logger_->Warn("Registry heartbeat failed");
-                }
-            }
         }
     }
 
@@ -260,7 +252,7 @@ private:
 
     std::shared_ptr<gs::logger::Logger> logger_;
     std::unique_ptr<AsyncTCPServer> server_;
-    std::unique_ptr<gs::registry::RegistryClient> reg_client_;
+    std::unique_ptr<gs::discovery::ServiceDiscovery> sd_;
     std::unique_ptr<ComputeThread> compute_;
 
     std::mutex conn_mtx_;
@@ -277,24 +269,32 @@ private:
 
 int main(int argc, char* argv[]) {
     uint16_t port = 8084;
-    std::vector<std::pair<std::string, uint16_t>> registry_addrs = {{"127.0.0.1", 2379}};
+    std::string discovery_type = "registry";
+    std::vector<std::string> discovery_addrs = {"127.0.0.1:2379"};
 
     std::string log_file;
     std::string log_level = "info";
 
-    int pos_idx = 1;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--log-file" && i + 1 < argc) {
             log_file = argv[++i];
         } else if (arg == "--log-level" && i + 1 < argc) {
             log_level = argv[++i];
-        } else if (pos_idx == 1) {
-            port = static_cast<uint16_t>(std::atoi(arg.c_str()));
-            pos_idx++;
-        } else if (pos_idx == 2) {
-            registry_addrs = gs::net::ParseAddrList(arg);
-            pos_idx++;
+        } else if (arg == "--discovery-type" && i + 1 < argc) {
+            discovery_type = argv[++i];
+        } else if (arg == "--discovery-addrs" && i + 1 < argc) {
+            // 解析逗号分隔的地址列表
+            std::string addrs = argv[++i];
+            size_t pos = 0;
+            while (pos < addrs.size()) {
+                size_t comma = addrs.find(',', pos);
+                if (comma == std::string::npos) comma = addrs.size();
+                discovery_addrs.push_back(addrs.substr(pos, comma - pos));
+                pos = comma + 1;
+            }
+        } else if (arg == "--port" && i + 1 < argc) {
+            port = static_cast<uint16_t>(std::atoi(argv[++i]));
         }
     }
 
@@ -306,7 +306,7 @@ int main(int argc, char* argv[]) {
 
     RealtimeServer srv;
     srv.SetLogger(logger);
-    if (!srv.Start(port, registry_addrs)) {
+    if (!srv.Start(port, discovery_type, discovery_addrs)) {
         return 1;
     }
     // 注册 OS 信号处理（简化版）

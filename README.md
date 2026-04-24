@@ -15,7 +15,7 @@
 | **协议** | protobuf3 | 18 字节定长二进制帧头 + protobuf3 包体，大端序 |
 | **网络（C++）** | libuv | 异步 IO（已统一替代阻塞模型） |
 | **网络（Go）** | 标准库 `net` | 薄封装，自研拆包粘包 |
-| **服务发现** | Registry (Go) | 支持 etcd / memory 双后端 |
+| **服务发现** | Registry (Go) + discovery 封装 | 支持 Registry 自研协议 或 直连 etcd 双方案 |
 | **构建** | Makefile + CMake | Makefile 负责 Go + Proto，CMake 负责 C++ |
 | **部署** | Docker Compose | 完整编排见 `tools/deploy/` |
 
@@ -27,12 +27,14 @@
 gmaker/
 ├── common/                 # 公共库（Go + C++ 双语言对称实现）
 │   ├── go/net/             # TCP 网络框架（Server/Client、拆包粘包）
-│   ├── go/registry/        # Registry SDK（注册/心跳/发现/监听）
+│   ├── go/discovery/       # 统一服务发现封装（Registry / etcd）
+│   ├── go/registry/        # Registry SDK（由 discovery 包装）
 │   ├── go/rpc/             # RPC 客户端（Req-Res、Fire-Forget、超时）
 │   ├── go/crypto/          # AES-256-GCM、HMAC-SHA256
 │   ├── go/limiter/         # 令牌桶限流 + 熔断器
 │   ├── cpp/gs/net/         # C++ 异步网络封装（libuv）
-│   ├── cpp/gs/registry/    # C++ Registry SDK
+│   ├── cpp/gs/discovery/   # C++ 统一服务发现封装（Registry / etcd）
+│   ├── cpp/gs/registry/    # C++ Registry SDK（由 discovery 包装）
 │   ├── cpp/gs/rpc/         # C++ RPC 封装
 │   └── cpp/gs/crypto/      # C++ 加密库
 ├── services/               # 可独立部署的服务
@@ -165,7 +167,7 @@ PowerShell 用户也可以使用：
 ./bin/registry-go.exe -listen 127.0.0.1:2379 -store memory
 
 # 2. 启动 Biz
-./bin/biz-go.exe -listen 127.0.0.1:8082 -registry 127.0.0.1:2379
+./bin/biz-go.exe -listen 127.0.0.1:8082 -discovery-addrs 127.0.0.1:2379
 
 # 3. 启动 Gateway（需要 gateway.json 配置文件在工作目录）
 ./bin/gateway-cpp.exe --config gateway.json
@@ -199,6 +201,39 @@ docker compose up -d
 ```
 
 完整编排包含：etcd、mysql、redis、registry-go、dbproxy-go、biz-go×2、gateway-cpp、realtime-cpp、logstats-go、prometheus、grafana。
+
+---
+
+## 服务发现配置（Registry / etcd 双方案）
+
+本项目支持两种服务发现后端，业务服务通过统一的 `discovery` 接口调用，底层差异完全封装。
+
+### Go 服务
+
+通过启动参数切换：
+
+```bash
+# Registry 模式（默认）
+./bin/biz-go.exe -listen :8082 -discovery-type registry -discovery-addrs 127.0.0.1:2379
+
+# etcd 直连模式（无需启动 registry-go）
+./bin/biz-go.exe -listen :8082 -discovery-type etcd -discovery-addrs 127.0.0.1:2379
+```
+
+### C++ 服务
+
+通过 `gateway.json` / `realtime.json` 中的 `discovery` 字段配置：
+
+```json
+{
+  "discovery": {
+    "type": "registry",
+    "addrs": ["127.0.0.1:2379"]
+  }
+}
+```
+
+> **注意**：C++ 侧的 etcd 直连依赖 `etcd-cpp-apiv3`，当前在 Windows 上默认关闭（`ENABLE_ETCD_DISCOVERY=OFF`）。Linux/Docker 环境可通过 `-DENABLE_ETCD_DISCOVERY=ON` 启用。
 
 ---
 

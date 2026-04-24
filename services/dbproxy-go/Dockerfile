@@ -9,5 +9,6 @@ FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 WORKDIR /app
 COPY --from=builder /build/dbproxy-go .
+COPY --from=builder /build/services/dbproxy-go/dbproxy.json .
 EXPOSE 3307
 ENTRYPOINT ["./dbproxy-go"]

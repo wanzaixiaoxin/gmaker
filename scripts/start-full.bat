@@ -15,11 +15,11 @@ start "Registry" cmd /c "bin\registry-go.exe -listen 127.0.0.1:2379 -store memor
 timeout /t 2 /nobreak >nul
 
 echo [2/5] Starting DBProxy ...
-start "DBProxy" cmd /c "bin\dbproxy-go.exe -listen 127.0.0.1:3307 -mysql root:123456@tcp(127.0.0.1:3306)/gmaker -log-level info ^& pause"
+start "DBProxy" cmd /c "bin\dbproxy-go.exe -config dbproxy.json -listen 127.0.0.1:3307 -mysql root:123456@tcp(127.0.0.1:3306)/gmaker -log-level info ^& pause"
 timeout /t 3 /nobreak >nul
 
 echo [3/5] Starting Biz ...
-start "Biz" cmd /c "bin\biz-go.exe -listen 127.0.0.1:8082 -registry 127.0.0.1:2379 -dbproxy 127.0.0.1:3307 -metrics :9082 -log-level info ^& pause"
+start "Biz" cmd /c "bin\biz-go.exe -config biz.json -listen 127.0.0.1:8082 -dbproxy 127.0.0.1:3307 -metrics :9082 -log-level info ^& pause"
 timeout /t 3 /nobreak >nul
 
 echo [4/5] Starting Gateway ...

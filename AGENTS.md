@@ -12,7 +12,7 @@
 - **Go**：负责业务服（Biz）、注册中心（Registry）、数据库代理（DBProxy）、日志统计（LogStats）等 IO/业务密集型服务。
 - **C++**：负责网关（Gateway）、实时服（Realtime）等网络/计算密集型服务。
 - **通信协议**：18 字节定长二进制帧头 + protobuf3 包体，大端序，Magic = `0x9D7F`。
-- **服务发现**：自研 Registry（Go），后端支持 etcd 或 memory（兜底）。
+- **服务发现**：自研 Registry（Go）作为通用服务发现层，后端支持 etcd 或 memory（兜底）。同时提供直连 etcd 的统一封装（Go + C++），业务服务可通过配置切换后端。
 - **当前状态**：框架骨架已完成 6 个 Phase 的落地（详见 `IMPLEMENTATION.md`），核心链路 `Client -> Gateway(C++) -> Biz(Go) -> Registry(Go)` 已跑通。
 
 ---
@@ -46,7 +46,8 @@ gmaker/
 │   ├── go/                 # Go 公共库
 │   │   ├── net/            # TCP Server/Client、拆包粘包、连接管理
 │   │   ├── rpc/            # RPC 客户端（Req-Res、Fire-Forget、超时）
-│   │   ├── registry/       # Registry SDK（注册/心跳/发现/监听）
+│   │   ├── discovery/      # 统一服务发现封装（Registry / etcd 双后端）
+│   │   ├── registry/       # Registry SDK（注册/心跳/发现/监听，由 discovery 包装）
 │   │   ├── logger/         # 结构化 JSON 日志（自研，非 zap）
 │   │   ├── metrics/        # Prometheus 风格指标（Counter/Gauge/Histogram）
 │   │   ├── config/         # 配置加载 + Etcd Watch 热重载
@@ -60,7 +61,8 @@ gmaker/
 │   └── cpp/gs/             # C++ 公共库（命名空间 gs::*）
 │       ├── net/            # TCP 网络框架（阻塞 + libuv 异步双轨）
 │       ├── rpc/            # RPC 客户端
-│       ├── registry/       # Registry SDK
+│       ├── discovery/      # 统一服务发现封装（Registry / etcd）
+│       ├── registry/       # Registry SDK（由 discovery 包装）
 │       ├── logger/         # JSON 日志封装
 │       ├── metrics/        # Prometheus 指标
 │       ├── config/         # TOML 配置加载（基于 toml11）
@@ -70,7 +72,7 @@ gmaker/
 │       ├── realtime/       # 实时服基础设施（Room、ComputeThread、AOI）
 │       └── replay/         # 防重放
 ├── services/               # 可独立部署的服务
-│   ├── registry-go/        # 注册中心（支持 etcd / memory 双后端）
+│   ├── registry-go/        # 注册中心（支持 etcd / memory 双后端，可选部署）
 │   ├── biz-go/             # 业务服骨架（登录、玩家数据、Ping）
 │   ├── dbproxy-go/         # 数据库代理（MySQL 统一入口；Redis 由各服务直接连接）
 │   ├── logstats-go/        # 日志收集与实时聚合
@@ -194,6 +196,7 @@ C++ 服务以 `main.cpp` 为主入口，配合公共库实现。当前 `gateway-
 |------|-----------|-------------------|
 | 网络 | `common/go/net` | `common/cpp/gs/net` |
 | RPC | `common/go/rpc` | `common/cpp/gs/rpc` |
+| 服务发现 | `common/go/discovery` | `common/cpp/gs/discovery` |
 | Registry SDK | `common/go/registry` | `common/cpp/gs/registry` |
 | 日志 | `common/go/logger` | `common/cpp/gs/logger` |
 | 指标 | `common/go/metrics` | `common/cpp/gs/metrics` |
@@ -214,7 +217,7 @@ C++ 服务以 `main.cpp` 为主入口，配合公共库实现。当前 `gateway-
 - **C++**：当前以可执行文件形式存在（`test-crypto`、`test-async-net`），未引入 GTest/GoogleBenchmark（预留接口）。
 
 ### 6.2 端到端集成测试
-- **`tests/phase1/main.go`**：验证 `Client -> Gateway(C++) -> Biz(Go) -> Registry(Go)` 整条链路。自动拉起 Registry（memory 模式）、Biz、Gateway，模拟客户端发送 Ping 包。
+- **`tests/phase1/main.go`**：验证 `Client -> Gateway(C++) -> Biz(Go) -> Registry(Go)` 整条链路（Registry 模式）。自动拉起 Registry（memory 模式）、Biz、Gateway，模拟客户端发送 Ping 包。
 - **`tests/phase2/main.go`**：验证完整数据链路（登录 -> 读玩家数据 -> 修改 -> 写回）。需要本地 MySQL（默认 `root:123456@tcp(127.0.0.1:3306)/gmaker`）和 Redis（默认 `127.0.0.1:6379`）。
 
 ### 6.3 重大改动后的强制验证标准
@@ -310,7 +313,7 @@ C++ 服务以 `main.cpp` 为主入口，配合公共库实现。当前 `gateway-
 ./bin/registry-go.exe -listen 127.0.0.1:2379 -store memory
 
 # 2. 启动 Biz
-./bin/biz-go.exe -listen 127.0.0.1:8082 -registry 127.0.0.1:2379
+./bin/biz-go.exe -listen 127.0.0.1:8082 -discovery-addrs 127.0.0.1:2379
 
 # 3. 启动 Gateway（需要 gateway.json 配置文件在工作目录）
 ./bin/gateway-cpp.exe --config gateway.json

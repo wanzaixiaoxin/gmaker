@@ -15,12 +15,12 @@ import (
 	"github.com/gmaker/luffa/common/go/logger"
 	"github.com/gmaker/luffa/common/go/metrics"
 	"github.com/gmaker/luffa/common/go/net"
-	"github.com/gmaker/luffa/common/go/registry"
+	"github.com/gmaker/luffa/common/go/discovery"
 	"github.com/gmaker/luffa/common/go/redis"
 	"github.com/gmaker/luffa/services/chat-go/internal/chat"
 	commonpb "github.com/gmaker/luffa/gen/go/common"
 	protocol "github.com/gmaker/luffa/gen/go/protocol"
-	pb "github.com/gmaker/luffa/gen/go/registry"
+
 )
 
 // 命令 ID 定义 (来自 protocol.proto)
@@ -55,7 +55,7 @@ const (
 type ChatConfig struct {
 	Service  ServiceConfig  `json:"service"`
 	Network  NetworkConfig  `json:"network"`
-	Registry RegistryConfig `json:"registry"`
+	Discovery DiscoveryConfig `json:"discovery"`
 	Redis    RedisConfig    `json:"redis"`
 	DBProxy  DBProxyConfig  `json:"dbproxy"`
 }
@@ -74,8 +74,9 @@ type NetworkConfig struct {
 	MaxConnections int    `json:"max_connections"`
 }
 
-type RegistryConfig struct {
-	Nodes []config.UpstreamNode `json:"nodes"`
+type DiscoveryConfig struct {
+	Type  string   `json:"type"`
+	Addrs []string `json:"addrs"`
 }
 
 type RedisConfig struct {
@@ -132,26 +133,21 @@ func main() {
 		log.Fatalf("init snowflake failed: %v", err)
 	}
 
-	// 连接 Registry
-	var registryAddrs []string
-	for _, n := range cfg.Registry.Nodes {
-		registryAddrs = append(registryAddrs, fmt.Sprintf("%s:%d", n.Host, n.Port))
+	// 初始化服务发现
+	sd, err := discovery.New(cfg.Discovery.Type, cfg.Discovery.Addrs)
+	if err != nil {
+		log.Fatalf("init discovery failed: %v", err)
 	}
-	regClient := registry.NewClient(registryAddrs)
-	if err := regClient.Connect(); err != nil {
-		log.Fatalf("connect registry failed: %v", err)
-	}
-	defer regClient.Close()
+	defer sd.Close()
 
-	// 注册到 Registry
-	node := &pb.NodeInfo{
+	node := discovery.NodeInfo{
 		ServiceType: cfg.Service.ServiceType,
-		NodeId:      cfg.Service.NodeID,
+		NodeID:      cfg.Service.NodeID,
 		Host:        cfg.Network.Host,
 		Port:        uint32(cfg.Network.Port),
 		RegisterAt:  uint64(time.Now().Unix()),
 	}
-	if _, err := regClient.RegisterWithRetry(node, 5); err != nil {
+	if err := sd.Register(nil, node); err != nil {
 		log.Fatalf("register failed: %v", err)
 	}
 	log.Info("Chat registered to registry")
@@ -178,7 +174,7 @@ func main() {
 	dbproxyOnData := func(_ *net.TCPConn, pkt *net.Packet) {
 		// DBProxy 响应由 rpc.Client 处理
 	}
-	upstreamMgr := registry.NewUpstreamManager(regClient)
+	upstreamMgr := discovery.NewUpstreamManager(sd)
 	upstreamMgr.AddInterest("dbproxy", dbproxyOnData)
 	if err := upstreamMgr.Start(); err != nil {
 		log.Warnf("subscribe dbproxy upstream failed: %v", err)

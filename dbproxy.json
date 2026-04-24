@@ -1,14 +1,13 @@
 {
   "service": {
-    "service_type": "biz",
-    "node_id": "biz-1",
+    "service_type": "dbproxy",
+    "node_id": "dbproxy-1",
     "log_level": "info",
-    "log_file": "",
-    "metrics_addr": ":9082"
+    "log_file": ""
   },
   "network": {
     "host": "127.0.0.1",
-    "port": 8082
+    "port": 3307
   },
   "discovery": {
     "type": "registry",
