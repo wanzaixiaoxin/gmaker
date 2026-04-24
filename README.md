@@ -130,34 +130,24 @@ bin/
 
 ```bash
 # 启动 Phase 1 最小链路（Registry + Biz + Gateway）
-scripts\start-minimal.bat
+scripts\start.bat minimal
 
 # 启动 Phase 2 完整链路（Registry + DBProxy + Biz + Gateway）
-scripts\start-full.bat
+scripts\start.bat full
 
 # 停止所有服务
 scripts\stop-all.bat
 
 # 单独启动某个服务
-scripts\start-registry.bat
-scripts\start-biz.bat
-scripts\start-dbproxy.bat
-scripts\start-gateway.bat
-scripts\start-logstats.bat
+scripts\start.bat registry
+scripts\start.bat biz
+scripts\start.bat dbproxy
+scripts\start.bat gateway
+scripts\start.bat logstats
 
 # 一键编译并运行测试
 scripts\run-phase1.bat
 scripts\run-phase2.bat
-```
-
-PowerShell 用户也可以使用：
-
-```powershell
-# 启动指定服务组合（TODO：待实现 PowerShell 版本）
-# .\scripts\start-services.ps1 minimal
-
-# 停止指定或全部服务（TODO：待实现 PowerShell 版本）
-# .\scripts\stop-services.ps1 all
 ```
 
 ### 手动启动（Phase 1，无需 MySQL/Redis）
@@ -179,7 +169,7 @@ PowerShell 用户也可以使用：
 
 1. **全量编译通过**：`make build`（或 Windows `build.bat`）
 2. **Phase 1 端到端通过**：`go run tests/phase1/main.go`
-3. **手动一键验证**：`scripts\start-minimal.bat`（Windows）
+3. **手动一键验证**：`scripts\start.bat minimal`（Windows）
 
 > 本项目为 Go + C++ 双语言栈， handshake 帧格式、conn_id 前缀、FlagEncrypt 标志等均为跨语言隐式契约，单侧单元测试无法覆盖，历史多次回归因此产生。
 

@@ -119,8 +119,7 @@ gmaker/
 make proto
 
 # Windows 下如果没有 make，可直接运行：
-#   scripts\gen-proto.bat        (CMD)
-#   scripts\gen-proto.ps1        (PowerShell)
+#   scripts\gen-proto.bat
 
 # 编译全部 Go 服务（输出到 bin/）
 make build-go
@@ -237,7 +236,7 @@ C++ 服务以 `main.cpp` 为主入口，配合公共库实现。当前 `gateway-
    go run tests/phase1/main.go
 
    # 方式 B：手动一键启动（本地开发使用）
-   scripts\start-minimal.bat
+   scripts\start.bat minimal
    ```
    验收标准：
    - Registry、Biz、Gateway 正常启动且无 ERROR 级日志
