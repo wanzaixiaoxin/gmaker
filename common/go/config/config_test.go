@@ -9,7 +9,7 @@ import (
 func TestLoader(t *testing.T) {
 	tmp, _ := os.CreateTemp("", "config-*.yaml")
 	defer os.Remove(tmp.Name())
-	tmp.WriteString("app_name: test_app\nmax_conn: 100\ndebug: true\n")
+	tmp.WriteString("{\"app_name\":\"test_app\",\"max_conn\":100,\"debug\":true}\n")
 	tmp.Close()
 
 	loader := NewLoader(tmp.Name())
@@ -28,7 +28,7 @@ func TestLoader(t *testing.T) {
 	}
 
 	// 热重载测试
-	os.WriteFile(tmp.Name(), []byte("app_name: updated_app\n"), 0644)
+	os.WriteFile(tmp.Name(), []byte("{\"app_name\":\"updated_app\"}\n"), 0644)
 	reloaded := false
 	loader.SetOnReload(func() { reloaded = true })
 	if err := loader.Reload(); err != nil {
@@ -45,7 +45,7 @@ func TestLoader(t *testing.T) {
 func TestServeReloadHTTP(t *testing.T) {
 	tmp, _ := os.CreateTemp("", "config-*.yaml")
 	defer os.Remove(tmp.Name())
-	os.WriteFile(tmp.Name(), []byte("k: v\n"), 0644)
+	os.WriteFile(tmp.Name(), []byte("{\"k\":\"v\"}\n"), 0644)
 
 	loader := NewLoader(tmp.Name())
 	loader.Load()

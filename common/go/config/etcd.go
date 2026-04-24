@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"sync"
 	"time"
@@ -66,7 +67,12 @@ func (l *EtcdLoader) Watch(ctx context.Context) {
 
 // Stop 停止 Watch
 func (l *EtcdLoader) Stop() {
-	close(l.stopCh)
+	select {
+	case <-l.stopCh:
+		// 已关闭，避免重复 close 导致 panic
+	default:
+		close(l.stopCh)
+	}
 	l.client.Close()
 }
 
@@ -112,10 +118,15 @@ func (l *EtcdLoader) GetBool(key string) bool {
 }
 
 func (l *EtcdLoader) parse(val string) error {
-	// TODO: 支持 YAML/JSON/TOML 解析，目前直接存储为原始字符串
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.data["raw"] = val
+	// 尝试解析为 JSON map；失败时保留原始字符串
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(val), &m); err == nil {
+		l.data = m
+		return nil
+	}
+	l.data = map[string]interface{}{"raw": val}
 	return nil
 }
 

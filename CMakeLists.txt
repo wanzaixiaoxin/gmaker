@@ -77,7 +77,7 @@ message(STATUS "Found abseil libs: ${ABSL_LIBS}")
 add_library(protobuf::libprotobuf STATIC IMPORTED GLOBAL)
 set_target_properties(protobuf::libprotobuf PROPERTIES
     IMPORTED_LOCATION ${PROTOBUF_LIBRARY}
-    INTERFACE_INCLUDE_DIRECTORIES "${PROTOBUF_INCLUDE_DIR};D:/Download/protobuf-34.1/build/_deps/absl-src"
+    INTERFACE_INCLUDE_DIRECTORIES "${PROTOBUF_INCLUDE_DIR};${PROTOBUF_ROOT}/build/_deps/absl-src"
 )
 target_link_libraries(protobuf::libprotobuf INTERFACE
     ${UTF8_VALIDITY_LIBRARY}

@@ -8,7 +8,7 @@ GO_SERVICES    := services/registry-go
 CPP_SERVICES   := services/gateway-cpp services/realtime-cpp
 COMMON_GO      := common/go
 COMMON_CPP     := common/cpp/gs
-PROTOC         := 3rd/protobuf/protobuf-34.1/build/Release/protoc.exe
+PROTOC         ?= 3rd/protobuf/protobuf-34.1/build/Release/protoc.exe
 
 # ==================== Protobuf 生成 ====================
 proto:
@@ -30,6 +30,9 @@ build-go:
 	cd services/registry-go && go mod tidy && go build -o ../../bin/registry-go.exe ./main.go
 	cd services/dbproxy-go && go mod tidy && go build -o ../../bin/dbproxy-go.exe ./main.go
 	cd services/biz-go && go mod tidy && go build -o ../../bin/biz-go.exe ./main.go
+	cd services/logstats-go && go mod tidy && go build -o ../../bin/logstats-go.exe ./main.go
+	cd services/chat-go && go mod tidy && go build -o ../../bin/chat-go.exe ./main.go
+	cd services/login-go && go mod tidy && go build -o ../../bin/login-go.exe ./main.go
 	@echo "Go build done."
 
 build-cpp:
@@ -46,10 +49,20 @@ endif
 test:
 	@echo "Running Go tests..."
 	cd $(COMMON_GO)/net && go test -v ./...
+	cd $(COMMON_GO)/config && go test -v ./...
 	@echo "Go tests done."
 	@echo "C++ tests require compiled binaries and GTest. Skipped in skeleton phase."
 
 # ==================== 清理 ====================
+ifeq ($(OS),Windows_NT)
+clean:
+	@if exist $(GEN_GO_DIR) rmdir /s /q $(GEN_GO_DIR)
+	@if exist $(GEN_CPP_DIR) rmdir /s /q $(GEN_CPP_DIR)
+	@if exist build rmdir /s /q build
+	@if exist bin rmdir /s /q bin
+	@echo "Clean done."
+else
 clean:
 	rm -rf $(GEN_GO_DIR) $(GEN_CPP_DIR) build bin
 	@echo "Clean done."
+endif

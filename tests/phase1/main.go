@@ -47,15 +47,14 @@ func main() {
 	log.Println("Biz started")
 
 	// 3. 启动 Gateway
-	gatewayCmd := exec.Command("./build/Release/gateway-cpp",
-		extractPort(gatewayAddr), "127.0.0.1:2379", "127.0.0.1:8082")
+	gatewayCmd := exec.Command("./bin/gateway-cpp.exe", "--config", "gateway.json")
 	gatewayCmd.Stdout = os.Stdout
 	gatewayCmd.Stderr = os.Stderr
 	if err := gatewayCmd.Start(); err != nil {
 		log.Fatalf("start gateway failed: %v", err)
 	}
 	defer stopCmd(gatewayCmd)
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	log.Println("Gateway started")
 
 	// 4. 客户端连接到 Gateway 并发送 Ping
@@ -66,6 +65,7 @@ func main() {
 		func(conn *net.TCPConn) {
 			log.Println("Client disconnected from gateway")
 		})
+	client.SetMasterKey(make([]byte, 32)) // 使用默认零密钥进行握手
 	if err := client.Connect(); err != nil {
 		log.Fatalf("connect gateway failed: %v", err)
 	}

@@ -46,6 +46,9 @@ type Logger struct {
 	service  string
 	nodeID   string
 	fields   map[string]interface{}
+	writeCh  chan []byte
+	stopCh   chan struct{}
+	wg       sync.WaitGroup
 }
 
 // Config 日志配置
@@ -62,13 +65,18 @@ func New(cfg Config) *Logger {
 		cfg.Output = os.Stdout
 	}
 	lvl := parseLevel(cfg.Level)
-	return &Logger{
+	l := &Logger{
 		out:     cfg.Output,
 		level:   lvl,
 		service: cfg.Service,
 		nodeID:  cfg.NodeID,
 		fields:  make(map[string]interface{}),
+		writeCh: make(chan []byte, 256),
+		stopCh:  make(chan struct{}),
 	}
+	l.wg.Add(1)
+	go l.writeLoop()
+	return l
 }
 
 // NewWithService 快捷创建，只指定服务名
@@ -78,15 +86,15 @@ func NewWithService(service, nodeID string) *Logger {
 
 // InitServiceLogger 根据命令行参数初始化服务日志（自动处理文件输出）
 func InitServiceLogger(service, nodeID, logLevel, logFile string) *Logger {
-	log := NewWithService(service, nodeID)
-	log.SetLevel(logLevel)
+	logInstance := NewWithService(service, nodeID)
+	logInstance.SetLevel(logLevel)
 	if logFile != "" {
 		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err == nil {
-			log = New(Config{Level: logLevel, Service: service, NodeID: nodeID, Output: f})
+			logInstance = New(Config{Level: logLevel, Service: service, NodeID: nodeID, Output: f})
 		}
 	}
-	return log
+	return logInstance
 }
 
 // SetLevel 动态调整日志级别
@@ -106,6 +114,8 @@ func (l *Logger) With(key string, value interface{}) *Logger {
 		service: l.service,
 		nodeID:  l.nodeID,
 		fields:  make(map[string]interface{}, len(l.fields)+1),
+		writeCh: l.writeCh,
+		stopCh:  l.stopCh,
 	}
 	for k, v := range l.fields {
 		child.fields[k] = v
@@ -119,13 +129,33 @@ func (l *Logger) WithTrace(traceID string) *Logger {
 	return l.With("trace_id", traceID)
 }
 
+func (l *Logger) writeLoop() {
+	defer l.wg.Done()
+	for {
+		select {
+		case data := <-l.writeCh:
+			l.out.Write(data)
+			l.out.Write([]byte{'\n'})
+		case <-l.stopCh:
+			// 排空 channel
+			for {
+				select {
+				case data := <-l.writeCh:
+					l.out.Write(data)
+					l.out.Write([]byte{'\n'})
+				default:
+					return
+				}
+			}
+		}
+	}
+}
+
 func (l *Logger) log(level Level, msg string, extra map[string]interface{}) {
 	if level < l.level {
 		return
 	}
 	l.mu.RLock()
-	defer l.mu.RUnlock()
-
 	record := map[string]interface{}{
 		"time":    time.Now().UTC().Format(time.RFC3339Nano),
 		"level":   level.String(),
@@ -139,21 +169,38 @@ func (l *Logger) log(level Level, msg string, extra map[string]interface{}) {
 	for k, v := range extra {
 		record[k] = v
 	}
+	l.mu.RUnlock()
 
 	data, err := json.Marshal(record)
 	if err != nil {
 		log.Printf("[logger] marshal error: %v", err)
 		return
 	}
-	l.out.Write(data)
-	l.out.Write([]byte{'\n'})
+	select {
+	case l.writeCh <- data:
+	default:
+		// channel 满，同步写入避免丢日志（仅用于极端情况）
+		l.out.Write(data)
+		l.out.Write([]byte{'\n'})
+	}
+}
+
+// Stop 停止日志后台 goroutine 并刷新剩余日志
+func (l *Logger) Stop() {
+	close(l.stopCh)
+	l.wg.Wait()
+}
+
+// Flush 等待日志 channel 排空（简单休眠方式）
+func (l *Logger) Flush() {
+	time.Sleep(50 * time.Millisecond)
 }
 
 func (l *Logger) Debug(msg string)                 { l.log(DebugLevel, msg, nil) }
 func (l *Logger) Info(msg string)                  { l.log(InfoLevel, msg, nil) }
 func (l *Logger) Warn(msg string)                  { l.log(WarnLevel, msg, nil) }
 func (l *Logger) Error(msg string)                 { l.log(ErrorLevel, msg, nil) }
-func (l *Logger) Fatal(msg string)                 { l.log(FatalLevel, msg, nil); os.Exit(1) }
+func (l *Logger) Fatal(msg string)                 { l.log(FatalLevel, msg, nil); l.Stop(); os.Exit(1) }
 func (l *Logger) Debugf(format string, v ...interface{}) { l.Debug(fmt.Sprintf(format, v...)) }
 func (l *Logger) Infof(format string, v ...interface{})  { l.Info(fmt.Sprintf(format, v...)) }
 func (l *Logger) Warnf(format string, v ...interface{})  { l.Warn(fmt.Sprintf(format, v...)) }

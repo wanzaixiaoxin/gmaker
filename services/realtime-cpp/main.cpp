@@ -4,6 +4,8 @@
 #include <condition_variable>
 #include <thread>
 #include <chrono>
+#include <csignal>
+#include <atomic>
 #include "gs/net/async/tcp_server.hpp"
 #include "gs/net/packet.hpp"
 #include "gs/net/address.hpp"
@@ -19,10 +21,10 @@ using namespace gs::net;
 using namespace gs::net::async;
 using namespace gs::realtime;
 
-constexpr uint32_t CMD_REALTIME_ENTER  = protocol::CMD_RT_ROOM_ENTER_RES;
+constexpr uint32_t CMD_REALTIME_ENTER  = protocol::CMD_RT_ROOM_ENTER_REQ;
 constexpr uint32_t CMD_REALTIME_LEAVE  = protocol::CMD_RT_ROOM_LEAVE_REQ;
-constexpr uint32_t CMD_REALTIME_MOVE   = protocol::CMD_RT_ROOM_LEAVE_RES;
-constexpr uint32_t CMD_REALTIME_ACTION = protocol::CMD_RT_FRAME_SYNC;
+constexpr uint32_t CMD_REALTIME_MOVE   = 0x00020020; // 预留：玩家移动（proto 待补充）
+constexpr uint32_t CMD_REALTIME_ACTION = 0x00020021; // 预留：玩家动作（proto 待补充）
 constexpr uint32_t CMD_REALTIME_SYNC   = protocol::CMD_RT_STATE_SYNC;
 
 // RealtimeServer 实时服
@@ -91,6 +93,8 @@ struct RealtimeServer {
             registry::Result res;
             if (reg_client_->Register(node, &res)) {
                 if (logger_) logger_->Info("Realtime registered to registry");
+                // 启动心跳线程
+                heartbeat_thread_ = std::thread([this]() { HeartbeatLoop(); });
             } else {
                 if (logger_) logger_->Warn("Realtime register to registry failed: " + res.msg());
             }
@@ -101,9 +105,23 @@ struct RealtimeServer {
     }
 
     void Stop() {
+        heartbeat_stop_.store(true);
+        if (heartbeat_thread_.joinable()) heartbeat_thread_.join();
         if (server_) server_->Stop();
         if (compute_) compute_->Stop();
         if (reg_client_) reg_client_->Close();
+    }
+
+    void HeartbeatLoop() {
+        while (!heartbeat_stop_.load()) {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            if (reg_client_) {
+                registry::Result res;
+                if (!reg_client_->Heartbeat("realtime-1", &res)) {
+                    if (logger_) logger_->Warn("Registry heartbeat failed");
+                }
+            }
+        }
     }
 
     void Wait() {
@@ -248,6 +266,10 @@ private:
     std::mutex conn_mtx_;
     std::unordered_map<uint64_t, AsyncTCPConnection*> conns_;
 
+    // 心跳线程
+    std::thread heartbeat_thread_;
+    std::atomic<bool> heartbeat_stop_{false};
+
     std::mutex stop_mtx_;
     std::condition_variable stop_cv_;
     bool stop_flag_ = false;
@@ -287,6 +309,10 @@ int main(int argc, char* argv[]) {
     if (!srv.Start(port, registry_addrs)) {
         return 1;
     }
+    // 注册 OS 信号处理（简化版）
+    signal(SIGINT, [](int) {});
+    signal(SIGTERM, [](int) {});
+
     srv.Wait();
     srv.Stop();
     return 0;

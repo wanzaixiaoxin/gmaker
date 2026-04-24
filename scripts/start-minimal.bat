@@ -17,7 +17,7 @@ start "Biz" cmd /c "bin\biz-go.exe -listen 127.0.0.1:8082 -registry 127.0.0.1:23
 timeout /t 2 /nobreak >nul
 
 echo [3/4] Starting Gateway ...
-start "Gateway" cmd /c "bin\gateway-cpp.exe 8081 127.0.0.1:2379 127.0.0.1:8082 --log-level info ^& pause"
+start "Gateway" cmd /c "bin\gateway-cpp.exe --config gateway.json ^& pause"
 timeout /t 2 /nobreak >nul
 
 echo [4/4] Starting TestClient (heartbeat daemon) ...

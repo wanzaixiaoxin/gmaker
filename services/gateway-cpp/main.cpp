@@ -6,6 +6,8 @@
 #include <condition_variable>
 #include <thread>
 #include <chrono>
+#include <csignal>
+#include <atomic>
 #include "gateway_config.hpp"
 #include "gs/net/async/tcp_server.hpp"
 #include "gs/net/async/upstream.hpp"
@@ -105,6 +107,8 @@ private:
     // 根据命令 ID 路由到对应的上游池
     AsyncUpstreamPool* RouteToPool(uint32_t cmd_id);
     
+    void HeartbeatLoop();
+    
     std::unique_ptr<AsyncTCPServer> server_;
     std::unique_ptr<gs::registry::UpstreamManager> upstream_mgr_;
     std::unique_ptr<AsyncWriteCoalescer> coalescer_;
@@ -131,6 +135,10 @@ private:
     gs::metrics::Counter*   req_counter_ = nullptr;
     gs::metrics::Histogram* req_latency_ = nullptr;
     gs::metrics::Gauge*     conn_gauge_  = nullptr;
+    
+    // 心跳线程
+    std::thread heartbeat_thread_;
+    std::atomic<bool> heartbeat_stop_{false};
     
     std::mutex stop_mtx_;
     std::condition_variable stop_cv_;
@@ -165,23 +173,30 @@ void HandshakeMiddleware::HandleHandshake(IConnection* conn, Packet& pkt) {
         return;
     }
 
-    auto session_key = DeriveSessionKey(master_key_, client_random);
+    std::vector<uint8_t> server_random = RandomBytes(16);
+    auto session_key = DeriveSessionKey(master_key_, client_random, server_random);
     
     {
         std::lock_guard<std::mutex> lk(mtx_);
         sessions_[conn->ID()] = session_key;
     }
 
-    // 发送握手响应
+    // 发送握手响应: [version: 1][server_random: 16][encrypted_challenge: ...]
+    auto encrypted_challenge = EncryptPacketPayload(session_key, client_random);
+
     Packet res;
     res.header.magic = MAGIC_VALUE;
-    res.header.cmd_id = cmd_handshake_ + 1;  // 响应命令 = 请求命令 + 1
+    res.header.cmd_id = cmd_handshake_;
     res.header.seq_id = pkt.header.seq_id;
     res.header.flags = 0;
     
-    std::vector<uint8_t> server_random = RandomBytes(16);
+    std::vector<uint8_t> payload;
+    payload.reserve(1 + 16 + encrypted_challenge.size());
+    payload.push_back(1); // version
+    payload.insert(payload.end(), server_random.begin(), server_random.end());
+    payload.insert(payload.end(), encrypted_challenge.begin(), encrypted_challenge.end());
     
-    res.payload = Buffer::FromVector(server_random);
+    res.payload = Buffer::FromVector(payload);
     res.header.length = HEADER_SIZE + static_cast<uint32_t>(res.payload.Size());
     
     conn->SendPacket(res);
@@ -276,6 +291,26 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
         }
         if (logger_) logger_->Info("Connected to registry");
         
+        // 注册 Gateway 自身节点
+        {
+            registry::NodeInfo node;
+            node.set_service_type("gateway");
+            node.set_node_id(cfg.node_id);
+            node.set_host("127.0.0.1");
+            node.set_port(cfg.listen_port);
+            node.set_register_at(static_cast<uint64_t>(
+                std::chrono::system_clock::now().time_since_epoch().count()));
+            registry::Result res;
+            if (reg_client_->Register(node, &res)) {
+                if (logger_) logger_->Info("Gateway registered to registry");
+            } else {
+                if (logger_) logger_->Warn("Gateway register to registry failed: " + res.msg());
+            }
+        }
+        
+        // 启动心跳线程
+        heartbeat_thread_ = std::thread([this]() { HeartbeatLoop(); });
+        
         upstream_mgr_ = std::make_unique<gs::registry::UpstreamManager>(reg_client_.get(), server_->EventLoop());
         
         // 声明对所有配置上游服务的兴趣
@@ -302,6 +337,9 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
 }
 
 void Gateway::Stop() {
+    heartbeat_stop_.store(true);
+    if (heartbeat_thread_.joinable()) heartbeat_thread_.join();
+    
     if (server_) server_->Stop();
     if (coalescer_) coalescer_->Stop();
     if (upstream_mgr_) upstream_mgr_->Stop();
@@ -310,6 +348,18 @@ void Gateway::Stop() {
     std::lock_guard<std::mutex> lk(stop_mtx_);
     stop_flag_ = true;
     stop_cv_.notify_all();
+}
+
+void Gateway::HeartbeatLoop() {
+    while (!heartbeat_stop_.load()) {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        if (reg_client_ && !cfg_.node_id.empty()) {
+            registry::Result res;
+            if (!reg_client_->Heartbeat(cfg_.node_id, &res)) {
+                if (logger_) logger_->Warn("Registry heartbeat failed");
+            }
+        }
+    }
 }
 
 void Gateway::Wait() {
@@ -332,7 +382,6 @@ void Gateway::OnClientPacket(AsyncTCPConnection* conn, Packet& pkt) {
     auto pool = RouteToPool(pkt.header.cmd_id);
     if (!pool) {
         if (logger_) logger_->Warn("No upstream pool for cmd=0x" + ToHex(pkt.header.cmd_id));
-        return;
         return;
     }
 
@@ -442,6 +491,7 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
                 std::vector<uint8_t>(res.payload.Data(), res.payload.Data() + res.payload.Size()));
             res.payload = Buffer::FromVector(encrypted);
             res.header.length = HEADER_SIZE + static_cast<uint32_t>(res.payload.Size());
+            res.header.flags |= static_cast<uint32_t>(gs::net::Flag::ENCRYPT);
         } catch (const std::exception& e) {
             if (logger_) logger_->Error("Encryption failed: " + std::string(e.what()));
             return;
@@ -466,20 +516,19 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
 }
 
 AsyncUpstreamPool* Gateway::RouteToPool(uint32_t cmd_id) {
-    // 根据命令 ID 查找服务类型
+    // 根据命令 ID 查找服务类型（按范围精确匹配，避免重叠）
     std::string svc_type;
     
-    // 使用 proto 中定义的命令范围
     if (cmd_id >= 0x00010000 && cmd_id <= 0x0001FFFF) {
         svc_type = "biz";
-    } else if (cmd_id >= protocol::CMD_CMN_LOGIN_REQ && cmd_id <= 0x0002FFFF) {
+    } else if (cmd_id >= 0x00001000 && cmd_id <= 0x0000FFFF) {
         svc_type = "login";
-    } else if (cmd_id >= protocol::CMD_CHAT_CREATE_ROOM_REQ && cmd_id <= 0x0003FFFF) {
-        svc_type = "chat";
-    } else if (cmd_id >= protocol::CMD_LOGSTATS_BASE && cmd_id <= 0x0004FFFF) {
-        svc_type = "logstats";
     } else if (cmd_id >= 0x00020000 && cmd_id <= 0x0002FFFF) {
         svc_type = "realtime";
+    } else if (cmd_id >= 0x00030000 && cmd_id <= 0x0003FFFF) {
+        svc_type = "chat";
+    } else if (cmd_id >= 0x00040000 && cmd_id <= 0x0004FFFF) {
+        svc_type = "logstats";
     }
     
     // 通过 UpstreamManager 获取连接池
@@ -536,6 +585,28 @@ int main(int argc, char* argv[]) {
     if (!gw.Start(cfg)) {
         return 1;
     }
+    
+    // 注册 OS 信号处理
+    signal(SIGINT, [](int) { /* 由主循环通过其他方式处理，此处仅占位 */ });
+    signal(SIGTERM, [](int) { /* 同上 */ });
+    
+    // 简单的信号监听：通过独立线程捕获 Ctrl+C
+    std::thread sig_thread([&gw]() {
+#ifdef _WIN32
+        // Windows 下简化处理：不做额外信号捕获，依赖控制台关闭
+#else
+        sigset_t set;
+        sigemptyset(&set);
+        sigaddset(&set, SIGINT);
+        sigaddset(&set, SIGTERM);
+        pthread_sigmask(SIG_BLOCK, &set, nullptr);
+        int sig;
+        sigwait(&set, &sig);
+        gw.Stop();
+#endif
+    });
+    sig_thread.detach();
+    
     gw.Wait();
     gw.Stop();
     return 0;
