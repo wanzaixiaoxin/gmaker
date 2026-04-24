@@ -22,10 +22,8 @@ const (
 	NODE_NOT_FOUND int32 = 200 // Registry
 	SERVICE_UNAVAILABLE int32 = 201 // Registry
 	REGISTER_FAILED int32 = 202 // Registry
-	CACHE_MISS int32 = 303 // Dbproxy
 	DB_CONN_FAILED int32 = 300 // Dbproxy
-	REDIS_ERROR int32 = 301 // Dbproxy
-	MYSQL_ERROR int32 = 302 // Dbproxy
+	MYSQL_ERROR int32 = 301 // Dbproxy
 	PLAYER_NOT_FOUND int32 = 400 // Biz
 	ITEM_NOT_FOUND int32 = 401 // Biz
 	NOT_ENOUGH_COIN int32 = 402 // Biz
@@ -62,10 +60,8 @@ var codeToName = map[int32]string{
 	200: "NODE_NOT_FOUND",
 	201: "SERVICE_UNAVAILABLE",
 	202: "REGISTER_FAILED",
-	303: "CACHE_MISS",
 	300: "DB_CONN_FAILED",
-	301: "REDIS_ERROR",
-	302: "MYSQL_ERROR",
+	301: "MYSQL_ERROR",
 	400: "PLAYER_NOT_FOUND",
 	401: "ITEM_NOT_FOUND",
 	402: "NOT_ENOUGH_COIN",

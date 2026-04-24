@@ -322,18 +322,10 @@ template <typename T>
 }
 enum CmdDBProxyInternal : int {
   CMD_DB_INT_UNKNOWN = 0,
-  CMD_DB_INT_REDIS_GET = 917505,
-  CMD_DB_INT_REDIS_GET_RES = 917506,
-  CMD_DB_INT_REDIS_SET = 917507,
-  CMD_DB_INT_REDIS_SET_RES = 917508,
-  CMD_DB_INT_REDIS_DEL = 917509,
-  CMD_DB_INT_REDIS_DEL_RES = 917510,
-  CMD_DB_INT_REDIS_PIPELINE = 917511,
-  CMD_DB_INT_REDIS_PIPELINE_RES = 917512,
-  CMD_DB_INT_MYSQL_QUERY = 917521,
-  CMD_DB_INT_MYSQL_QUERY_RES = 917522,
-  CMD_DB_INT_MYSQL_EXEC = 917523,
-  CMD_DB_INT_MYSQL_EXEC_RES = 917524,
+  CMD_DB_INT_MYSQL_QUERY = 917505,
+  CMD_DB_INT_MYSQL_QUERY_RES = 917506,
+  CMD_DB_INT_MYSQL_EXEC = 917507,
+  CMD_DB_INT_MYSQL_EXEC_RES = 917508,
   CmdDBProxyInternal_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   CmdDBProxyInternal_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -344,11 +336,11 @@ extern const uint32_t CmdDBProxyInternal_internal_data_[];
 inline constexpr CmdDBProxyInternal CmdDBProxyInternal_MIN =
     static_cast<CmdDBProxyInternal>(0);
 inline constexpr CmdDBProxyInternal CmdDBProxyInternal_MAX =
-    static_cast<CmdDBProxyInternal>(917524);
+    static_cast<CmdDBProxyInternal>(917508);
 [[nodiscard]] inline bool CmdDBProxyInternal_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, CmdDBProxyInternal_internal_data_);
 }
-inline constexpr int CmdDBProxyInternal_ARRAYSIZE = 917524 + 1;
+inline constexpr int CmdDBProxyInternal_ARRAYSIZE = 917508 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 CmdDBProxyInternal_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(CmdDBProxyInternal) {

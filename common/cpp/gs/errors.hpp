@@ -26,10 +26,8 @@ inline constexpr int32_t HEARTBEAT_TIMEOUT = 203; // Registry
 inline constexpr int32_t NODE_NOT_FOUND = 200; // Registry
 inline constexpr int32_t SERVICE_UNAVAILABLE = 201; // Registry
 inline constexpr int32_t REGISTER_FAILED = 202; // Registry
-inline constexpr int32_t CACHE_MISS = 303; // Dbproxy
 inline constexpr int32_t DB_CONN_FAILED = 300; // Dbproxy
-inline constexpr int32_t REDIS_ERROR = 301; // Dbproxy
-inline constexpr int32_t MYSQL_ERROR = 302; // Dbproxy
+inline constexpr int32_t MYSQL_ERROR = 301; // Dbproxy
 inline constexpr int32_t PLAYER_NOT_FOUND = 400; // Biz
 inline constexpr int32_t ITEM_NOT_FOUND = 401; // Biz
 inline constexpr int32_t NOT_ENOUGH_COIN = 402; // Biz
@@ -65,9 +63,7 @@ inline const std::unordered_map<int32_t, std::string> kCodeNameMap = {
     { NODE_NOT_FOUND, "NODE_NOT_FOUND" },
     { SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE" },
     { REGISTER_FAILED, "REGISTER_FAILED" },
-    { CACHE_MISS, "CACHE_MISS" },
     { DB_CONN_FAILED, "DB_CONN_FAILED" },
-    { REDIS_ERROR, "REDIS_ERROR" },
     { MYSQL_ERROR, "MYSQL_ERROR" },
     { PLAYER_NOT_FOUND, "PLAYER_NOT_FOUND" },
     { ITEM_NOT_FOUND, "ITEM_NOT_FOUND" },

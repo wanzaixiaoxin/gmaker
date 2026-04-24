@@ -20,493 +20,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type RedisGetReq struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-}
-
-func (x *RedisGetReq) Reset() {
-	*x = RedisGetReq{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[0]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RedisGetReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RedisGetReq) ProtoMessage() {}
-
-func (x *RedisGetReq) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[0]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RedisGetReq.ProtoReflect.Descriptor instead.
-func (*RedisGetReq) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *RedisGetReq) GetKey() string {
-	if x != nil {
-		return x.Key
-	}
-	return ""
-}
-
-type RedisGetRes struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Ok    bool   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	Value string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-}
-
-func (x *RedisGetRes) Reset() {
-	*x = RedisGetRes{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[1]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RedisGetRes) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RedisGetRes) ProtoMessage() {}
-
-func (x *RedisGetRes) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[1]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RedisGetRes.ProtoReflect.Descriptor instead.
-func (*RedisGetRes) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *RedisGetRes) GetOk() bool {
-	if x != nil {
-		return x.Ok
-	}
-	return false
-}
-
-func (x *RedisGetRes) GetValue() string {
-	if x != nil {
-		return x.Value
-	}
-	return ""
-}
-
-type RedisSetReq struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Key    string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Value  string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-	TtlSec uint64 `protobuf:"varint,3,opt,name=ttl_sec,json=ttlSec,proto3" json:"ttl_sec,omitempty"` // 0 表示无过期时间
-}
-
-func (x *RedisSetReq) Reset() {
-	*x = RedisSetReq{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[2]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RedisSetReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RedisSetReq) ProtoMessage() {}
-
-func (x *RedisSetReq) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[2]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RedisSetReq.ProtoReflect.Descriptor instead.
-func (*RedisSetReq) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *RedisSetReq) GetKey() string {
-	if x != nil {
-		return x.Key
-	}
-	return ""
-}
-
-func (x *RedisSetReq) GetValue() string {
-	if x != nil {
-		return x.Value
-	}
-	return ""
-}
-
-func (x *RedisSetReq) GetTtlSec() uint64 {
-	if x != nil {
-		return x.TtlSec
-	}
-	return 0
-}
-
-type RedisSetRes struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Ok bool `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-}
-
-func (x *RedisSetRes) Reset() {
-	*x = RedisSetRes{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[3]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RedisSetRes) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RedisSetRes) ProtoMessage() {}
-
-func (x *RedisSetRes) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[3]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RedisSetRes.ProtoReflect.Descriptor instead.
-func (*RedisSetRes) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *RedisSetRes) GetOk() bool {
-	if x != nil {
-		return x.Ok
-	}
-	return false
-}
-
-type RedisDelReq struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Keys []string `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys,omitempty"`
-}
-
-func (x *RedisDelReq) Reset() {
-	*x = RedisDelReq{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[4]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RedisDelReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RedisDelReq) ProtoMessage() {}
-
-func (x *RedisDelReq) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[4]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RedisDelReq.ProtoReflect.Descriptor instead.
-func (*RedisDelReq) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *RedisDelReq) GetKeys() []string {
-	if x != nil {
-		return x.Keys
-	}
-	return nil
-}
-
-type RedisDelRes struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Ok    bool  `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	Count int64 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
-}
-
-func (x *RedisDelRes) Reset() {
-	*x = RedisDelRes{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[5]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RedisDelRes) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RedisDelRes) ProtoMessage() {}
-
-func (x *RedisDelRes) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[5]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RedisDelRes.ProtoReflect.Descriptor instead.
-func (*RedisDelRes) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *RedisDelRes) GetOk() bool {
-	if x != nil {
-		return x.Ok
-	}
-	return false
-}
-
-func (x *RedisDelRes) GetCount() int64 {
-	if x != nil {
-		return x.Count
-	}
-	return 0
-}
-
-type RedisPipelineCmd struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Op     string `protobuf:"bytes,1,opt,name=op,proto3" json:"op,omitempty"` // GET/SET/DEL
-	Key    string `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
-	Value  string `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
-	TtlSec uint64 `protobuf:"varint,4,opt,name=ttl_sec,json=ttlSec,proto3" json:"ttl_sec,omitempty"`
-}
-
-func (x *RedisPipelineCmd) Reset() {
-	*x = RedisPipelineCmd{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[6]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RedisPipelineCmd) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RedisPipelineCmd) ProtoMessage() {}
-
-func (x *RedisPipelineCmd) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[6]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RedisPipelineCmd.ProtoReflect.Descriptor instead.
-func (*RedisPipelineCmd) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *RedisPipelineCmd) GetOp() string {
-	if x != nil {
-		return x.Op
-	}
-	return ""
-}
-
-func (x *RedisPipelineCmd) GetKey() string {
-	if x != nil {
-		return x.Key
-	}
-	return ""
-}
-
-func (x *RedisPipelineCmd) GetValue() string {
-	if x != nil {
-		return x.Value
-	}
-	return ""
-}
-
-func (x *RedisPipelineCmd) GetTtlSec() uint64 {
-	if x != nil {
-		return x.TtlSec
-	}
-	return 0
-}
-
-type RedisPipelineReq struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Cmds []*RedisPipelineCmd `protobuf:"bytes,1,rep,name=cmds,proto3" json:"cmds,omitempty"`
-}
-
-func (x *RedisPipelineReq) Reset() {
-	*x = RedisPipelineReq{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[7]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RedisPipelineReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RedisPipelineReq) ProtoMessage() {}
-
-func (x *RedisPipelineReq) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[7]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RedisPipelineReq.ProtoReflect.Descriptor instead.
-func (*RedisPipelineReq) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *RedisPipelineReq) GetCmds() []*RedisPipelineCmd {
-	if x != nil {
-		return x.Cmds
-	}
-	return nil
-}
-
-type RedisPipelineRes struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Ok      bool     `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	Results [][]byte `protobuf:"bytes,2,rep,name=results,proto3" json:"results,omitempty"` // 简单字符串序列化结果
-}
-
-func (x *RedisPipelineRes) Reset() {
-	*x = RedisPipelineRes{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[8]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RedisPipelineRes) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RedisPipelineRes) ProtoMessage() {}
-
-func (x *RedisPipelineRes) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[8]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RedisPipelineRes.ProtoReflect.Descriptor instead.
-func (*RedisPipelineRes) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *RedisPipelineRes) GetOk() bool {
-	if x != nil {
-		return x.Ok
-	}
-	return false
-}
-
-func (x *RedisPipelineRes) GetResults() [][]byte {
-	if x != nil {
-		return x.Results
-	}
-	return nil
-}
-
 type MySQLColumn struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -519,7 +32,7 @@ type MySQLColumn struct {
 func (x *MySQLColumn) Reset() {
 	*x = MySQLColumn{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[9]
+		mi := &file_dbproxy_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -532,7 +45,7 @@ func (x *MySQLColumn) String() string {
 func (*MySQLColumn) ProtoMessage() {}
 
 func (x *MySQLColumn) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[9]
+	mi := &file_dbproxy_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -545,7 +58,7 @@ func (x *MySQLColumn) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MySQLColumn.ProtoReflect.Descriptor instead.
 func (*MySQLColumn) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{9}
+	return file_dbproxy_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *MySQLColumn) GetName() string {
@@ -573,7 +86,7 @@ type MySQLRow struct {
 func (x *MySQLRow) Reset() {
 	*x = MySQLRow{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[10]
+		mi := &file_dbproxy_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -586,7 +99,7 @@ func (x *MySQLRow) String() string {
 func (*MySQLRow) ProtoMessage() {}
 
 func (x *MySQLRow) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[10]
+	mi := &file_dbproxy_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -599,7 +112,7 @@ func (x *MySQLRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MySQLRow.ProtoReflect.Descriptor instead.
 func (*MySQLRow) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{10}
+	return file_dbproxy_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *MySQLRow) GetColumns() []*MySQLColumn {
@@ -622,7 +135,7 @@ type MySQLQueryReq struct {
 func (x *MySQLQueryReq) Reset() {
 	*x = MySQLQueryReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[11]
+		mi := &file_dbproxy_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -635,7 +148,7 @@ func (x *MySQLQueryReq) String() string {
 func (*MySQLQueryReq) ProtoMessage() {}
 
 func (x *MySQLQueryReq) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[11]
+	mi := &file_dbproxy_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -648,7 +161,7 @@ func (x *MySQLQueryReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MySQLQueryReq.ProtoReflect.Descriptor instead.
 func (*MySQLQueryReq) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{11}
+	return file_dbproxy_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *MySQLQueryReq) GetUid() uint64 {
@@ -685,7 +198,7 @@ type MySQLQueryRes struct {
 func (x *MySQLQueryRes) Reset() {
 	*x = MySQLQueryRes{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[12]
+		mi := &file_dbproxy_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -698,7 +211,7 @@ func (x *MySQLQueryRes) String() string {
 func (*MySQLQueryRes) ProtoMessage() {}
 
 func (x *MySQLQueryRes) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[12]
+	mi := &file_dbproxy_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -711,7 +224,7 @@ func (x *MySQLQueryRes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MySQLQueryRes.ProtoReflect.Descriptor instead.
 func (*MySQLQueryRes) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{12}
+	return file_dbproxy_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *MySQLQueryRes) GetOk() bool {
@@ -748,7 +261,7 @@ type MySQLExecReq struct {
 func (x *MySQLExecReq) Reset() {
 	*x = MySQLExecReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[13]
+		mi := &file_dbproxy_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -761,7 +274,7 @@ func (x *MySQLExecReq) String() string {
 func (*MySQLExecReq) ProtoMessage() {}
 
 func (x *MySQLExecReq) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[13]
+	mi := &file_dbproxy_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -774,7 +287,7 @@ func (x *MySQLExecReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MySQLExecReq.ProtoReflect.Descriptor instead.
 func (*MySQLExecReq) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{13}
+	return file_dbproxy_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *MySQLExecReq) GetUid() uint64 {
@@ -812,7 +325,7 @@ type MySQLExecRes struct {
 func (x *MySQLExecRes) Reset() {
 	*x = MySQLExecRes{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_dbproxy_proto_msgTypes[14]
+		mi := &file_dbproxy_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -825,7 +338,7 @@ func (x *MySQLExecRes) String() string {
 func (*MySQLExecRes) ProtoMessage() {}
 
 func (x *MySQLExecRes) ProtoReflect() protoreflect.Message {
-	mi := &file_dbproxy_proto_msgTypes[14]
+	mi := &file_dbproxy_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -838,7 +351,7 @@ func (x *MySQLExecRes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MySQLExecRes.ProtoReflect.Descriptor instead.
 func (*MySQLExecRes) Descriptor() ([]byte, []int) {
-	return file_dbproxy_proto_rawDescGZIP(), []int{14}
+	return file_dbproxy_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *MySQLExecRes) GetOk() bool {
@@ -873,73 +386,40 @@ var File_dbproxy_proto protoreflect.FileDescriptor
 
 var file_dbproxy_proto_rawDesc = []byte{
 	0x0a, 0x0d, 0x64, 0x62, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12,
-	0x07, 0x64, 0x62, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x22, 0x1f, 0x0a, 0x0b, 0x52, 0x65, 0x64, 0x69,
-	0x73, 0x47, 0x65, 0x74, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x22, 0x33, 0x0a, 0x0b, 0x52, 0x65, 0x64,
-	0x69, 0x73, 0x47, 0x65, 0x74, 0x52, 0x65, 0x73, 0x12, 0x0e, 0x0a, 0x02, 0x6f, 0x6b, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6f, 0x6b, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75,
-	0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x22, 0x4e,
-	0x0a, 0x0b, 0x52, 0x65, 0x64, 0x69, 0x73, 0x53, 0x65, 0x74, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a,
-	0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12,
-	0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05,
-	0x76, 0x61, 0x6c, 0x75, 0x65, 0x12, 0x17, 0x0a, 0x07, 0x74, 0x74, 0x6c, 0x5f, 0x73, 0x65, 0x63,
-	0x18, 0x03, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x74, 0x74, 0x6c, 0x53, 0x65, 0x63, 0x22, 0x1d,
-	0x0a, 0x0b, 0x52, 0x65, 0x64, 0x69, 0x73, 0x53, 0x65, 0x74, 0x52, 0x65, 0x73, 0x12, 0x0e, 0x0a,
-	0x02, 0x6f, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6f, 0x6b, 0x22, 0x21, 0x0a,
-	0x0b, 0x52, 0x65, 0x64, 0x69, 0x73, 0x44, 0x65, 0x6c, 0x52, 0x65, 0x71, 0x12, 0x12, 0x0a, 0x04,
-	0x6b, 0x65, 0x79, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x04, 0x6b, 0x65, 0x79, 0x73,
-	0x22, 0x33, 0x0a, 0x0b, 0x52, 0x65, 0x64, 0x69, 0x73, 0x44, 0x65, 0x6c, 0x52, 0x65, 0x73, 0x12,
-	0x0e, 0x0a, 0x02, 0x6f, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6f, 0x6b, 0x12,
-	0x14, 0x0a, 0x05, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05,
-	0x63, 0x6f, 0x75, 0x6e, 0x74, 0x22, 0x63, 0x0a, 0x10, 0x52, 0x65, 0x64, 0x69, 0x73, 0x50, 0x69,
-	0x70, 0x65, 0x6c, 0x69, 0x6e, 0x65, 0x43, 0x6d, 0x64, 0x12, 0x0e, 0x0a, 0x02, 0x6f, 0x70, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x6f, 0x70, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76,
-	0x61, 0x6c, 0x75, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75,
-	0x65, 0x12, 0x17, 0x0a, 0x07, 0x74, 0x74, 0x6c, 0x5f, 0x73, 0x65, 0x63, 0x18, 0x04, 0x20, 0x01,
-	0x28, 0x04, 0x52, 0x06, 0x74, 0x74, 0x6c, 0x53, 0x65, 0x63, 0x22, 0x41, 0x0a, 0x10, 0x52, 0x65,
-	0x64, 0x69, 0x73, 0x50, 0x69, 0x70, 0x65, 0x6c, 0x69, 0x6e, 0x65, 0x52, 0x65, 0x71, 0x12, 0x2d,
-	0x0a, 0x04, 0x63, 0x6d, 0x64, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x64,
-	0x62, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x2e, 0x52, 0x65, 0x64, 0x69, 0x73, 0x50, 0x69, 0x70, 0x65,
-	0x6c, 0x69, 0x6e, 0x65, 0x43, 0x6d, 0x64, 0x52, 0x04, 0x63, 0x6d, 0x64, 0x73, 0x22, 0x3c, 0x0a,
-	0x10, 0x52, 0x65, 0x64, 0x69, 0x73, 0x50, 0x69, 0x70, 0x65, 0x6c, 0x69, 0x6e, 0x65, 0x52, 0x65,
-	0x73, 0x12, 0x0e, 0x0a, 0x02, 0x6f, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6f,
-	0x6b, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x02, 0x20, 0x03,
-	0x28, 0x0c, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x22, 0x37, 0x0a, 0x0b, 0x4d,
-	0x79, 0x53, 0x51, 0x4c, 0x43, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61,
-	0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x14,
-	0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76,
-	0x61, 0x6c, 0x75, 0x65, 0x22, 0x3a, 0x0a, 0x08, 0x4d, 0x79, 0x53, 0x51, 0x4c, 0x52, 0x6f, 0x77,
-	0x12, 0x2e, 0x0a, 0x07, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28,
-	0x0b, 0x32, 0x14, 0x2e, 0x64, 0x62, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x2e, 0x4d, 0x79, 0x53, 0x51,
-	0x4c, 0x43, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x52, 0x07, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73,
-	0x22, 0x47, 0x0a, 0x0d, 0x4d, 0x79, 0x53, 0x51, 0x4c, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x65,
-	0x71, 0x12, 0x10, 0x0a, 0x03, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x03,
-	0x75, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x71, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x03, 0x73, 0x71, 0x6c, 0x12, 0x12, 0x0a, 0x04, 0x61, 0x72, 0x67, 0x73, 0x18, 0x03, 0x20,
-	0x03, 0x28, 0x09, 0x52, 0x04, 0x61, 0x72, 0x67, 0x73, 0x22, 0x5c, 0x0a, 0x0d, 0x4d, 0x79, 0x53,
-	0x51, 0x4c, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x65, 0x73, 0x12, 0x0e, 0x0a, 0x02, 0x6f, 0x6b,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6f, 0x6b, 0x12, 0x25, 0x0a, 0x04, 0x72, 0x6f,
-	0x77, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x64, 0x62, 0x70, 0x72, 0x6f,
-	0x78, 0x79, 0x2e, 0x4d, 0x79, 0x53, 0x51, 0x4c, 0x52, 0x6f, 0x77, 0x52, 0x04, 0x72, 0x6f, 0x77,
-	0x73, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x22, 0x46, 0x0a, 0x0c, 0x4d, 0x79, 0x53, 0x51, 0x4c,
-	0x45, 0x78, 0x65, 0x63, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x75, 0x69, 0x64, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x04, 0x52, 0x03, 0x75, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x71, 0x6c,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x71, 0x6c, 0x12, 0x12, 0x0a, 0x04, 0x61,
-	0x72, 0x67, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x04, 0x61, 0x72, 0x67, 0x73, 0x22,
-	0x7f, 0x0a, 0x0c, 0x4d, 0x79, 0x53, 0x51, 0x4c, 0x45, 0x78, 0x65, 0x63, 0x52, 0x65, 0x73, 0x12,
-	0x0e, 0x0a, 0x02, 0x6f, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6f, 0x6b, 0x12,
-	0x24, 0x0a, 0x0e, 0x6c, 0x61, 0x73, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x69,
-	0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0c, 0x6c, 0x61, 0x73, 0x74, 0x49, 0x6e, 0x73,
-	0x65, 0x72, 0x74, 0x49, 0x64, 0x12, 0x23, 0x0a, 0x0d, 0x72, 0x6f, 0x77, 0x73, 0x5f, 0x61, 0x66,
-	0x66, 0x65, 0x63, 0x74, 0x65, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0c, 0x72, 0x6f,
-	0x77, 0x73, 0x41, 0x66, 0x66, 0x65, 0x63, 0x74, 0x65, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72,
-	0x72, 0x6f, 0x72, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72,
-	0x42, 0x28, 0x5a, 0x26, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67,
-	0x6d, 0x61, 0x6b, 0x65, 0x72, 0x2f, 0x6c, 0x75, 0x66, 0x66, 0x61, 0x2f, 0x67, 0x65, 0x6e, 0x2f,
-	0x67, 0x6f, 0x2f, 0x64, 0x62, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74,
-	0x6f, 0x33,
+	0x07, 0x64, 0x62, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x22, 0x37, 0x0a, 0x0b, 0x4d, 0x79, 0x53, 0x51,
+	0x4c, 0x43, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x76,
+	0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75,
+	0x65, 0x22, 0x3a, 0x0a, 0x08, 0x4d, 0x79, 0x53, 0x51, 0x4c, 0x52, 0x6f, 0x77, 0x12, 0x2e, 0x0a,
+	0x07, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x14,
+	0x2e, 0x64, 0x62, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x2e, 0x4d, 0x79, 0x53, 0x51, 0x4c, 0x43, 0x6f,
+	0x6c, 0x75, 0x6d, 0x6e, 0x52, 0x07, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x22, 0x47, 0x0a,
+	0x0d, 0x4d, 0x79, 0x53, 0x51, 0x4c, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x65, 0x71, 0x12, 0x10,
+	0x0a, 0x03, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x03, 0x75, 0x69, 0x64,
+	0x12, 0x10, 0x0a, 0x03, 0x73, 0x71, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73,
+	0x71, 0x6c, 0x12, 0x12, 0x0a, 0x04, 0x61, 0x72, 0x67, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09,
+	0x52, 0x04, 0x61, 0x72, 0x67, 0x73, 0x22, 0x5c, 0x0a, 0x0d, 0x4d, 0x79, 0x53, 0x51, 0x4c, 0x51,
+	0x75, 0x65, 0x72, 0x79, 0x52, 0x65, 0x73, 0x12, 0x0e, 0x0a, 0x02, 0x6f, 0x6b, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x08, 0x52, 0x02, 0x6f, 0x6b, 0x12, 0x25, 0x0a, 0x04, 0x72, 0x6f, 0x77, 0x73, 0x18,
+	0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x64, 0x62, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x2e,
+	0x4d, 0x79, 0x53, 0x51, 0x4c, 0x52, 0x6f, 0x77, 0x52, 0x04, 0x72, 0x6f, 0x77, 0x73, 0x12, 0x14,
+	0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65,
+	0x72, 0x72, 0x6f, 0x72, 0x22, 0x46, 0x0a, 0x0c, 0x4d, 0x79, 0x53, 0x51, 0x4c, 0x45, 0x78, 0x65,
+	0x63, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x04, 0x52, 0x03, 0x75, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x71, 0x6c, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x71, 0x6c, 0x12, 0x12, 0x0a, 0x04, 0x61, 0x72, 0x67, 0x73,
+	0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x04, 0x61, 0x72, 0x67, 0x73, 0x22, 0x7f, 0x0a, 0x0c,
+	0x4d, 0x79, 0x53, 0x51, 0x4c, 0x45, 0x78, 0x65, 0x63, 0x52, 0x65, 0x73, 0x12, 0x0e, 0x0a, 0x02,
+	0x6f, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6f, 0x6b, 0x12, 0x24, 0x0a, 0x0e,
+	0x6c, 0x61, 0x73, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x69, 0x64, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x03, 0x52, 0x0c, 0x6c, 0x61, 0x73, 0x74, 0x49, 0x6e, 0x73, 0x65, 0x72, 0x74,
+	0x49, 0x64, 0x12, 0x23, 0x0a, 0x0d, 0x72, 0x6f, 0x77, 0x73, 0x5f, 0x61, 0x66, 0x66, 0x65, 0x63,
+	0x74, 0x65, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0c, 0x72, 0x6f, 0x77, 0x73, 0x41,
+	0x66, 0x66, 0x65, 0x63, 0x74, 0x65, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72,
+	0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x42, 0x28, 0x5a,
+	0x26, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x6d, 0x61, 0x6b,
+	0x65, 0x72, 0x2f, 0x6c, 0x75, 0x66, 0x66, 0x61, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x67, 0x6f, 0x2f,
+	0x64, 0x62, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -954,33 +434,23 @@ func file_dbproxy_proto_rawDescGZIP() []byte {
 	return file_dbproxy_proto_rawDescData
 }
 
-var file_dbproxy_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_dbproxy_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_dbproxy_proto_goTypes = []interface{}{
-	(*RedisGetReq)(nil),      // 0: dbproxy.RedisGetReq
-	(*RedisGetRes)(nil),      // 1: dbproxy.RedisGetRes
-	(*RedisSetReq)(nil),      // 2: dbproxy.RedisSetReq
-	(*RedisSetRes)(nil),      // 3: dbproxy.RedisSetRes
-	(*RedisDelReq)(nil),      // 4: dbproxy.RedisDelReq
-	(*RedisDelRes)(nil),      // 5: dbproxy.RedisDelRes
-	(*RedisPipelineCmd)(nil), // 6: dbproxy.RedisPipelineCmd
-	(*RedisPipelineReq)(nil), // 7: dbproxy.RedisPipelineReq
-	(*RedisPipelineRes)(nil), // 8: dbproxy.RedisPipelineRes
-	(*MySQLColumn)(nil),      // 9: dbproxy.MySQLColumn
-	(*MySQLRow)(nil),         // 10: dbproxy.MySQLRow
-	(*MySQLQueryReq)(nil),    // 11: dbproxy.MySQLQueryReq
-	(*MySQLQueryRes)(nil),    // 12: dbproxy.MySQLQueryRes
-	(*MySQLExecReq)(nil),     // 13: dbproxy.MySQLExecReq
-	(*MySQLExecRes)(nil),     // 14: dbproxy.MySQLExecRes
+	(*MySQLColumn)(nil),   // 0: dbproxy.MySQLColumn
+	(*MySQLRow)(nil),      // 1: dbproxy.MySQLRow
+	(*MySQLQueryReq)(nil), // 2: dbproxy.MySQLQueryReq
+	(*MySQLQueryRes)(nil), // 3: dbproxy.MySQLQueryRes
+	(*MySQLExecReq)(nil),  // 4: dbproxy.MySQLExecReq
+	(*MySQLExecRes)(nil),  // 5: dbproxy.MySQLExecRes
 }
 var file_dbproxy_proto_depIdxs = []int32{
-	6,  // 0: dbproxy.RedisPipelineReq.cmds:type_name -> dbproxy.RedisPipelineCmd
-	9,  // 1: dbproxy.MySQLRow.columns:type_name -> dbproxy.MySQLColumn
-	10, // 2: dbproxy.MySQLQueryRes.rows:type_name -> dbproxy.MySQLRow
-	3,  // [3:3] is the sub-list for method output_type
-	3,  // [3:3] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	0, // 0: dbproxy.MySQLRow.columns:type_name -> dbproxy.MySQLColumn
+	1, // 1: dbproxy.MySQLQueryRes.rows:type_name -> dbproxy.MySQLRow
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_dbproxy_proto_init() }
@@ -990,114 +460,6 @@ func file_dbproxy_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_dbproxy_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisGetReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_dbproxy_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisGetRes); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_dbproxy_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisSetReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_dbproxy_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisSetRes); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_dbproxy_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisDelReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_dbproxy_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisDelRes); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_dbproxy_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisPipelineCmd); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_dbproxy_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisPipelineReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_dbproxy_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedisPipelineRes); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_dbproxy_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*MySQLColumn); i {
 			case 0:
 				return &v.state
@@ -1109,7 +471,7 @@ func file_dbproxy_proto_init() {
 				return nil
 			}
 		}
-		file_dbproxy_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+		file_dbproxy_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*MySQLRow); i {
 			case 0:
 				return &v.state
@@ -1121,7 +483,7 @@ func file_dbproxy_proto_init() {
 				return nil
 			}
 		}
-		file_dbproxy_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+		file_dbproxy_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*MySQLQueryReq); i {
 			case 0:
 				return &v.state
@@ -1133,7 +495,7 @@ func file_dbproxy_proto_init() {
 				return nil
 			}
 		}
-		file_dbproxy_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+		file_dbproxy_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*MySQLQueryRes); i {
 			case 0:
 				return &v.state
@@ -1145,7 +507,7 @@ func file_dbproxy_proto_init() {
 				return nil
 			}
 		}
-		file_dbproxy_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+		file_dbproxy_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*MySQLExecReq); i {
 			case 0:
 				return &v.state
@@ -1157,7 +519,7 @@ func file_dbproxy_proto_init() {
 				return nil
 			}
 		}
-		file_dbproxy_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+		file_dbproxy_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*MySQLExecRes); i {
 			case 0:
 				return &v.state
@@ -1176,7 +538,7 @@ func file_dbproxy_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_dbproxy_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
