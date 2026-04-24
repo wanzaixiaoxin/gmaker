@@ -1,0 +1,26 @@
+{
+  "service": {
+    "service_type": "gateway",
+    "node_id": "gateway-1",
+    "log_level": "info",
+    "log_file": "",
+    "metrics_addr": ":9081"
+  },
+  "network": {
+    "port": 8081,
+    "max_connections": 10000
+  },
+  "registry": {
+    "nodes": [
+      {"host": "etcd", "port": 2379}
+    ]
+  },
+  "upstream": {
+    "services": ["biz", "chat", "login"]
+  },
+  "coalescer_interval_ms": 16,
+  "security": {
+    "master_key_hex": "",
+    "replay_window_seconds": 300
+  }
+}

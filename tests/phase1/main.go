@@ -5,8 +5,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/gmaker/luffa/common/go/net"
@@ -95,9 +93,8 @@ func main() {
 
 	log.Println("=== Phase 1 Integration Test PASSED ===")
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	// 等待 1 秒确保日志输出，然后自动退出（CI 友好）
+	time.Sleep(1 * time.Second)
 }
 
 func stopCmd(cmd *exec.Cmd) {

@@ -32,7 +32,6 @@ build-go:
 	cd services/biz-go && go mod tidy && go build -o ../../bin/biz-go.exe ./main.go
 	cd services/logstats-go && go mod tidy && go build -o ../../bin/logstats-go.exe ./main.go
 	cd services/chat-go && go mod tidy && go build -o ../../bin/chat-go.exe ./main.go
-	cd services/login-go && go mod tidy && go build -o ../../bin/login-go.exe ./main.go
 	@echo "Go build done."
 
 build-cpp:

@@ -38,8 +38,9 @@ gmaker/
 ├── services/               # 可独立部署的服务
 │   ├── registry-go/        # 注册中心（etcd / memory 双后端）
 │   ├── biz-go/             # 业务服骨架（登录、玩家数据、Ping）
-│   ├── dbproxy-go/         # 数据库代理（Redis + MySQL 统一入口）
+│   ├── dbproxy-go/         # 数据库代理（MySQL 统一入口；Redis 由各服务直接连接）
 │   ├── logstats-go/        # 日志收集与实时聚合
+│   ├── chat-go/            # 聊天服（骨架）
 │   ├── login-go/           # 登录验签服（占位）
 │   ├── bot-go/             # 压测机器人（占位）
 │   ├── gateway-cpp/        # C++ 网关（客户端接入、转发 Biz、加密握手）
@@ -113,7 +114,8 @@ bin/
   ├── logstats-go.exe
   ├── gateway-cpp.exe      (从 build/Release/ 复制)
   ├── realtime-cpp.exe     (从 build/Release/ 复制)
-  └── test-crypto.exe
+  ├── test-crypto.exe
+  └── test-async-net.exe
 ```
 
 ---
@@ -149,11 +151,11 @@ scripts\run-phase2.bat
 PowerShell 用户也可以使用：
 
 ```powershell
-# 启动指定服务组合
-.\scripts\start-services.ps1 minimal   # minimal / full / all / registry / biz / dbproxy / gateway / logstats
+# 启动指定服务组合（TODO：待实现 PowerShell 版本）
+# .\scripts\start-services.ps1 minimal
 
-# 停止指定或全部服务
-.\scripts\stop-services.ps1 all       # all / registry / biz / dbproxy / gateway / logstats
+# 停止指定或全部服务（TODO：待实现 PowerShell 版本）
+# .\scripts\stop-services.ps1 all
 ```
 
 ### 手动启动（Phase 1，无需 MySQL/Redis）
@@ -165,9 +167,19 @@ PowerShell 用户也可以使用：
 # 2. 启动 Biz
 ./bin/biz-go.exe -listen 127.0.0.1:8082 -registry 127.0.0.1:2379
 
-# 3. 启动 Gateway（参数：gateway_port registry_addr fallback_biz_nodes）
-./bin/gateway-cpp.exe 8081 127.0.0.1:2379 127.0.0.1:8082
+# 3. 启动 Gateway（需要 gateway.json 配置文件在工作目录）
+./bin/gateway-cpp.exe --config gateway.json
 ```
+
+### 开发规范：重大改动后强制验证
+
+任何涉及协议、公共库、Gateway/Biz 交互的改动，提交前必须完成：
+
+1. **全量编译通过**：`make build`（或 Windows `build.bat`）
+2. **Phase 1 端到端通过**：`go run tests/phase1/main.go`
+3. **手动一键验证**：`scripts\start-minimal.bat`（Windows）
+
+> 本项目为 Go + C++ 双语言栈， handshake 帧格式、conn_id 前缀、FlagEncrypt 标志等均为跨语言隐式契约，单侧单元测试无法覆盖，历史多次回归因此产生。
 
 ### 一键联调测试
 

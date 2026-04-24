@@ -144,7 +144,7 @@ Redis 作为全服共享的高速存储层，承担**缓存、会话、排行榜
 
 #### 部署架构
 - **模式**：**Redis Cluster**（6 节点起步：3 主 3 从），天然支持分片与故障转移
-- **访问入口**：由 `dbproxy-go` 统一代理，业务服务不直接连 Redis
+- **访问入口**：各业务服务直接连接 Redis（不再经过 DBProxy 代理）；DBProxy 仅代理 MySQL
 - **备份策略**：RDB 每小时快照 + AOF 每秒刷盘，冷备定期上传对象存储
 
 #### Key 设计规范
@@ -1075,7 +1075,7 @@ Client --TCP/WS--> Gateway(C++) --RPC--> Biz(Go)
 
 ### Phase 2：核心玩法
 - [ ] `realtime-cpp`：实时服骨架 + 首个插件（如同步房间 `sync_room`）
-- [ ] `dbproxy-go`：数据库代理（Redis + MySQL 连接池）
+- [ ] `dbproxy-go`：数据库代理（MySQL 连接池；Redis 由各服务直接连接）
 - [ ] `biz-go`：完整大厅逻辑（按项目需求加载模块）
 - [ ] Gateway 与 Realtime 的路由打通
 

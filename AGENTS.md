@@ -33,7 +33,7 @@
 
 ### 根级依赖文件
 - **`go.mod`** / **`go.sum`**：根 Go 模块，`github.com/gmaker/luffa`，依赖 `google.golang.org/grpc` 和 `protobuf`。
-- **`CMakeLists.txt`**：定义 C++ 编译目标（`gateway-cpp`、`realtime-cpp`、`test-crypto`、`test-async-net`）。
+- **`CMakeLists.txt`**：定义 C++ 编译目标（`gateway-cpp`、`realtime-cpp`、`test-crypto`、`test-async-net`、`test-redis`、`test-net-perf-client`、`test-net-perf-server`）。
 - **`Makefile`**：提供 `proto`、`build-go`、`build-cpp`、`build`、`test`、`clean` 命令。
 
 ---
@@ -72,12 +72,12 @@ gmaker/
 ├── services/               # 可独立部署的服务
 │   ├── registry-go/        # 注册中心（支持 etcd / memory 双后端）
 │   ├── biz-go/             # 业务服骨架（登录、玩家数据、Ping）
-│   ├── dbproxy-go/         # 数据库代理（Redis + MySQL 统一入口）
+│   ├── dbproxy-go/         # 数据库代理（MySQL 统一入口；Redis 由各服务直接连接）
 │   ├── logstats-go/        # 日志收集与实时聚合
 │   ├── gateway-cpp/        # C++ 网关（客户端接入、转发 Biz、加密握手）
 │   └── realtime-cpp/       # C++ 实时服骨架（Room + ComputeThread）
 ├── spec/                   # 协议与规范定义
-│   ├── proto/              # protobuf3 定义（common、biz、login、dbproxy、registry、packet）
+│   ├── proto/              # protobuf3 定义（protocol、common、biz、login、chat、dbproxy、registry、packet）
 │   ├── cmd_ids.yaml        # 全局命令号定义
 │   ├── errors.toml         # 全局错误码体系
 │   └── rpc_spec.yaml       # RPC 行为契约（超时、重试）
@@ -91,8 +91,12 @@ gmaker/
 │   ├── deploy/             # Docker Compose、Grafana Dashboard、Prometheus 配置
 │   ├── benchmark/          # 压测工具（占位）
 │   ├── gen-errors/         # 错误码生成工具（占位）
-│   └── testclient/         # 测试客户端（占位）
-└── 3rd/libuv/              # C++ 异步网络库（第三方依赖）
+│   └── testclient/         # 测试客户端（已实现，支持 login / heartbeat / flood / chat 场景）
+└── 3rd/                    # 第三方依赖
+    ├── libuv/              # C++ 异步网络库
+    ├── protobuf/           # protobuf 34.1 源码与构建产物
+    ├── hiredis/            # Redis C 客户端
+    └── rapidjson/          # JSON 解析（header-only）
 ```
 
 ---
@@ -118,11 +122,11 @@ make proto
 
 # 编译全部 Go 服务（输出到 bin/）
 make build-go
-# 产物：bin/registry-go.exe、bin/dbproxy-go.exe、bin/biz-go.exe
+# 产物：bin/registry-go.exe、bin/dbproxy-go.exe、bin/biz-go.exe、bin/chat-go.exe、bin/logstats-go.exe
 
 # 编译全部 C++ 服务（CMake Release 模式）
 make build-cpp
-# 产物：build/Release/gateway-cpp.exe、build/Release/realtime-cpp.exe
+# 产物：build/Release/*.exe，最终由 make build 自动复制到 bin/
 
 # 一键编译全部
 make build
@@ -136,9 +140,11 @@ make clean
 ```
 
 ### C++ 测试二进制文件
-CMake 会额外生成两个测试可执行文件：
+CMake 会额外生成多个测试可执行文件：
 - `build/Release/test-crypto.exe`：AES-GCM / HMAC 自测
 - `build/Release/test-async-net.exe`：libuv 异步网络层自测
+- `build/Release/test-redis.exe`：Redis 连接测试
+- `build/Release/test-net-perf-client.exe` / `test-net-perf-server.exe`：网络性能压测
 
 ### 一键联调测试
 
@@ -170,14 +176,17 @@ Go 服务遵循以下目录惯例：
 services/{name}-go/
 ├── main.go                 # 入口：flag 解析、组件初始化、信号处理
 ├── internal/
-│   ├── server/             # TCP/HTTP 服务启动与路由
-│   └── {domain}/           # 业务领域子包（如 mysql/、redis/、store/）
+│   ├── handler/            # 请求处理与业务路由
+│   ├── service/            # 业务领域服务（如 player/、auth/）
+│   └── dbproxy/            # 下游 DBProxy 客户端封装
 └── go.mod                  # 服务级 Go 模块（部分服务有，部分复用根模块）
 ```
 
+> 注：`biz-go` 是典型范例，其 `internal/` 下分为 `handler/`（路由分发）、`service/`（玩家业务）、`dbproxy/`（下游代理客户端），无 `server/` 子包。
+
 ### 5.3 C++ 服务内部结构
 
-C++ 服务为单 `main.cpp` + 公共库模式，业务逻辑直接写在 `main.cpp` 中（当前骨架阶段）。公共库头文件统一放在 `common/cpp/gs/{module}/`。
+C++ 服务以 `main.cpp` 为主入口，配合公共库实现。当前 `gateway-cpp` 已包含完整的 `Gateway` 类、中间件链（`HandshakeMiddleware` / `EncryptionMiddleware`）、上游连接池管理、Room 成员管理、信号处理等，不再是简单的"骨架阶段"单文件模式。公共库头文件统一放在 `common/cpp/gs/{module}/`。
 
 ### 5.4 公共库双语言对称约定
 
@@ -208,12 +217,43 @@ C++ 服务为单 `main.cpp` + 公共库模式，业务逻辑直接写在 `main.c
 - **`tests/phase1/main.go`**：验证 `Client -> Gateway(C++) -> Biz(Go) -> Registry(Go)` 整条链路。自动拉起 Registry（memory 模式）、Biz、Gateway，模拟客户端发送 Ping 包。
 - **`tests/phase2/main.go`**：验证完整数据链路（登录 -> 读玩家数据 -> 修改 -> 写回）。需要本地 MySQL（默认 `root:123456@tcp(127.0.0.1:3306)/gmaker`）和 Redis（默认 `127.0.0.1:6379`）。
 
-### 6.3 CI/CD 流水线
-`.github/workflows/ci.yml` 包含 4 个 Job：
+### 6.3 重大改动后的强制验证标准
+
+任何涉及以下范围的 PR 或本地提交，在合并前**必须**完成以下三步验证：
+
+1. **全量编译通过**
+   ```bash
+   make build        # 或 Windows: build.bat
+   ```
+   - Go：全部服务产物输出到 `bin/*.exe`
+   - C++：`build/Release/gateway-cpp.exe`、`realtime-cpp.exe`、`test-crypto.exe`、`test-async-net.exe`
+
+2. **Phase 1 端到端联调通过**
+   ```bash
+   # 方式 A：程序化测试（推荐 CI 使用）
+   go run tests/phase1/main.go
+
+   # 方式 B：手动一键启动（本地开发使用）
+   scripts\start-minimal.bat
+   ```
+   验收标准：
+   - Registry、Biz、Gateway 正常启动且无 ERROR 级日志
+   - Client 成功完成 Handshake（`Handshake completed`）
+   - Client 成功发送 Ping 并收到 Pong（`cmd=65541`）
+   - `start-minimal` 场景下 TestClient heartbeat 至少成功 1 次
+
+3. **清理验证**
+   运行 `scripts\stop-all.bat`（或手动 `taskkill`）确保无残留进程，避免端口占用导致下次测试失败。
+
+> **为什么强制？** 本项目为 Go + C++ 双语言栈，且存在协议层（握手帧格式、conn_id 前缀、FlagEncrypt 标志）的跨语言隐式契约。单一语言的单元测试无法覆盖这些边界，历史多次回归均因只测了单侧导致。
+
+### 6.4 CI/CD 流水线
+`.github/workflows/ci.yml` 包含 5 个 Job：
 1. `go-build`（ubuntu-latest）：编译全部 Go 服务 + 运行 `go test ./common/go/...`
 2. `cpp-build`（windows-latest）：CMake 配置并编译 C++ 服务 + 运行 `test-crypto.exe`
 3. `proto-check`（ubuntu-latest）：验证 protoc 版本，检查生成代码是否最新（TODO 中）
-4. `docker-build`（ubuntu-latest）：依赖前两个 Job，构建 Docker 镜像并 `docker compose up` 冒烟测试
+4. `e2e-phase1`（windows-latest）：编译全部产物后运行 `go run tests/phase1/main.go`，验证最小链路
+5. `docker-build`（ubuntu-latest）：依赖前序 Job，构建 Docker 镜像并 `docker compose up` 冒烟测试
 
 ---
 
@@ -253,7 +293,7 @@ C++ 服务为单 `main.cpp` + 公共库模式，业务逻辑直接写在 `main.c
 
 ### 8.2 数据安全
 - 密码存储使用 SHA256（当前骨架简化实现），生产环境应迁移到 Argon2id（已在 `DESIGN.md` 中规划）。
-- DBProxy 对 Redis 热点 Key 有限流（`internal/limiter/hotkey.go`），对危险命令（`KEYS`、`FLUSHALL`）应做拦截（当前预留接口）。
+- 各服务直接连接 Redis（不再经过 DBProxy 代理）。Redis 热点 Key 限流和危险命令拦截由各服务自行实现（当前预留接口）。
 
 ### 8.3 服务安全
 - Gateway 支持令牌桶限流（`common/cpp/gs/limiter/token_bucket.cpp`）。
@@ -272,8 +312,8 @@ C++ 服务为单 `main.cpp` + 公共库模式，业务逻辑直接写在 `main.c
 # 2. 启动 Biz
 ./bin/biz-go.exe -listen 127.0.0.1:8082 -registry 127.0.0.1:2379
 
-# 3. 启动 Gateway（参数：gateway_port registry_addr fallback_biz_nodes）
-./build/Release/gateway-cpp.exe 8081 127.0.0.1:2379 127.0.0.1:8082
+# 3. 启动 Gateway（需要 gateway.json 配置文件在工作目录）
+./bin/gateway-cpp.exe --config gateway.json
 ```
 
 ### 9.2 Docker Compose 全服编排

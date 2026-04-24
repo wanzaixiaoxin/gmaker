@@ -64,12 +64,11 @@ services:
       - redis
     environment:
       - DBPROXY_MYSQL_DSN=root:root123@tcp(mysql:3306)/game
-      - DBPROXY_REDIS_ADDR=redis:6379
     ports:
       - "3307:3307"
     networks:
       - gmaker
-    command: ["/app/dbproxy-go", "-listen=:3307", "-mysql=root:root123@tcp(mysql:3306)/game", "-redis=redis:6379"]
+    command: ["/app/dbproxy-go", "-listen=:3307", "-mysql=root:root123@tcp(mysql:3306)/game"]
 
   biz-go-1:
     build:
@@ -116,7 +115,9 @@ services:
       - "9081:9081"
     networks:
       - gmaker
-    command: ["/app/gateway-cpp", "8081", "registry-go:2379", "biz-go-1:8082,biz-go-2:8083"]
+    volumes:
+      - ./gateway.json:/app/gateway.json:ro
+    command: ["/app/gateway-cpp", "--config", "/app/gateway.json"]
 
   realtime-cpp:
     build:

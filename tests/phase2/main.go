@@ -2,12 +2,9 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/gmaker/luffa/common/go/net"
@@ -41,7 +38,7 @@ func main() {
 
 	// 2. 启动 DBProxy
 	mysqlDSN := "root:123456@tcp(127.0.0.1:3306)/gmaker"
-	dbproxyCmd := exec.Command("./bin/dbproxy-go.exe", "-listen", dbproxyAddr, "-redis", "127.0.0.1:6379", "-mysql", mysqlDSN)
+	dbproxyCmd := exec.Command("./bin/dbproxy-go.exe", "-listen", dbproxyAddr, "-mysql", mysqlDSN)
 	dbproxyCmd.Stdout = os.Stdout
 	dbproxyCmd.Stderr = os.Stderr
 	if err := dbproxyCmd.Start(); err != nil {
@@ -63,15 +60,14 @@ func main() {
 	log.Println("Biz started")
 
 	// 4. 启动 Gateway
-	gatewayCmd := exec.Command("./build/Release/gateway-cpp",
-		fmt.Sprintf("%s", extractPort(gatewayAddr)), "127.0.0.1", fmt.Sprintf("%s", extractPort(bizAddr)))
+	gatewayCmd := exec.Command("./bin/gateway-cpp.exe", "--config", "gateway.json")
 	gatewayCmd.Stdout = os.Stdout
 	gatewayCmd.Stderr = os.Stderr
 	if err := gatewayCmd.Start(); err != nil {
 		log.Fatalf("start gateway failed: %v", err)
 	}
 	defer stopCmd(gatewayCmd)
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	log.Println("Gateway started")
 
 	// 5. 客户端连接到 Gateway
@@ -182,9 +178,8 @@ func main() {
 
 	log.Println("=== Phase 2 Integration Test PASSED ===")
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	// 自动退出（CI 友好）
+	time.Sleep(1 * time.Second)
 }
 
 func sendPacket(client *net.TCPClient, cmdID uint32, seqID uint32, msg proto.Message) {

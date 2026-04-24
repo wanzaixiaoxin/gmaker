@@ -334,51 +334,51 @@
 3. Go `common/go/net/server.go`：`Middleware` 接口 + `MiddlewareFunc` 适配器 + `Use(mw ...Middleware)`
 4. Gateway 重构：`HandshakeMiddleware`（握手+防重放+session 管理）+ `EncryptionMiddleware`（解密）注册到 `TCPServer` 中间件链
 
-### 8.2 Go Module 缺失
+### 8.2 Go Module
 
 | 维度 | 评分 | 说明 |
 |------|------|
-| 架构一致性 | 🔴 | common/go 下各包无 go.mod，子目录无法独立 import |
-| 生产就绪度 | 🟡 | 当前按 service 维度有 go.sum，但 common 库没有独立模块 |
-| 可演进性 | 🟡 | 如果 common 库要独立发布或复用，必须拆分为独立 module |
+| 架构一致性 | 🟢 | 根目录已创建 `go.mod`（module `github.com/gmaker/luffa`），采用单 module monorepo 模式 |
+| 生产就绪度 | 🟢 | 各服务子目录均有独立 `go.mod` 或复用根模块，构建正常 |
+| 可演进性 | 🟢 | 单 module monorepo 管理简单，common 库通过子包路径引用 |
 
-**偏离项**：
-- `common/go/net`、`common/go/crypto` 等包没有 `go.mod`
-- 各 service 的 `go.mod` 也缺失（只有 `go.sum`）
+**偏离项**（✅ 已修复）：
+- ~~`common/go/net`、`common/go/crypto` 等包没有 `go.mod`~~ → 根目录 `go.mod` 已覆盖全部子包
+- ~~各 service 的 `go.mod` 缺失~~ → `registry-go`、`dbproxy-go`、`biz-go`、`logstats-go`、`chat-go` 均已有 `go.mod`
 
-**补救计划**：
-1. 根目录创建 `go.mod`，module 名为 `github.com/gmaker/luffa`
-2. 或者：为每个 common 子包创建独立 module（推荐单 module monorepo，管理更简单）
+**补救计划**（✅ 已完成）：
+1. 根目录创建 `go.mod`，module 名为 `github.com/gmaker/luffa` ✅
+2. 各服务子目录按需创建独立 `go.mod` 或复用根模块 ✅
 
 ---
 
 ## 九、Gateway 服务（services/gateway-cpp）
 
-### 9.1 单点 Biz 后端连接
+### 9.1 Biz 后端连接池与动态发现
 
 | 维度 | 评分 | 说明 |
 |------|------|
-| 架构一致性 | 🔴 | Gateway 只维护单个 `biz_client_` 连接到固定 Biz 节点，与 DESIGN.md 的多节点部署架构矛盾 |
-| 生产就绪度 | 🔴 | 单 Biz 节点故障 = 全服不可用；无负载均衡导致热点节点 |
-| 可演进性 | 🔴 | 从单连接迁移到连接池需要重写 Gateway 的转发逻辑 |
-| 返工风险 | 🔴 高 | 当前 `biz_client_` 是 `unique_ptr<TCPClient>`，任何多节点扩展都需要大面积改动 |
+| 架构一致性 | 🟢 | Gateway 已使用 `UpstreamPool` + `UpstreamManager`，通过 Registry Watch 动态发现 Biz 节点 |
+| 生产就绪度 | 🟢 | 连接池支持轮询负载均衡、自动重连、健康状态跟踪 |
+| 可演进性 | 🟢 | 新增/移除 Biz 节点由 Registry 推送，Gateway 自动感知，无需重启 |
+| 返工风险 | 🟢 低 | 连接池抽象已就位，后续只需在 `RouteToPool` 中扩展路由策略 |
 
-**偏离项**：
-- `gateway-cpp/main.cpp` 中 `biz_client_` 为单例，`OnClientPacket` 直接调用 `biz_client_->Conn()->SendPacket(pkt)`
-- 无连接池、无轮询/哈希负载均衡、无故障转移、无健康检查
-- 命令行参数只接受单个 `biz_host:biz_port`，不支持多节点配置
-- Biz 节点断开时 Gateway 直接不可用，无自动切换到备用节点的能力
+**偏离项**（✅ 已修复）：
+- ~~`gateway-cpp/main.cpp` 中 `biz_client_` 为单例~~ → 已移除单例，改用 `UpstreamManager` 管理多个上游池
+- ~~无连接池、无负载均衡~~ → `UpstreamPool` 已实现轮询 + 健康检查
+- ~~命令行参数只接受单个 `biz_host:biz_port`~~ → 改为 `gateway.json` 配置 + Registry 动态发现
+- ~~Biz 节点断开时 Gateway 直接不可用~~ → Registry 节点下线后 `UpstreamPool` 自动移除不健康节点
 
-**补救计划（已执行）**：
+**补救计划（✅ 已完成）**：
 1. 新增 `common/cpp/gs/net/upstream.hpp/cpp` — `UpstreamPool` 通用上游连接池：
    - 维护多个 `TCPClient` 连接
    - 轮询（Round-Robin）负载均衡
    - 自动重连 + 指数退避（1s ~ 30s）
    - 连接级健康状态跟踪
-2. Gateway 改用 `UpstreamPool` 管理 Biz 节点：
-   - 支持命令行传入多节点 `host1:port1,host2:port2`
-   - 默认配置两个 Biz 节点（8082、8083）
-   - 转发逻辑改为 `biz_pool_->SendPacket(pkt)`
+2. Gateway 改用 `UpstreamManager` 管理上游节点：
+   - 通过 Registry Watch 动态订阅 biz / chat / login 等服务的节点变化
+   - 转发逻辑改为 `pool->SendPacket(pkt)`，由 `RouteToPool(cmd_id)` 按命令号范围路由
+   - 配置文件中 `upstream.services` 定义关注的服务列表
 3. **原则**：任何有后端依赖的服务（Gateway、Realtime、DBProxy-client）都必须使用连接池而非单连接
 
 ---

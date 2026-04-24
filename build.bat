@@ -10,7 +10,7 @@ cd /d "%~dp0"
 
 where go >nul 2>nul
 if errorlevel 1 (
-    echo [ERROR] Go not found. Install Go 1.20+ and add to PATH.
+    echo [ERROR] Go not found. Install Go 1.22+ and add to PATH.
     exit /b 1
 )
 
@@ -28,7 +28,7 @@ echo.
 echo [Phase 1/2] Building Go services ...
 echo ------------------------------------------
 
-set GO_SERVICES=registry-go dbproxy-go login-go biz-go chat-go logstats-go bot-go
+set GO_SERVICES=registry-go dbproxy-go biz-go chat-go logstats-go
 set GO_TOOLS=testclient
 
 for %%s in (%GO_SERVICES%) do (

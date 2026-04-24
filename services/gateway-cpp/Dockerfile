@@ -10,5 +10,6 @@ FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y libprotobuf23 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /build/build/gateway-cpp .
+COPY --from=builder /build/services/gateway-cpp/gateway.json .
 EXPOSE 8081 9081
 ENTRYPOINT ["./gateway-cpp"]
