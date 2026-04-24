@@ -34,7 +34,7 @@ func main() {
 	log.Println("Registry started")
 
 	// 2. 启动 Biz
-	bizCmd := exec.Command("./bin/biz-go.exe", "-config", "biz.json", "-listen", bizAddr)
+	bizCmd := exec.Command("./bin/biz-go.exe", "-config", "biz.json")
 	bizCmd.Stdout = os.Stdout
 	bizCmd.Stderr = os.Stderr
 	if err := bizCmd.Start(); err != nil {

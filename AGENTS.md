@@ -313,7 +313,7 @@ C++ 服务以 `main.cpp` 为主入口，配合公共库实现。当前 `gateway-
 ./bin/registry-go.exe -listen 127.0.0.1:2379 -store memory
 
 # 2. 启动 Biz
-./bin/biz-go.exe -listen 127.0.0.1:8082 -discovery-addrs 127.0.0.1:2379
+./bin/biz-go.exe -config biz.json
 
 # 3. 启动 Gateway（需要 gateway.json 配置文件在工作目录）
 ./bin/gateway-cpp.exe --config gateway.json

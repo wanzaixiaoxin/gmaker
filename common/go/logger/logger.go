@@ -84,17 +84,17 @@ func NewWithService(service, nodeID string) *Logger {
 	return New(Config{Level: "info", Service: service, NodeID: nodeID})
 }
 
-// InitServiceLogger 根据命令行参数初始化服务日志（自动处理文件输出）
+// InitServiceLogger 根据命令行参数初始化服务日志
+// 当 logFile 非空时，日志同时输出到控制台和文件（tee 模式）
 func InitServiceLogger(service, nodeID, logLevel, logFile string) *Logger {
-	logInstance := NewWithService(service, nodeID)
-	logInstance.SetLevel(logLevel)
+	var output io.Writer = os.Stdout
 	if logFile != "" {
 		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err == nil {
-			logInstance = New(Config{Level: logLevel, Service: service, NodeID: nodeID, Output: f})
+			output = io.MultiWriter(os.Stdout, f)
 		}
 	}
-	return logInstance
+	return New(Config{Level: logLevel, Service: service, NodeID: nodeID, Output: output})
 }
 
 // SetLevel 动态调整日志级别

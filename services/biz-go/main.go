@@ -47,14 +47,9 @@ type BizConfig struct {
 func main() {
 	var (
 		configFile    = flag.String("config", "biz.json", "Config file path")
-		listenAddr    = flag.String("listen", "", "Biz listen address (overrides config)")
-		dbproxyAddrs  = flag.String("dbproxy", "127.0.0.1:3307", "DBProxy addresses, comma separated")
-		redisAddrs    = flag.String("redis", "127.0.0.1:6379", "Redis addresses, comma separated")
+		dbproxyAddrs  = flag.String("dbproxy", "", "DBProxy addresses, comma separated (overrides config)")
+		redisAddrs    = flag.String("redis", "", "Redis addresses, comma separated (overrides config)")
 		redisPass     = flag.String("redis-pass", "", "Redis password")
-		nodeID        = flag.Int64("node-id", 0, "Snowflake node ID (overrides config)")
-		metricsAddr   = flag.String("metrics", "", "Metrics HTTP address (overrides config)")
-		logFile       = flag.String("log-file", "", "Log file path (overrides config)")
-		logLevel      = flag.String("log-level", "", "Log level (overrides config)")
 	)
 	flag.Parse()
 
@@ -65,44 +60,32 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 命令行参数覆盖配置文件
+	// 从 node_id（如 "biz-1"）解析 Snowflake 数字节点 ID
+	var nodeID int64 = 1
+	parts := strings.Split(cfg.Service.NodeID, "-")
+	if len(parts) > 1 {
+		fmt.Sscanf(parts[len(parts)-1], "%d", &nodeID)
+	}
+	if nodeID == 0 {
+		nodeID = 1
+	}
+
 	host := cfg.Network.Host
 	port := cfg.Network.Port
-	if *listenAddr != "" {
-		host, port = parseHostPort(*listenAddr)
-	}
-	if *nodeID == 0 {
-		parts := strings.Split(cfg.Service.NodeID, "-")
-		if len(parts) > 1 {
-			fmt.Sscanf(parts[len(parts)-1], "%d", nodeID)
-		}
-		if *nodeID == 0 {
-			*nodeID = 1
-		}
-	}
-	if *metricsAddr == "" {
-		*metricsAddr = cfg.Service.MetricsAddr
-	}
-	if *logFile == "" {
-		*logFile = cfg.Service.LogFile
-	}
-	if *logLevel == "" {
-		*logLevel = cfg.Service.LogLevel
-	}
 	listen := fmt.Sprintf("%s:%d", host, port)
 
 	// 初始化结构化日志
-	log := logger.InitServiceLogger("biz", fmt.Sprintf("biz-%d", *nodeID), *logLevel, *logFile)
+	log := logger.InitServiceLogger("biz", cfg.Service.NodeID, cfg.Service.LogLevel, cfg.Service.LogFile)
 	logger.SetDefault(log)
 
 	// 启动 Prometheus metrics HTTP 服务
-	metrics.ServeDefaultHTTP(*metricsAddr)
+	metrics.ServeDefaultHTTP(cfg.Service.MetricsAddr)
 	reqCounter := metrics.DefaultCounter("biz_requests_total")
 	reqLatency := metrics.DefaultHistogram("biz_request_duration_ms", []int64{1, 5, 10, 25, 50, 100, 250, 500, 1000})
 	connGauge := metrics.DefaultGauge("biz_connections")
 
 	// 初始化 Snowflake ID 生成器
-	idGen, err := idgen.NewSnowflake(*nodeID)
+	idGen, err := idgen.NewSnowflake(nodeID)
 	if err != nil {
 		log.Fatalf("init snowflake failed: %v", err)
 	}
@@ -116,7 +99,7 @@ func main() {
 
 	node := discovery.NodeInfo{
 		ServiceType: "biz",
-		NodeID:      fmt.Sprintf("biz-%d", *nodeID),
+		NodeID:      cfg.Service.NodeID,
 		Host:        host,
 		Port:        uint32(port),
 		RegisterAt:  uint64(time.Now().Unix()),

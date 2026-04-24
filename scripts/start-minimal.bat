@@ -13,7 +13,7 @@ start "Registry" cmd /c "bin\registry-go.exe -listen 127.0.0.1:2379 -store memor
 timeout /t 2 /nobreak >nul
 
 echo [2/4] Starting Biz ...
-start "Biz" cmd /c "bin\biz-go.exe -config biz.json -listen 127.0.0.1:8082 -metrics :9082 -log-level info ^& pause"
+start "Biz" cmd /c "bin\biz-go.exe -config biz.json ^& pause"
 timeout /t 2 /nobreak >nul
 
 echo [3/4] Starting Gateway ...

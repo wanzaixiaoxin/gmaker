@@ -36,10 +36,7 @@ type DBProxyConfig struct {
 func main() {
 	var (
 		configFile    = flag.String("config", "dbproxy.json", "Config file path")
-		listenAddr    = flag.String("listen", "", "DBProxy listen address (overrides config)")
-		mysqlDSNs     = flag.String("mysql", "", "MySQL DSNs, comma separated")
-		logFile       = flag.String("log-file", "", "Log file path (overrides config)")
-		logLevel      = flag.String("log-level", "", "Log level (overrides config)")
+		mysqlDSNs     = flag.String("mysql", "", "MySQL DSNs, comma separated (overrides config)")
 	)
 	flag.Parse()
 
@@ -50,19 +47,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 命令行参数覆盖配置文件
 	listen := fmt.Sprintf("%s:%d", cfg.Network.Host, cfg.Network.Port)
-	if *listenAddr != "" {
-		listen = *listenAddr
-	}
-	if *logFile == "" {
-		*logFile = cfg.Service.LogFile
-	}
-	if *logLevel == "" {
-		*logLevel = cfg.Service.LogLevel
-	}
 
-	log := logger.InitServiceLogger("dbproxy", cfg.Service.NodeID, *logLevel, *logFile)
+	log := logger.InitServiceLogger("dbproxy", cfg.Service.NodeID, cfg.Service.LogLevel, cfg.Service.LogFile)
 	logger.SetDefault(log)
 
 	// MySQL

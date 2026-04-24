@@ -167,7 +167,7 @@ PowerShell 用户也可以使用：
 ./bin/registry-go.exe -listen 127.0.0.1:2379 -store memory
 
 # 2. 启动 Biz
-./bin/biz-go.exe -listen 127.0.0.1:8082 -discovery-addrs 127.0.0.1:2379
+./bin/biz-go.exe -config biz.json
 
 # 3. 启动 Gateway（需要 gateway.json 配置文件在工作目录）
 ./bin/gateway-cpp.exe --config gateway.json
@@ -210,14 +210,19 @@ docker compose up -d
 
 ### Go 服务
 
-通过启动参数切换：
+通过配置文件切换（`biz.json` / `dbproxy.json`）：
+
+```json
+{
+  "discovery": {
+    "type": "registry",
+    "addrs": ["127.0.0.1:2379"]
+  }
+}
+```
 
 ```bash
-# Registry 模式（默认）
-./bin/biz-go.exe -listen :8082 -discovery-type registry -discovery-addrs 127.0.0.1:2379
-
-# etcd 直连模式（无需启动 registry-go）
-./bin/biz-go.exe -listen :8082 -discovery-type etcd -discovery-addrs 127.0.0.1:2379
+./bin/biz-go.exe -config biz.json
 ```
 
 ### C++ 服务
