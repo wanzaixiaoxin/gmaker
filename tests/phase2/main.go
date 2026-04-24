@@ -38,7 +38,7 @@ func main() {
 
 	// 2. 启动 DBProxy
 	mysqlDSN := "root:123456@tcp(127.0.0.1:3306)/gmaker"
-	dbproxyCmd := exec.Command("./bin/dbproxy-go.exe", "-config", "dbproxy.json", "-mysql", mysqlDSN)
+	dbproxyCmd := exec.Command("./bin/dbproxy-go.exe", "-config", "conf/dbproxy.json", "-mysql", mysqlDSN)
 	dbproxyCmd.Stdout = os.Stdout
 	dbproxyCmd.Stderr = os.Stderr
 	if err := dbproxyCmd.Start(); err != nil {
@@ -49,7 +49,7 @@ func main() {
 	log.Println("DBProxy started")
 
 	// 3. 启动 Biz
-	bizCmd := exec.Command("./bin/biz-go.exe", "-config", "biz.json", "-dbproxy", dbproxyAddr)
+	bizCmd := exec.Command("./bin/biz-go.exe", "-config", "conf/biz.json", "-dbproxy", dbproxyAddr)
 	bizCmd.Stdout = os.Stdout
 	bizCmd.Stderr = os.Stderr
 	if err := bizCmd.Start(); err != nil {
@@ -60,7 +60,7 @@ func main() {
 	log.Println("Biz started")
 
 	// 4. 启动 Gateway
-	gatewayCmd := exec.Command("./bin/gateway-cpp.exe", "--config", "gateway.json")
+	gatewayCmd := exec.Command("./bin/gateway-cpp.exe", "--config", "conf/gateway.json")
 	gatewayCmd.Stdout = os.Stdout
 	gatewayCmd.Stderr = os.Stderr
 	if err := gatewayCmd.Start(); err != nil {

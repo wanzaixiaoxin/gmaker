@@ -74,7 +74,7 @@ jobs:
           Copy-Item build/Release/gateway-cpp.exe bin/gateway-cpp.exe
       - name: Ensure gateway.json exists
         run: |
-          if (!(Test-Path gateway.json)) { Copy-Item services/gateway-cpp/gateway.json gateway.json }
+          if (!(Test-Path conf/gateway.json)) { New-Item -ItemType Directory -Path conf -Force; Copy-Item services/gateway-cpp/gateway.json conf/gateway.json }
       - name: Run Phase 1 E2E test
         run: |
           go run tests/phase1/main.go

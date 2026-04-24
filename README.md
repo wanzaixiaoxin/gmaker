@@ -167,10 +167,10 @@ PowerShell 用户也可以使用：
 ./bin/registry-go.exe -listen 127.0.0.1:2379 -store memory
 
 # 2. 启动 Biz
-./bin/biz-go.exe -config biz.json
+./bin/biz-go.exe -config conf/biz.json
 
-# 3. 启动 Gateway（需要 gateway.json 配置文件在工作目录）
-./bin/gateway-cpp.exe --config gateway.json
+# 3. 启动 Gateway（需要 conf/gateway.json 配置文件）
+./bin/gateway-cpp.exe --config conf/gateway.json
 ```
 
 ### 开发规范：重大改动后强制验证
@@ -210,7 +210,7 @@ docker compose up -d
 
 ### Go 服务
 
-通过配置文件切换（`biz.json` / `dbproxy.json`）：
+通过配置文件切换（`conf/biz.json` / `conf/dbproxy.json`）：
 
 ```json
 {
@@ -222,12 +222,12 @@ docker compose up -d
 ```
 
 ```bash
-./bin/biz-go.exe -config biz.json
+./bin/biz-go.exe -config conf/biz.json
 ```
 
 ### C++ 服务
 
-通过 `gateway.json` / `realtime.json` 中的 `discovery` 字段配置：
+通过 `conf/gateway.json` / `conf/realtime.json` 中的 `discovery` 字段配置：
 
 ```json
 {

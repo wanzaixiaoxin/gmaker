@@ -46,7 +46,7 @@ type BizConfig struct {
 
 func main() {
 	var (
-		configFile    = flag.String("config", "biz.json", "Config file path")
+		configFile    = flag.String("config", "conf/biz.json", "Config file path")
 		dbproxyAddrs  = flag.String("dbproxy", "", "DBProxy addresses, comma separated (overrides config)")
 		redisAddrs    = flag.String("redis", "", "Redis addresses, comma separated (overrides config)")
 		redisPass     = flag.String("redis-pass", "", "Redis password")

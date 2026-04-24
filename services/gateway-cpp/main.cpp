@@ -529,7 +529,7 @@ std::string ToHex(uint32_t v) {
 // ==================== main ====================
 
 int main(int argc, char* argv[]) {
-    std::string config_file = "gateway.json";
+    std::string config_file = "conf/gateway.json";
     
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];

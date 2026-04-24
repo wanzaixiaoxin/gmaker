@@ -35,7 +35,7 @@ type DBProxyConfig struct {
 
 func main() {
 	var (
-		configFile    = flag.String("config", "dbproxy.json", "Config file path")
+		configFile    = flag.String("config", "conf/dbproxy.json", "Config file path")
 		mysqlDSNs     = flag.String("mysql", "", "MySQL DSNs, comma separated (overrides config)")
 	)
 	flag.Parse()

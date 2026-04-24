@@ -15,15 +15,15 @@ start "Registry" cmd /c "bin\registry-go.exe -listen 127.0.0.1:2379 -store memor
 timeout /t 2 /nobreak >nul
 
 echo [2/5] Starting DBProxy ...
-start "DBProxy" cmd /c "bin\dbproxy-go.exe -config dbproxy.json -mysql root:123456@tcp(127.0.0.1:3306)/gmaker ^& pause"
+start "DBProxy" cmd /c "bin\dbproxy-go.exe -config conf\dbproxy.json -mysql root:123456@tcp(127.0.0.1:3306)/gmaker ^& pause"
 timeout /t 3 /nobreak >nul
 
 echo [3/5] Starting Biz ...
-start "Biz" cmd /c "bin\biz-go.exe -config biz.json -dbproxy 127.0.0.1:3307 ^& pause"
+start "Biz" cmd /c "bin\biz-go.exe -config conf\biz.json -dbproxy 127.0.0.1:3307 ^& pause"
 timeout /t 3 /nobreak >nul
 
 echo [4/5] Starting Gateway ...
-start "Gateway" cmd /c "bin\gateway-cpp.exe --config gateway.json --log-level info ^& pause"
+start "Gateway" cmd /c "bin\gateway-cpp.exe --config conf\gateway.json --log-level info ^& pause"
 timeout /t 2 /nobreak >nul
 
 echo [5/5] Starting TestClient (heartbeat daemon) ...

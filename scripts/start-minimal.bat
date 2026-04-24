@@ -13,11 +13,11 @@ start "Registry" cmd /c "bin\registry-go.exe -listen 127.0.0.1:2379 -store memor
 timeout /t 2 /nobreak >nul
 
 echo [2/4] Starting Biz ...
-start "Biz" cmd /c "bin\biz-go.exe -config biz.json ^& pause"
+start "Biz" cmd /c "bin\biz-go.exe -config conf\biz.json ^& pause"
 timeout /t 2 /nobreak >nul
 
 echo [3/4] Starting Gateway ...
-start "Gateway" cmd /c "bin\gateway-cpp.exe --config gateway.json ^& pause"
+start "Gateway" cmd /c "bin\gateway-cpp.exe --config conf\gateway.json ^& pause"
 timeout /t 2 /nobreak >nul
 
 echo [4/4] Starting TestClient (heartbeat daemon) ...

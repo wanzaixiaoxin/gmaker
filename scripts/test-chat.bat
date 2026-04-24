@@ -39,7 +39,7 @@ timeout /t 1 /nobreak >nul
 
 REM 启动 Chat (不使用 dbproxy，使用 Redis 和内存回退)
 echo [2/3] Starting Chat Service...
-start /B "%BIN_DIR%\chat-go.exe" -config chat.json -listen :8086 -redis %REDIS_ADDR% -node-id 1
+start /B "%BIN_DIR%\chat-go.exe" -config conf\chat.json -listen :8086 -redis %REDIS_ADDR% -node-id 1
 timeout /t 2 /nobreak >nul
 
 REM 启动 Gateway

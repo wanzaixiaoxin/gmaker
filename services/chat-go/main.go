@@ -90,7 +90,7 @@ type DBProxyConfig struct {
 }
 
 func main() {
-	configFile := flag.String("config", "chat.json", "Config file path")
+	configFile := flag.String("config", "conf/chat.json", "Config file path")
 	flag.Parse()
 
 	// 加载配置
