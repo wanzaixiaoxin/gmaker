@@ -95,6 +95,14 @@ class ChatLeaveRoomRes;
 struct ChatLeaveRoomResDefaultTypeInternal;
 extern ChatLeaveRoomResDefaultTypeInternal _ChatLeaveRoomRes_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull ChatLeaveRoomRes_class_data_;
+class ChatListRoomReq;
+struct ChatListRoomReqDefaultTypeInternal;
+extern ChatListRoomReqDefaultTypeInternal _ChatListRoomReq_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull ChatListRoomReq_class_data_;
+class ChatListRoomRes;
+struct ChatListRoomResDefaultTypeInternal;
+extern ChatListRoomResDefaultTypeInternal _ChatListRoomRes_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull ChatListRoomRes_class_data_;
 class ChatMessage;
 struct ChatMessageDefaultTypeInternal;
 extern ChatMessageDefaultTypeInternal _ChatMessage_default_instance_;
@@ -878,6 +886,214 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatMessage final : public ::google
 };
 
 extern const ::google::protobuf::internal::ClassDataFull ChatMessage_class_data_;
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatListRoomReq final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:chat.ChatListRoomReq) */ {
+ public:
+  inline ChatListRoomReq() : ChatListRoomReq(nullptr) {}
+  ~ChatListRoomReq() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ChatListRoomReq* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ChatListRoomReq));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ChatListRoomReq(::google::protobuf::internal::ConstantInitialized);
+
+  inline ChatListRoomReq(const ChatListRoomReq& from) : ChatListRoomReq(nullptr, from) {}
+  inline ChatListRoomReq(ChatListRoomReq&& from) noexcept
+      : ChatListRoomReq(nullptr, ::std::move(from)) {}
+  inline ChatListRoomReq& operator=(const ChatListRoomReq& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ChatListRoomReq& operator=(ChatListRoomReq&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ChatListRoomReq& default_instance() {
+    return *reinterpret_cast<const ChatListRoomReq*>(
+        &_ChatListRoomReq_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 13;
+  friend void swap(ChatListRoomReq& a, ChatListRoomReq& b) { a.Swap(&b); }
+  inline void Swap(ChatListRoomReq* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ChatListRoomReq* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ChatListRoomReq* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ChatListRoomReq>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ChatListRoomReq& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ChatListRoomReq& from) { ChatListRoomReq::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ChatListRoomReq* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "chat.ChatListRoomReq"; }
+
+  explicit ChatListRoomReq(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ChatListRoomReq(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ChatListRoomReq& from);
+  ChatListRoomReq(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ChatListRoomReq&& from) noexcept
+      : ChatListRoomReq(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPageFieldNumber = 1,
+    kLimitFieldNumber = 2,
+  };
+  // uint32 page = 1;
+  void clear_page() ;
+  [[nodiscard]] ::uint32_t page() const;
+  void set_page(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_page() const;
+  void _internal_set_page(::uint32_t value);
+
+  public:
+  // uint32 limit = 2;
+  void clear_limit() ;
+  [[nodiscard]] ::uint32_t limit() const;
+  void set_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_limit() const;
+  void _internal_set_limit(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:chat.ChatListRoomReq)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ChatListRoomReq& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t page_;
+    ::uint32_t limit_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_chat_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull ChatListRoomReq_class_data_;
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatLeaveRoomReq final : public ::google::protobuf::Message
@@ -1773,7 +1989,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatCloseRoomReq final : public ::g
     return *reinterpret_cast<const ChatCloseRoomReq*>(
         &_ChatCloseRoomReq_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(ChatCloseRoomReq& a, ChatCloseRoomReq& b) { a.Swap(&b); }
   inline void Swap(ChatCloseRoomReq* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2345,6 +2561,242 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatMsgNotify final : public ::goog
 };
 
 extern const ::google::protobuf::internal::ClassDataFull ChatMsgNotify_class_data_;
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatListRoomRes final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:chat.ChatListRoomRes) */ {
+ public:
+  inline ChatListRoomRes() : ChatListRoomRes(nullptr) {}
+  ~ChatListRoomRes() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ChatListRoomRes* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ChatListRoomRes));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ChatListRoomRes(::google::protobuf::internal::ConstantInitialized);
+
+  inline ChatListRoomRes(const ChatListRoomRes& from) : ChatListRoomRes(nullptr, from) {}
+  inline ChatListRoomRes(ChatListRoomRes&& from) noexcept
+      : ChatListRoomRes(nullptr, ::std::move(from)) {}
+  inline ChatListRoomRes& operator=(const ChatListRoomRes& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ChatListRoomRes& operator=(ChatListRoomRes&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ChatListRoomRes& default_instance() {
+    return *reinterpret_cast<const ChatListRoomRes*>(
+        &_ChatListRoomRes_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 14;
+  friend void swap(ChatListRoomRes& a, ChatListRoomRes& b) { a.Swap(&b); }
+  inline void Swap(ChatListRoomRes* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ChatListRoomRes* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ChatListRoomRes* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ChatListRoomRes>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ChatListRoomRes& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ChatListRoomRes& from) { ChatListRoomRes::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ChatListRoomRes* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "chat.ChatListRoomRes"; }
+
+  explicit ChatListRoomRes(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ChatListRoomRes(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ChatListRoomRes& from);
+  ChatListRoomRes(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ChatListRoomRes&& from) noexcept
+      : ChatListRoomRes(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRoomsFieldNumber = 2,
+    kResultFieldNumber = 1,
+    kTotalFieldNumber = 3,
+  };
+  // repeated .chat.ChatRoomInfo rooms = 2;
+  [[nodiscard]] int rooms_size()
+      const;
+  private:
+  int _internal_rooms_size() const;
+
+  public:
+  void clear_rooms() ;
+  [[nodiscard]] ::chat::ChatRoomInfo* PROTOBUF_NONNULL mutable_rooms(int index);
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::chat::ChatRoomInfo>* PROTOBUF_NONNULL
+  mutable_rooms();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::chat::ChatRoomInfo>& _internal_rooms() const;
+  ::google::protobuf::RepeatedPtrField<::chat::ChatRoomInfo>* PROTOBUF_NONNULL _internal_mutable_rooms();
+  public:
+  [[nodiscard]] const ::chat::ChatRoomInfo& rooms(int index) const;
+  ::chat::ChatRoomInfo* PROTOBUF_NONNULL add_rooms();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::chat::ChatRoomInfo>& rooms()
+      const;
+  // .common.Result result = 1;
+  [[nodiscard]] bool has_result()
+      const;
+  void clear_result() ;
+  [[nodiscard]] const ::common::Result& result() const;
+  [[nodiscard]] ::common::Result* PROTOBUF_NULLABLE release_result();
+  ::common::Result* PROTOBUF_NONNULL mutable_result();
+  void set_allocated_result(::common::Result* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_result(::common::Result* PROTOBUF_NULLABLE value);
+  ::common::Result* PROTOBUF_NULLABLE unsafe_arena_release_result();
+
+  private:
+  const ::common::Result& _internal_result() const;
+  ::common::Result* PROTOBUF_NONNULL _internal_mutable_result();
+
+  public:
+  // uint32 total = 3;
+  void clear_total() ;
+  [[nodiscard]] ::uint32_t total() const;
+  void set_total(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_total() const;
+  void _internal_set_total(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:chat.ChatListRoomRes)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   2, 0,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ChatListRoomRes& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::chat::ChatRoomInfo > rooms_;
+    ::common::Result* PROTOBUF_NULLABLE result_;
+    ::uint32_t total_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_chat_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull ChatListRoomRes_class_data_;
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatLeaveRoomRes final : public ::google::protobuf::Message
@@ -3291,7 +3743,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatCloseRoomRes final : public ::g
     return *reinterpret_cast<const ChatCloseRoomRes*>(
         &_ChatCloseRoomRes_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(ChatCloseRoomRes& a, ChatCloseRoomRes& b) { a.Swap(&b); }
   inline void Swap(ChatCloseRoomRes* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5246,6 +5698,238 @@ inline ::google::protobuf::RepeatedPtrField<::chat::ChatMessage>* PROTOBUF_NONNU
 ChatGetHistoryRes::_internal_mutable_msgs() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.msgs_;
+}
+
+// -------------------------------------------------------------------
+
+// ChatListRoomReq
+
+// uint32 page = 1;
+inline void ChatListRoomReq::clear_page() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.page_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::uint32_t ChatListRoomReq::page() const {
+  // @@protoc_insertion_point(field_get:chat.ChatListRoomReq.page)
+  return _internal_page();
+}
+inline void ChatListRoomReq::set_page(::uint32_t value) {
+  _internal_set_page(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:chat.ChatListRoomReq.page)
+}
+inline ::uint32_t ChatListRoomReq::_internal_page() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.page_;
+}
+inline void ChatListRoomReq::_internal_set_page(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.page_ = value;
+}
+
+// uint32 limit = 2;
+inline void ChatListRoomReq::clear_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline ::uint32_t ChatListRoomReq::limit() const {
+  // @@protoc_insertion_point(field_get:chat.ChatListRoomReq.limit)
+  return _internal_limit();
+}
+inline void ChatListRoomReq::set_limit(::uint32_t value) {
+  _internal_set_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:chat.ChatListRoomReq.limit)
+}
+inline ::uint32_t ChatListRoomReq::_internal_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.limit_;
+}
+inline void ChatListRoomReq::_internal_set_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ChatListRoomRes
+
+// .common.Result result = 1;
+inline bool ChatListRoomRes::has_result() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.result_ != nullptr);
+  return value;
+}
+inline const ::common::Result& ChatListRoomRes::_internal_result() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::Result* p = _impl_.result_;
+  return p != nullptr ? *p : reinterpret_cast<const ::common::Result&>(::common::_Result_default_instance_);
+}
+inline const ::common::Result& ChatListRoomRes::result() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:chat.ChatListRoomRes.result)
+  return _internal_result();
+}
+inline void ChatListRoomRes::unsafe_arena_set_allocated_result(
+    ::common::Result* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.result_);
+  }
+  _impl_.result_ = reinterpret_cast<::common::Result*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:chat.ChatListRoomRes.result)
+}
+inline ::common::Result* PROTOBUF_NULLABLE ChatListRoomRes::release_result() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::Result* released = _impl_.result_;
+  _impl_.result_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::Result* PROTOBUF_NULLABLE ChatListRoomRes::unsafe_arena_release_result() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:chat.ChatListRoomRes.result)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::Result* temp = _impl_.result_;
+  _impl_.result_ = nullptr;
+  return temp;
+}
+inline ::common::Result* PROTOBUF_NONNULL ChatListRoomRes::_internal_mutable_result() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.result_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::Result>(GetArena());
+    _impl_.result_ = reinterpret_cast<::common::Result*>(p);
+  }
+  return _impl_.result_;
+}
+inline ::common::Result* PROTOBUF_NONNULL ChatListRoomRes::mutable_result()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::Result* _msg = _internal_mutable_result();
+  // @@protoc_insertion_point(field_mutable:chat.ChatListRoomRes.result)
+  return _msg;
+}
+inline void ChatListRoomRes::set_allocated_result(::common::Result* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.result_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.result_ = reinterpret_cast<::common::Result*>(value);
+  // @@protoc_insertion_point(field_set_allocated:chat.ChatListRoomRes.result)
+}
+
+// repeated .chat.ChatRoomInfo rooms = 2;
+inline int ChatListRoomRes::_internal_rooms_size() const {
+  return _internal_rooms().size();
+}
+inline int ChatListRoomRes::rooms_size() const {
+  return _internal_rooms_size();
+}
+inline void ChatListRoomRes::clear_rooms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rooms_.Clear();
+  ClearHasBitForRepeated(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::chat::ChatRoomInfo* PROTOBUF_NONNULL ChatListRoomRes::mutable_rooms(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:chat.ChatListRoomRes.rooms)
+  return _internal_mutable_rooms()->Mutable(index);
+}
+inline ::google::protobuf::RepeatedPtrField<::chat::ChatRoomInfo>* PROTOBUF_NONNULL ChatListRoomRes::mutable_rooms()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:chat.ChatListRoomRes.rooms)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_rooms();
+}
+inline const ::chat::ChatRoomInfo& ChatListRoomRes::rooms(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:chat.ChatListRoomRes.rooms)
+  return _internal_rooms().Get(index);
+}
+inline ::chat::ChatRoomInfo* PROTOBUF_NONNULL ChatListRoomRes::add_rooms()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::chat::ChatRoomInfo* _add =
+      _internal_mutable_rooms()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:chat.ChatListRoomRes.rooms)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::chat::ChatRoomInfo>& ChatListRoomRes::rooms() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:chat.ChatListRoomRes.rooms)
+  return _internal_rooms();
+}
+inline const ::google::protobuf::RepeatedPtrField<::chat::ChatRoomInfo>&
+ChatListRoomRes::_internal_rooms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rooms_;
+}
+inline ::google::protobuf::RepeatedPtrField<::chat::ChatRoomInfo>* PROTOBUF_NONNULL
+ChatListRoomRes::_internal_mutable_rooms() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.rooms_;
+}
+
+// uint32 total = 3;
+inline void ChatListRoomRes::clear_total() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline ::uint32_t ChatListRoomRes::total() const {
+  // @@protoc_insertion_point(field_get:chat.ChatListRoomRes.total)
+  return _internal_total();
+}
+inline void ChatListRoomRes::set_total(::uint32_t value) {
+  _internal_set_total(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:chat.ChatListRoomRes.total)
+}
+inline ::uint32_t ChatListRoomRes::_internal_total() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_;
+}
+inline void ChatListRoomRes::_internal_set_total(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_ = value;
 }
 
 // -------------------------------------------------------------------

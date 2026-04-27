@@ -92,7 +92,16 @@ func (s *Server) handleMySQLQuery(conn *net.TCPConn, pkt *net.Packet) {
 			}
 			var rowCols []*pb.MySQLColumn
 			for i, col := range cols {
-				rowCols = append(rowCols, &pb.MySQLColumn{Name: col, Value: fmt.Sprintf("%v", vals[i])})
+				var valStr string
+				switch v := vals[i].(type) {
+				case []byte:
+					valStr = string(v)
+				case string:
+					valStr = v
+				default:
+					valStr = fmt.Sprintf("%v", v)
+				}
+				rowCols = append(rowCols, &pb.MySQLColumn{Name: col, Value: valStr})
 			}
 			res.Rows = append(res.Rows, &pb.MySQLRow{Columns: rowCols})
 		}
@@ -101,11 +110,14 @@ func (s *Server) handleMySQLQuery(conn *net.TCPConn, pkt *net.Packet) {
 }
 
 func (s *Server) handleMySQLExec(conn *net.TCPConn, pkt *net.Packet) {
+	log.Printf("[DBProxy] received MySQLExec cmd=0x%08X seq=%d payload=%d", pkt.CmdID, pkt.SeqID, len(pkt.Payload))
 	var req pb.MySQLExecReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
+		log.Printf("[DBProxy] unmarshal error: %v", err)
 		s.sendError(conn, pkt.SeqID, err)
 		return
 	}
+	log.Printf("[DBProxy] executing SQL: %s", req.Sql)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -121,10 +133,12 @@ func (s *Server) handleMySQLExec(conn *net.TCPConn, pkt *net.Packet) {
 	result, err := s.mysql.ExecByUID(ctx, req.Uid, req.Sql, args...)
 	res := &pb.MySQLExecRes{Ok: err == nil}
 	if err != nil {
+		log.Printf("[DBProxy] exec error: %v", err)
 		res.Error = err.Error()
 	} else {
 		res.LastInsertId, _ = result.LastInsertId()
 		res.RowsAffected, _ = result.RowsAffected()
+		log.Printf("[DBProxy] exec ok, rowsAffected=%d", res.RowsAffected)
 	}
 	s.sendProto(conn, pkt.SeqID, CmdMySQLExecRes, res)
 }

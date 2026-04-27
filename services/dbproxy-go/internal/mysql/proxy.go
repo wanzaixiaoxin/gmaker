@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -35,6 +36,13 @@ func NewProxy(cfgs []Config) (*Proxy, error) {
 		if cfg.MaxIdleConn > 0 {
 			db.SetMaxIdleConns(cfg.MaxIdleConn)
 		}
+		// Warmup: ensure first physical connection is established
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := db.PingContext(ctx); err != nil {
+			cancel()
+			return nil, fmt.Errorf("mysql ping failed: %w", err)
+		}
+		cancel()
 		shards = append(shards, db)
 	}
 	return &Proxy{shards: shards}, nil

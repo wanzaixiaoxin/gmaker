@@ -1,0 +1,1278 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gmaker Web 聊天室</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script>
+const PROTO_DESCRIPTOR = {
+  "nested": {
+    "biz": {
+      "options": {
+        "go_package": "github.com/gmaker/luffa/gen/go/biz"
+      },
+      "nested": {
+        "PlayerBase": {
+          "fields": {
+            "playerId": {
+              "type": "uint64",
+              "id": 1
+            },
+            "nickname": {
+              "type": "string",
+              "id": 2
+            },
+            "level": {
+              "type": "uint32",
+              "id": 3
+            },
+            "exp": {
+              "type": "uint64",
+              "id": 4
+            },
+            "coin": {
+              "type": "uint64",
+              "id": 5
+            },
+            "diamond": {
+              "type": "uint64",
+              "id": 6
+            },
+            "createAt": {
+              "type": "uint64",
+              "id": 7
+            },
+            "loginAt": {
+              "type": "uint64",
+              "id": 8
+            }
+          }
+        },
+        "GetPlayerReq": {
+          "fields": {
+            "playerId": {
+              "type": "uint64",
+              "id": 1
+            }
+          }
+        },
+        "GetPlayerRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            },
+            "player": {
+              "type": "PlayerBase",
+              "id": 2
+            }
+          }
+        },
+        "Item": {
+          "fields": {
+            "itemId": {
+              "type": "uint32",
+              "id": 1
+            },
+            "count": {
+              "type": "uint64",
+              "id": 2
+            }
+          }
+        },
+        "GetBagReq": {
+          "fields": {
+            "playerId": {
+              "type": "uint64",
+              "id": 1
+            }
+          }
+        },
+        "GetBagRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            },
+            "items": {
+              "rule": "repeated",
+              "type": "Item",
+              "id": 2
+            }
+          }
+        },
+        "UpdatePlayerReq": {
+          "fields": {
+            "playerId": {
+              "type": "uint64",
+              "id": 1
+            },
+            "nickname": {
+              "type": "string",
+              "id": 2
+            },
+            "coin": {
+              "type": "uint64",
+              "id": 3
+            },
+            "diamond": {
+              "type": "uint64",
+              "id": 4
+            }
+          }
+        },
+        "UpdatePlayerRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            }
+          }
+        },
+        "Ping": {
+          "fields": {
+            "clientTime": {
+              "type": "uint64",
+              "id": 1
+            }
+          }
+        },
+        "Pong": {
+          "fields": {
+            "clientTime": {
+              "type": "uint64",
+              "id": 1
+            },
+            "serverTime": {
+              "type": "uint64",
+              "id": 2
+            }
+          }
+        }
+      }
+    },
+    "common": {
+      "options": {
+        "go_package": "github.com/gmaker/luffa/gen/go/common"
+      },
+      "nested": {
+        "Result": {
+          "fields": {
+            "ok": {
+              "type": "bool",
+              "id": 1
+            },
+            "code": {
+              "type": "uint32",
+              "id": 2
+            },
+            "msg": {
+              "type": "string",
+              "id": 3
+            }
+          }
+        },
+        "PageReq": {
+          "fields": {
+            "page": {
+              "type": "uint32",
+              "id": 1
+            },
+            "limit": {
+              "type": "uint32",
+              "id": 2
+            }
+          }
+        },
+        "PageRes": {
+          "fields": {
+            "page": {
+              "type": "uint32",
+              "id": 1
+            },
+            "limit": {
+              "type": "uint32",
+              "id": 2
+            },
+            "total": {
+              "type": "uint32",
+              "id": 3
+            },
+            "totalPage": {
+              "type": "uint32",
+              "id": 4
+            }
+          }
+        },
+        "Empty": {
+          "fields": {}
+        },
+        "Packet": {
+          "fields": {
+            "magic": {
+              "type": "uint32",
+              "id": 1
+            },
+            "cmdId": {
+              "type": "uint32",
+              "id": 2
+            },
+            "seqId": {
+              "type": "uint32",
+              "id": 3
+            },
+            "flag": {
+              "type": "uint32",
+              "id": 4
+            },
+            "payload": {
+              "type": "bytes",
+              "id": 5
+            }
+          }
+        }
+      }
+    },
+    "chat": {
+      "options": {
+        "go_package": "github.com/gmaker/luffa/gen/go/chat"
+      },
+      "nested": {
+        "ChatRoomInfo": {
+          "fields": {
+            "roomId": {
+              "type": "uint64",
+              "id": 1
+            },
+            "name": {
+              "type": "string",
+              "id": 2
+            },
+            "creatorId": {
+              "type": "uint64",
+              "id": 3
+            },
+            "status": {
+              "type": "uint32",
+              "id": 4
+            },
+            "createdAt": {
+              "type": "uint64",
+              "id": 5
+            },
+            "closedAt": {
+              "type": "uint64",
+              "id": 6
+            }
+          }
+        },
+        "ChatMessage": {
+          "fields": {
+            "msgId": {
+              "type": "uint64",
+              "id": 1
+            },
+            "roomId": {
+              "type": "uint64",
+              "id": 2
+            },
+            "senderId": {
+              "type": "uint64",
+              "id": 3
+            },
+            "senderName": {
+              "type": "string",
+              "id": 4
+            },
+            "content": {
+              "type": "string",
+              "id": 5
+            },
+            "sentAt": {
+              "type": "uint64",
+              "id": 6
+            }
+          }
+        },
+        "ChatCreateRoomReq": {
+          "fields": {
+            "name": {
+              "type": "string",
+              "id": 1
+            },
+            "creatorId": {
+              "type": "uint64",
+              "id": 2
+            }
+          }
+        },
+        "ChatCreateRoomRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            },
+            "room": {
+              "type": "ChatRoomInfo",
+              "id": 2
+            }
+          }
+        },
+        "ChatJoinRoomReq": {
+          "fields": {
+            "roomId": {
+              "type": "uint64",
+              "id": 1
+            },
+            "playerId": {
+              "type": "uint64",
+              "id": 2
+            }
+          }
+        },
+        "ChatJoinRoomRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            },
+            "room": {
+              "type": "ChatRoomInfo",
+              "id": 2
+            },
+            "recentMsgs": {
+              "rule": "repeated",
+              "type": "ChatMessage",
+              "id": 3
+            }
+          }
+        },
+        "ChatLeaveRoomReq": {
+          "fields": {
+            "roomId": {
+              "type": "uint64",
+              "id": 1
+            },
+            "playerId": {
+              "type": "uint64",
+              "id": 2
+            }
+          }
+        },
+        "ChatLeaveRoomRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            }
+          }
+        },
+        "ChatSendMsgReq": {
+          "fields": {
+            "roomId": {
+              "type": "uint64",
+              "id": 1
+            },
+            "senderId": {
+              "type": "uint64",
+              "id": 2
+            },
+            "content": {
+              "type": "string",
+              "id": 3
+            }
+          }
+        },
+        "ChatSendMsgRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            },
+            "msg": {
+              "type": "ChatMessage",
+              "id": 2
+            }
+          }
+        },
+        "ChatMsgNotify": {
+          "fields": {
+            "msg": {
+              "type": "ChatMessage",
+              "id": 1
+            }
+          }
+        },
+        "ChatGetHistoryReq": {
+          "fields": {
+            "roomId": {
+              "type": "uint64",
+              "id": 1
+            },
+            "limit": {
+              "type": "uint32",
+              "id": 2
+            }
+          }
+        },
+        "ChatGetHistoryRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            },
+            "msgs": {
+              "rule": "repeated",
+              "type": "ChatMessage",
+              "id": 2
+            }
+          }
+        },
+        "ChatListRoomReq": {
+          "fields": {
+            "page": {
+              "type": "uint32",
+              "id": 1
+            },
+            "limit": {
+              "type": "uint32",
+              "id": 2
+            }
+          }
+        },
+        "ChatListRoomRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            },
+            "rooms": {
+              "rule": "repeated",
+              "type": "ChatRoomInfo",
+              "id": 2
+            },
+            "total": {
+              "type": "uint32",
+              "id": 3
+            }
+          }
+        },
+        "ChatCloseRoomReq": {
+          "fields": {
+            "roomId": {
+              "type": "uint64",
+              "id": 1
+            },
+            "operatorId": {
+              "type": "uint64",
+              "id": 2
+            }
+          }
+        },
+        "ChatCloseRoomRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            }
+          }
+        }
+      }
+    },
+    "dbproxy": {
+      "options": {
+        "go_package": "github.com/gmaker/luffa/gen/go/dbproxy"
+      },
+      "nested": {
+        "MySQLColumn": {
+          "fields": {
+            "name": {
+              "type": "string",
+              "id": 1
+            },
+            "value": {
+              "type": "string",
+              "id": 2
+            }
+          }
+        },
+        "MySQLRow": {
+          "fields": {
+            "columns": {
+              "rule": "repeated",
+              "type": "MySQLColumn",
+              "id": 1
+            }
+          }
+        },
+        "MySQLQueryReq": {
+          "fields": {
+            "uid": {
+              "type": "uint64",
+              "id": 1
+            },
+            "sql": {
+              "type": "string",
+              "id": 2
+            },
+            "args": {
+              "rule": "repeated",
+              "type": "string",
+              "id": 3
+            }
+          }
+        },
+        "MySQLQueryRes": {
+          "fields": {
+            "ok": {
+              "type": "bool",
+              "id": 1
+            },
+            "rows": {
+              "rule": "repeated",
+              "type": "MySQLRow",
+              "id": 2
+            },
+            "error": {
+              "type": "string",
+              "id": 3
+            }
+          }
+        },
+        "MySQLExecReq": {
+          "fields": {
+            "uid": {
+              "type": "uint64",
+              "id": 1
+            },
+            "sql": {
+              "type": "string",
+              "id": 2
+            },
+            "args": {
+              "rule": "repeated",
+              "type": "string",
+              "id": 3
+            }
+          }
+        },
+        "MySQLExecRes": {
+          "fields": {
+            "ok": {
+              "type": "bool",
+              "id": 1
+            },
+            "lastInsertId": {
+              "type": "int64",
+              "id": 2
+            },
+            "rowsAffected": {
+              "type": "int64",
+              "id": 3
+            },
+            "error": {
+              "type": "string",
+              "id": 4
+            }
+          }
+        }
+      }
+    },
+    "login": {
+      "options": {
+        "go_package": "github.com/gmaker/luffa/gen/go/login"
+      },
+      "nested": {
+        "LoginReq": {
+          "fields": {
+            "account": {
+              "type": "string",
+              "id": 1
+            },
+            "password": {
+              "type": "string",
+              "id": 2
+            },
+            "platform": {
+              "type": "string",
+              "id": 3
+            },
+            "version": {
+              "type": "string",
+              "id": 4
+            }
+          }
+        },
+        "LoginRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            },
+            "token": {
+              "type": "string",
+              "id": 2
+            },
+            "playerId": {
+              "type": "uint64",
+              "id": 3
+            },
+            "expireAt": {
+              "type": "uint64",
+              "id": 4
+            }
+          }
+        },
+        "RegisterReq": {
+          "fields": {
+            "account": {
+              "type": "string",
+              "id": 1
+            },
+            "password": {
+              "type": "string",
+              "id": 2
+            },
+            "platform": {
+              "type": "string",
+              "id": 3
+            }
+          }
+        },
+        "RegisterRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            },
+            "playerId": {
+              "type": "uint64",
+              "id": 2
+            }
+          }
+        },
+        "VerifyTokenReq": {
+          "fields": {
+            "token": {
+              "type": "string",
+              "id": 1
+            }
+          }
+        },
+        "VerifyTokenRes": {
+          "fields": {
+            "result": {
+              "type": "common.Result",
+              "id": 1
+            },
+            "playerId": {
+              "type": "uint64",
+              "id": 2
+            },
+            "expireAt": {
+              "type": "uint64",
+              "id": 3
+            }
+          }
+        }
+      }
+    },
+    "protocol": {
+      "options": {
+        "go_package": "github.com/gmaker/luffa/gen/go/protocol"
+      },
+      "nested": {
+        "ServiceType": {
+          "values": {
+            "SERVICE_UNKNOWN": 0,
+            "SERVICE_REGISTRY": 1,
+            "SERVICE_GATEWAY": 2,
+            "SERVICE_DBPROXY": 3,
+            "SERVICE_BIZ": 10,
+            "SERVICE_CHAT": 11,
+            "SERVICE_LOGIN": 12,
+            "SERVICE_LOGSTATS": 13,
+            "SERVICE_REALTIME": 20,
+            "SERVICE_BOT": 30
+          }
+        },
+        "CmdSystem": {
+          "values": {
+            "CMD_SYS_UNKNOWN": 0,
+            "CMD_SYS_HEARTBEAT": 1,
+            "CMD_SYS_HANDSHAKE": 2,
+            "CMD_SYS_ERROR_PACKET": 3
+          }
+        },
+        "CmdCommon": {
+          "values": {
+            "CMD_CMN_UNKNOWN": 0,
+            "CMD_CMN_LOGIN_REQ": 4096,
+            "CMD_CMN_LOGIN_RES": 4097,
+            "CMD_CMN_REGISTER_REQ": 4098,
+            "CMD_CMN_REGISTER_RES": 4099,
+            "CMD_CMN_GATEWAY_FORWARD": 4100
+          }
+        },
+        "CmdGatewayInternal": {
+          "values": {
+            "CMD_GW_UNKNOWN": 0,
+            "CMD_GW_ROOM_JOIN": 4112,
+            "CMD_GW_ROOM_LEAVE": 4113
+          }
+        },
+        "CmdRegistryInternal": {
+          "values": {
+            "CMD_REG_INT_UNKNOWN": 0,
+            "CMD_REG_INT_REGISTER": 983041,
+            "CMD_REG_INT_HEARTBEAT": 983042,
+            "CMD_REG_INT_DISCOVER": 983043,
+            "CMD_REG_INT_WATCH": 983044,
+            "CMD_REG_INT_NODE_EVENT": 983045,
+            "CMD_REG_INT_SUBSCRIBE": 983046
+          }
+        },
+        "CmdDBProxyInternal": {
+          "values": {
+            "CMD_DB_INT_UNKNOWN": 0,
+            "CMD_DB_INT_MYSQL_QUERY": 917505,
+            "CMD_DB_INT_MYSQL_QUERY_RES": 917506,
+            "CMD_DB_INT_MYSQL_EXEC": 917507,
+            "CMD_DB_INT_MYSQL_EXEC_RES": 917508
+          }
+        },
+        "CmdBiz": {
+          "values": {
+            "CMD_BIZ_UNKNOWN": 0,
+            "CMD_BIZ_GET_PLAYER_REQ": 65536,
+            "CMD_BIZ_GET_PLAYER_RES": 65537,
+            "CMD_BIZ_GET_BAG_REQ": 65538,
+            "CMD_BIZ_GET_BAG_RES": 65539,
+            "CMD_BIZ_PING": 65540,
+            "CMD_BIZ_PONG": 65541,
+            "CMD_BIZ_UPDATE_PLAYER_REQ": 65542,
+            "CMD_BIZ_UPDATE_PLAYER_RES": 65543
+          }
+        },
+        "CmdChat": {
+          "values": {
+            "CMD_CHAT_UNKNOWN": 0,
+            "CMD_CHAT_CREATE_ROOM_REQ": 196608,
+            "CMD_CHAT_CREATE_ROOM_RES": 196609,
+            "CMD_CHAT_JOIN_ROOM_REQ": 196610,
+            "CMD_CHAT_JOIN_ROOM_RES": 196611,
+            "CMD_CHAT_LEAVE_ROOM_REQ": 196612,
+            "CMD_CHAT_LEAVE_ROOM_RES": 196613,
+            "CMD_CHAT_SEND_MSG_REQ": 196614,
+            "CMD_CHAT_SEND_MSG_RES": 196615,
+            "CMD_CHAT_MSG_NOTIFY": 196616,
+            "CMD_CHAT_GET_HISTORY_REQ": 196617,
+            "CMD_CHAT_GET_HISTORY_RES": 196618,
+            "CMD_CHAT_CLOSE_ROOM_REQ": 196619,
+            "CMD_CHAT_CLOSE_ROOM_RES": 196620,
+            "CMD_CHAT_LIST_ROOM_REQ": 196621,
+            "CMD_CHAT_LIST_ROOM_RES": 196622
+          }
+        },
+        "CmdLogStats": {
+          "values": {
+            "CMD_LOGSTATS_UNKNOWN": 0,
+            "CMD_LOGSTATS_BASE": 262144
+          }
+        },
+        "CmdRealtime": {
+          "values": {
+            "CMD_RT_UNKNOWN": 0,
+            "CMD_RT_ROOM_ENTER_REQ": 131072,
+            "CMD_RT_ROOM_ENTER_RES": 131073,
+            "CMD_RT_ROOM_LEAVE_REQ": 131074,
+            "CMD_RT_ROOM_LEAVE_RES": 131075,
+            "CMD_RT_FRAME_SYNC": 131076,
+            "CMD_RT_STATE_SYNC": 131077
+          }
+        },
+        "CmdRange": {
+          "fields": {
+            "start": {
+              "type": "uint32",
+              "id": 1
+            },
+            "end": {
+              "type": "uint32",
+              "id": 2
+            }
+          }
+        },
+        "ServiceCmdRanges": {
+          "fields": {
+            "chat": {
+              "type": "CmdRange",
+              "id": 1
+            },
+            "biz": {
+              "type": "CmdRange",
+              "id": 2
+            },
+            "login": {
+              "type": "CmdRange",
+              "id": 3
+            },
+            "realtime": {
+              "type": "CmdRange",
+              "id": 4
+            }
+          }
+        }
+      }
+    },
+    "registry": {
+      "options": {
+        "go_package": "github.com/gmaker/luffa/gen/go/registry"
+      },
+      "nested": {
+        "NodeInfo": {
+          "fields": {
+            "serviceType": {
+              "type": "string",
+              "id": 1
+            },
+            "nodeId": {
+              "type": "string",
+              "id": 2
+            },
+            "host": {
+              "type": "string",
+              "id": 3
+            },
+            "port": {
+              "type": "uint32",
+              "id": 4
+            },
+            "metadata": {
+              "keyType": "string",
+              "type": "string",
+              "id": 5
+            },
+            "loadScore": {
+              "type": "uint64",
+              "id": 6
+            },
+            "registerAt": {
+              "type": "uint64",
+              "id": 7
+            }
+          }
+        },
+        "NodeList": {
+          "fields": {
+            "nodes": {
+              "rule": "repeated",
+              "type": "NodeInfo",
+              "id": 1
+            }
+          }
+        },
+        "NodeEvent": {
+          "fields": {
+            "type": {
+              "type": "Type",
+              "id": 1
+            },
+            "node": {
+              "type": "NodeInfo",
+              "id": 2
+            }
+          },
+          "nested": {
+            "Type": {
+              "values": {
+                "JOIN": 0,
+                "LEAVE": 1,
+                "UPDATE": 2
+              }
+            }
+          }
+        },
+        "Result": {
+          "fields": {
+            "ok": {
+              "type": "bool",
+              "id": 1
+            },
+            "code": {
+              "type": "uint32",
+              "id": 2
+            },
+            "msg": {
+              "type": "string",
+              "id": 3
+            }
+          }
+        },
+        "NodeId": {
+          "fields": {
+            "nodeId": {
+              "type": "string",
+              "id": 1
+            }
+          }
+        },
+        "ServiceType": {
+          "fields": {
+            "serviceType": {
+              "type": "string",
+              "id": 1
+            }
+          }
+        },
+        "SubscribeReq": {
+          "fields": {
+            "serviceTypes": {
+              "rule": "repeated",
+              "type": "string",
+              "id": 1
+            }
+          }
+        },
+        "SubscribeRes": {
+          "fields": {
+            "snapshot": {
+              "keyType": "string",
+              "type": "NodeList",
+              "id": 1
+            }
+          }
+        },
+        "Registry": {
+          "methods": {
+            "Register": {
+              "requestType": "NodeInfo",
+              "responseType": "Result"
+            },
+            "Heartbeat": {
+              "requestType": "NodeId",
+              "responseType": "Result"
+            },
+            "Discover": {
+              "requestType": "ServiceType",
+              "responseType": "NodeList"
+            },
+            "Watch": {
+              "requestType": "ServiceType",
+              "responseType": "NodeEvent",
+              "responseStream": true
+            },
+            "Subscribe": {
+              "requestType": "SubscribeReq",
+              "responseType": "SubscribeRes"
+            }
+          }
+        }
+      }
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/protobufjs@7.3.2/dist/protobuf.min.js"></script>
+    <script src="js/net.js"></script>
+    <script src="js/chat.js"></script>
+</head>
+<body>
+<div id="app">
+    <!-- 登录/注册面板 -->
+    <div id="authPanel" class="panel">
+        <h2>🚀 gmaker Web 聊天室</h2>
+        <div class="login-tabs">
+            <button id="tabLogin" class="active" onclick="switchTab('login')">登录</button>
+            <button id="tabRegister" onclick="switchTab('register')">注册</button>
+        </div>
+        <input type="text" id="account" placeholder="账号" value="">
+        <input type="password" id="password" placeholder="密码" value="">
+        <button id="btnAuth" onclick="doAuth()">登录</button>
+        <div id="authMsg"></div>
+    </div>
+
+    <!-- 大厅面板 -->
+    <div id="lobbyPanel" class="panel hidden">
+        <div class="toolbar">
+            <div>
+                <strong id="userLabel">用户</strong>
+                <button class="secondary" onclick="logout()">登出</button>
+            </div>
+            <button onclick="refreshRooms()">🔄 刷新列表</button>
+        </div>
+        <div class="toolbar">
+            <input type="text" id="newRoomName" placeholder="新聊天室名称" style="width:200px;margin:0;">
+            <button onclick="createRoom()">➕ 创建</button>
+        </div>
+        <table class="room-list">
+            <thead>
+                <tr><th>ID</th><th>名称</th><th>创建者</th><th>创建时间</th><th>操作</th></tr>
+            </thead>
+            <tbody id="roomTableBody"></tbody>
+        </table>
+        <div id="lobbyMsg"></div>
+    </div>
+
+    <!-- 房间面板 -->
+    <div id="roomPanel" class="panel hidden">
+        <div class="toolbar">
+            <div>
+                <strong id="roomTitle">房间</strong>
+                <button class="secondary" onclick="backToLobby()">← 返回大厅</button>
+            </div>
+            <button id="btnCloseRoom" class="danger hidden" onclick="closeRoom()">🗑 关闭房间</button>
+        </div>
+        <div id="msgList" class="msg-list"></div>
+        <div class="msg-input-row">
+            <input type="text" id="msgInput" placeholder="输入消息..." onkeydown="if(event.key==='Enter')sendMsg()">
+            <button onclick="sendMsg()">发送</button>
+        </div>
+        <div id="roomMsg"></div>
+    </div>
+
+    <div class="status-bar" id="statusBar">未连接</div>
+</div>
+
+<script>
+const LOGIN_HTTP = 'http://127.0.0.1:8084';
+
+let wsClient = null;
+let chatAPI = null;
+let playerID = 0;
+let token = '';
+let currentRoom = null;
+let authMode = 'login';
+let root = null;
+
+// 加载 protobuf descriptor
+try {
+    root = protobuf.Root.fromJSON(PROTO_DESCRIPTOR);
+    setStatus('Protobuf 加载完成，请登录');
+} catch (e) {
+    setStatus('Protobuf 加载失败: ' + e.message);
+}
+
+function setStatus(text) {
+    document.getElementById('statusBar').textContent = text;
+}
+
+function showMsg(id, text, isError) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = isError ? 'error' : 'success';
+}
+
+function switchTab(mode) {
+    authMode = mode;
+    document.getElementById('tabLogin').classList.toggle('active', mode === 'login');
+    document.getElementById('tabRegister').classList.toggle('active', mode === 'register');
+    document.getElementById('btnAuth').textContent = mode === 'login' ? '登录' : '注册';
+    document.getElementById('authMsg').textContent = '';
+}
+
+async function doAuth() {
+    const account = document.getElementById('account').value.trim();
+    const password = document.getElementById('password').value.trim();
+    if (!account || !password) {
+        showMsg('authMsg', '请输入账号和密码', true);
+        return;
+    }
+
+    setStatus('请求中...');
+    try {
+        if (authMode === 'register') {
+            const resp = await fetch(LOGIN_HTTP + '/api/v1/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ account, password })
+            });
+            const data = await resp.json();
+            if (data.code !== 0) {
+                throw new Error(data.msg || '注册失败');
+            }
+            showMsg('authMsg', '注册成功，请登录', false);
+            switchTab('login');
+            setStatus('未连接');
+            return;
+        }
+
+        // 登录模式：先 HTTP 登录
+        const resp = await fetch(LOGIN_HTTP + '/api/v1/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account, password })
+        });
+        const data = await resp.json();
+        if (data.code !== 0) {
+            throw new Error(data.msg || '登录失败');
+        }
+
+        playerID = data.player_id || 0;
+        token = data.token || '';
+        const gatewayAddr = data.gateway_addr || '127.0.0.1:8083';
+        setStatus('获取到 Gateway: ' + gatewayAddr + '，正在连接 WS...');
+
+        // 建立 WebSocket 连接
+        const wsUrl = 'ws://' + gatewayAddr;
+        wsClient = new WSClient(wsUrl);
+        await wsClient.connect();
+        chatAPI = new ChatAPI(wsClient, root);
+
+        setStatus('已连接 | 玩家ID: ' + playerID);
+        showMsg('authMsg', '', false);
+
+        // 监听推送
+        chatAPI.onNotify((msg) => {
+            if (currentRoom && msg.msg && msg.msg.roomId === currentRoom.roomId) {
+                appendMsg(msg.msg, false);
+            }
+        });
+
+        showPanel('lobbyPanel');
+        document.getElementById('userLabel').textContent = '用户: ' + account + ' (ID:' + playerID + ')';
+        refreshRooms();
+    } catch (e) {
+        setStatus('连接失败');
+        showMsg('authMsg', e.message || '网络错误', true);
+        if (wsClient) { wsClient.close(); wsClient = null; }
+    }
+}
+
+function logout() {
+    if (wsClient) wsClient.close();
+    playerID = 0;
+    token = '';
+    currentRoom = null;
+    showPanel('authPanel');
+    setStatus('未连接');
+}
+
+function showPanel(id) {
+    ['authPanel', 'lobbyPanel', 'roomPanel'].forEach(pid => {
+        document.getElementById(pid).classList.toggle('hidden', pid !== id);
+    });
+}
+
+async function refreshRooms() {
+    try {
+        const res = await chatAPI.listRooms(1, 100);
+        const tbody = document.getElementById('roomTableBody');
+        tbody.innerHTML = '';
+        if (res.rooms && res.rooms.length) {
+            res.rooms.forEach(r => {
+                const tr = document.createElement('tr');
+                const date = r.createdAt ? new Date(r.createdAt * 1000).toLocaleString() : '-';
+                tr.innerHTML = `
+                    <td>${r.roomId}</td>
+                    <td>${escapeHtml(r.name)}</td>
+                    <td>${r.creatorId}</td>
+                    <td>${date}</td>
+                    <td></td>
+                `;
+                const btn = document.createElement('button');
+                btn.textContent = '加入';
+                btn.onclick = () => enterRoom(r.roomId, r.name);
+                tr.lastElementChild.appendChild(btn);
+                tbody.appendChild(tr);
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">暂无聊天室</td></tr>';
+        }
+    } catch (e) {
+        showMsg('lobbyMsg', '获取列表失败: ' + e.message, true);
+    }
+}
+
+async function createRoom() {
+    const name = document.getElementById('newRoomName').value.trim();
+    if (!name) return;
+    try {
+        const res = await chatAPI.createRoom(name, playerID);
+        if (!res.result || !res.result.ok) throw new Error(res.result ? res.result.msg : '创建失败');
+        document.getElementById('newRoomName').value = '';
+        refreshRooms();
+        enterRoom(res.room.roomId, res.room.name);
+    } catch (e) {
+        showMsg('lobbyMsg', '创建失败: ' + e.message, true);
+    }
+}
+
+async function enterRoom(roomId, roomName) {
+    try {
+        const res = await chatAPI.joinRoom(roomId, playerID);
+        if (!res.result || !res.result.ok) throw new Error(res.result ? res.result.msg : '加入失败');
+        currentRoom = res.room;
+        document.getElementById('roomTitle').textContent = '房间: ' + roomName;
+        document.getElementById('btnCloseRoom').classList.toggle('hidden', currentRoom.creatorId !== playerID);
+        showPanel('roomPanel');
+
+        const msgList = document.getElementById('msgList');
+        msgList.innerHTML = '';
+        if (res.recentMsgs && res.recentMsgs.length) {
+            res.recentMsgs.forEach(m => appendMsg(m, m.senderId === playerID));
+        }
+    } catch (e) {
+        showMsg('lobbyMsg', '加入房间失败: ' + e.message, true);
+    }
+}
+
+function backToLobby() {
+    if (currentRoom) {
+        chatAPI.leaveRoom(currentRoom.roomId, playerID).catch(() => {});
+        currentRoom = null;
+    }
+    showPanel('lobbyPanel');
+    refreshRooms();
+}
+
+async function sendMsg() {
+    const input = document.getElementById('msgInput');
+    const content = input.value.trim();
+    if (!content || !currentRoom) return;
+    try {
+        const res = await chatAPI.sendMsg(currentRoom.roomId, playerID, content);
+        if (!res.result || !res.result.ok) throw new Error(res.result ? res.result.msg : '发送失败');
+        appendMsg(res.msg, true);
+        input.value = '';
+    } catch (e) {
+        showMsg('roomMsg', '发送失败: ' + e.message, true);
+    }
+}
+
+function appendMsg(msg, isMine) {
+    const list = document.getElementById('msgList');
+    const div = document.createElement('div');
+    div.className = 'msg-item' + (isMine ? ' mine' : '');
+    const time = msg.sentAt ? new Date(msg.sentAt * 1000).toLocaleTimeString() : '';
+    div.innerHTML = `
+        <div class="meta">${msg.senderName || msg.senderId} · ${time}</div>
+        <div class="content">${escapeHtml(msg.content)}</div>
+    `;
+    list.appendChild(div);
+    list.scrollTop = list.scrollHeight;
+}
+
+async function closeRoom() {
+    if (!currentRoom || currentRoom.creatorId !== playerID) return;
+    if (!confirm('确定要关闭此聊天室吗？')) return;
+    try {
+        const res = await chatAPI.closeRoom(currentRoom.roomId, playerID);
+        if (!res.result || !res.result.ok) throw new Error(res.result ? res.result.msg : '关闭失败');
+        currentRoom = null;
+        showPanel('lobbyPanel');
+        refreshRooms();
+    } catch (e) {
+        showMsg('roomMsg', '关闭失败: ' + e.message, true);
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+</body>
+</html>

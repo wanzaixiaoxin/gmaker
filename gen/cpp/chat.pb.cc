@@ -125,6 +125,33 @@ struct ChatMessageDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ChatMessageDefaultTypeInternal _ChatMessage_default_instance_;
 
+inline constexpr ChatListRoomReq::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        page_{0u},
+        limit_{0u} {}
+
+template <typename>
+constexpr ChatListRoomReq::ChatListRoomReq(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(ChatListRoomReq_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+struct ChatListRoomReqDefaultTypeInternal {
+  constexpr ChatListRoomReqDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ChatListRoomReqDefaultTypeInternal() {}
+  union {
+    ChatListRoomReq _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ChatListRoomReqDefaultTypeInternal _ChatListRoomReq_default_instance_;
+
 inline constexpr ChatLeaveRoomReq::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
@@ -314,6 +341,42 @@ struct ChatMsgNotifyDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ChatMsgNotifyDefaultTypeInternal _ChatMsgNotify_default_instance_;
+
+inline constexpr ChatListRoomRes::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        #ifdef PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_REPEATED_PTR_FIELD
+        rooms_{visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::chat::ChatListRoomRes,
+            PROTOBUF_FIELD_OFFSET(::chat::ChatListRoomRes, _impl_.rooms_)>()
+        }
+        #else  // !PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_REPEATED_PTR_FIELD
+        rooms_ {}
+        #endif
+        ,
+        result_{nullptr},
+        total_{0u} {}
+
+template <typename>
+constexpr ChatListRoomRes::ChatListRoomRes(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(ChatListRoomRes_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+struct ChatListRoomResDefaultTypeInternal {
+  constexpr ChatListRoomResDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ChatListRoomResDefaultTypeInternal() {}
+  union {
+    ChatListRoomRes _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ChatListRoomResDefaultTypeInternal _ChatListRoomRes_default_instance_;
 
 inline constexpr ChatLeaveRoomRes::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
@@ -580,6 +643,22 @@ const ::uint32_t
         1,
         0,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::chat::ChatListRoomReq, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::chat::ChatListRoomReq, _impl_.page_),
+        PROTOBUF_FIELD_OFFSET(::chat::ChatListRoomReq, _impl_.limit_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::chat::ChatListRoomRes, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::chat::ChatListRoomRes, _impl_.result_),
+        PROTOBUF_FIELD_OFFSET(::chat::ChatListRoomRes, _impl_.rooms_),
+        PROTOBUF_FIELD_OFFSET(::chat::ChatListRoomRes, _impl_.total_),
+        1,
+        0,
+        2,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::chat::ChatCloseRoomReq, _impl_._has_bits_),
         5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::chat::ChatCloseRoomReq, _impl_.room_id_),
@@ -608,8 +687,10 @@ static const ::_pbi::MigrationSchema
         {88, sizeof(::chat::ChatMsgNotify)},
         {93, sizeof(::chat::ChatGetHistoryReq)},
         {100, sizeof(::chat::ChatGetHistoryRes)},
-        {107, sizeof(::chat::ChatCloseRoomReq)},
-        {114, sizeof(::chat::ChatCloseRoomRes)},
+        {107, sizeof(::chat::ChatListRoomReq)},
+        {114, sizeof(::chat::ChatListRoomRes)},
+        {123, sizeof(::chat::ChatCloseRoomReq)},
+        {130, sizeof(::chat::ChatCloseRoomRes)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::chat::_ChatRoomInfo_default_instance_._instance,
@@ -625,6 +706,8 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::chat::_ChatMsgNotify_default_instance_._instance,
     &::chat::_ChatGetHistoryReq_default_instance_._instance,
     &::chat::_ChatGetHistoryRes_default_instance_._instance,
+    &::chat::_ChatListRoomReq_default_instance_._instance,
+    &::chat::_ChatListRoomRes_default_instance_._instance,
     &::chat::_ChatCloseRoomReq_default_instance_._instance,
     &::chat::_ChatCloseRoomRes_default_instance_._instance,
 };
@@ -656,11 +739,14 @@ const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIA
     "istoryReq\022\017\n\007room_id\030\001 \001(\004\022\r\n\005limit\030\002 \001("
     "\r\"T\n\021ChatGetHistoryRes\022\036\n\006result\030\001 \001(\0132\016"
     ".common.Result\022\037\n\004msgs\030\002 \003(\0132\021.chat.Chat"
-    "Message\"8\n\020ChatCloseRoomReq\022\017\n\007room_id\030\001"
-    " \001(\004\022\023\n\013operator_id\030\002 \001(\004\"2\n\020ChatCloseRo"
-    "omRes\022\036\n\006result\030\001 \001(\0132\016.common.ResultB%Z"
-    "#github.com/gmaker/luffa/gen/go/chatb\006pr"
-    "oto3"
+    "Message\".\n\017ChatListRoomReq\022\014\n\004page\030\001 \001(\r"
+    "\022\r\n\005limit\030\002 \001(\r\"c\n\017ChatListRoomRes\022\036\n\006re"
+    "sult\030\001 \001(\0132\016.common.Result\022!\n\005rooms\030\002 \003("
+    "\0132\022.chat.ChatRoomInfo\022\r\n\005total\030\003 \001(\r\"8\n\020"
+    "ChatCloseRoomReq\022\017\n\007room_id\030\001 \001(\004\022\023\n\013ope"
+    "rator_id\030\002 \001(\004\"2\n\020ChatCloseRoomRes\022\036\n\006re"
+    "sult\030\001 \001(\0132\016.common.ResultB%Z#github.com"
+    "/gmaker/luffa/gen/go/chatb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_chat_2eproto_deps[1] = {
@@ -670,13 +756,13 @@ static ::absl::once_flag descriptor_table_chat_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_chat_2eproto = {
     false,
     false,
-    1204,
+    1353,
     descriptor_table_protodef_chat_2eproto,
     "chat.proto",
     &descriptor_table_chat_2eproto_once,
     descriptor_table_chat_2eproto_deps,
     1,
-    15,
+    17,
     schemas,
     file_default_instances,
     TableStruct_chat_2eproto::offsets,
@@ -5065,6 +5151,692 @@ void ChatGetHistoryRes::InternalSwap(ChatGetHistoryRes* PROTOBUF_RESTRICT PROTOB
 }
 
 ::google::protobuf::Metadata ChatGetHistoryRes::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class ChatListRoomReq::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<ChatListRoomReq>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ChatListRoomReq, _impl_._has_bits_);
+};
+
+ChatListRoomReq::ChatListRoomReq(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ChatListRoomReq_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:chat.ChatListRoomReq)
+}
+ChatListRoomReq::ChatListRoomReq(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ChatListRoomReq& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ChatListRoomReq_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ChatListRoomReq::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ChatListRoomReq::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, page_),
+           0,
+           offsetof(Impl_, limit_) -
+               offsetof(Impl_, page_) +
+               sizeof(Impl_::limit_));
+}
+ChatListRoomReq::~ChatListRoomReq() {
+  // @@protoc_insertion_point(destructor:chat.ChatListRoomReq)
+  SharedDtor(*this);
+}
+inline void ChatListRoomReq::SharedDtor(MessageLite& self) {
+  ChatListRoomReq& this_ = static_cast<ChatListRoomReq&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL ChatListRoomReq::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ChatListRoomReq(arena);
+}
+constexpr auto ChatListRoomReq::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ChatListRoomReq),
+                                            alignof(ChatListRoomReq));
+}
+constexpr auto ChatListRoomReq::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_ChatListRoomReq_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // IsInitialized
+          &ChatListRoomReq::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ChatListRoomReq>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ChatListRoomReq::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ChatListRoomReq>(), &ChatListRoomReq::ByteSizeLong,
+              &ChatListRoomReq::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ChatListRoomReq, _impl_._cached_size_),
+          false,
+      },
+      &ChatListRoomReq::kDescriptorMethods,
+      &descriptor_table_chat_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ChatListRoomReq_class_data_ =
+        ChatListRoomReq::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ChatListRoomReq::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ChatListRoomReq_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ChatListRoomReq_class_data_.tc_table);
+  return ChatListRoomReq_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<1, 2, 0, 0, 2>
+ChatListRoomReq::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(ChatListRoomReq, _impl_._has_bits_),
+    0, // no _extensions_
+    2, 8,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967292,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    2,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    ChatListRoomReq_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::chat::ChatListRoomReq>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // uint32 limit = 2;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ChatListRoomReq, _impl_.limit_), 1>(),
+     {16, 1, 0,
+      PROTOBUF_FIELD_OFFSET(ChatListRoomReq, _impl_.limit_)}},
+    // uint32 page = 1;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ChatListRoomReq, _impl_.page_), 0>(),
+     {8, 0, 0,
+      PROTOBUF_FIELD_OFFSET(ChatListRoomReq, _impl_.page_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // uint32 page = 1;
+    {PROTOBUF_FIELD_OFFSET(ChatListRoomReq, _impl_.page_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    // uint32 limit = 2;
+    {PROTOBUF_FIELD_OFFSET(ChatListRoomReq, _impl_.limit_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+  }},
+  // no aux_entries
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void ChatListRoomReq::Clear() {
+// @@protoc_insertion_point(message_clear_start:chat.ChatListRoomReq)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.page_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.limit_) -
+        reinterpret_cast<char*>(&_impl_.page_)) + sizeof(_impl_.limit_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ChatListRoomReq::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ChatListRoomReq& this_ = static_cast<const ChatListRoomReq&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ChatListRoomReq::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ChatListRoomReq& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:chat.ChatListRoomReq)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 page = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_page() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_page(), target);
+    }
+  }
+
+  // uint32 limit = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_limit(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:chat.ChatListRoomReq)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ChatListRoomReq::ByteSizeLong(const MessageLite& base) {
+  const ChatListRoomReq& this_ = static_cast<const ChatListRoomReq&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ChatListRoomReq::ByteSizeLong() const {
+  const ChatListRoomReq& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:chat.ChatListRoomReq)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint32 page = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_page() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_page());
+      }
+    }
+    // uint32 limit = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_limit());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ChatListRoomReq::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<ChatListRoomReq*>(&to_msg);
+  auto& from = static_cast<const ChatListRoomReq&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:chat.ChatListRoomReq)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_page() != 0) {
+        _this->_impl_.page_ = from._impl_.page_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_limit() != 0) {
+        _this->_impl_.limit_ = from._impl_.limit_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ChatListRoomReq::CopyFrom(const ChatListRoomReq& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:chat.ChatListRoomReq)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ChatListRoomReq::InternalSwap(ChatListRoomReq* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ChatListRoomReq, _impl_.limit_)
+      + sizeof(ChatListRoomReq::_impl_.limit_)
+      - PROTOBUF_FIELD_OFFSET(ChatListRoomReq, _impl_.page_)>(
+          reinterpret_cast<char*>(&_impl_.page_),
+          reinterpret_cast<char*>(&other->_impl_.page_));
+}
+
+::google::protobuf::Metadata ChatListRoomReq::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class ChatListRoomRes::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<ChatListRoomRes>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_._has_bits_);
+};
+
+void ChatListRoomRes::clear_result() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.result_ != nullptr) _impl_.result_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+ChatListRoomRes::ChatListRoomRes(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ChatListRoomRes_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:chat.ChatListRoomRes)
+}
+PROTOBUF_NDEBUG_INLINE ChatListRoomRes::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::chat::ChatListRoomRes& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        #ifdef PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_REPEATED_PTR_FIELD
+        rooms_{visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::chat::ChatListRoomRes,
+            PROTOBUF_FIELD_OFFSET(::chat::ChatListRoomRes, _impl_.rooms_)>()
+        , from.rooms_}
+        #else
+        rooms_ { visibility, arena, from.rooms_ }
+        #endif
+     {}
+
+ChatListRoomRes::ChatListRoomRes(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ChatListRoomRes& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ChatListRoomRes_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ChatListRoomRes* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.result_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.result_)
+                : nullptr;
+  _impl_.total_ = from._impl_.total_;
+
+  // @@protoc_insertion_point(copy_constructor:chat.ChatListRoomRes)
+}
+PROTOBUF_NDEBUG_INLINE ChatListRoomRes::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        #ifdef PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_REPEATED_PTR_FIELD
+        rooms_{visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::chat::ChatListRoomRes,
+            PROTOBUF_FIELD_OFFSET(::chat::ChatListRoomRes, _impl_.rooms_)>()
+        }
+        #else
+        rooms_ { visibility, arena }
+        #endif
+     {}
+
+inline void ChatListRoomRes::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, result_),
+           0,
+           offsetof(Impl_, total_) -
+               offsetof(Impl_, result_) +
+               sizeof(Impl_::total_));
+}
+ChatListRoomRes::~ChatListRoomRes() {
+  // @@protoc_insertion_point(destructor:chat.ChatListRoomRes)
+  SharedDtor(*this);
+}
+inline void ChatListRoomRes::SharedDtor(MessageLite& self) {
+  ChatListRoomRes& this_ = static_cast<ChatListRoomRes&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.result_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL ChatListRoomRes::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ChatListRoomRes(arena);
+}
+#ifdef PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_REPEATED_PTR_FIELD
+constexpr auto ChatListRoomRes::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ChatListRoomRes),
+                                            alignof(ChatListRoomRes));
+}
+#else  // !PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_REPEATED_PTR_FIELD
+constexpr auto ChatListRoomRes::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_.rooms_) +
+          decltype(ChatListRoomRes::_impl_.rooms_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::Message::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::ZeroInit(
+        sizeof(ChatListRoomRes), alignof(ChatListRoomRes), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&ChatListRoomRes::PlacementNew_,
+                                 sizeof(ChatListRoomRes),
+                                 alignof(ChatListRoomRes));
+  }
+}
+#endif
+constexpr auto ChatListRoomRes::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_ChatListRoomRes_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // IsInitialized
+          &ChatListRoomRes::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ChatListRoomRes>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ChatListRoomRes::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ChatListRoomRes>(), &ChatListRoomRes::ByteSizeLong,
+              &ChatListRoomRes::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_._cached_size_),
+          false,
+      },
+      &ChatListRoomRes::kDescriptorMethods,
+      &descriptor_table_chat_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ChatListRoomRes_class_data_ =
+        ChatListRoomRes::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ChatListRoomRes::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ChatListRoomRes_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ChatListRoomRes_class_data_.tc_table);
+  return ChatListRoomRes_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 3, 2, 0, 2>
+ChatListRoomRes::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_._has_bits_),
+    0, // no _extensions_
+    3, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967288,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    3,  // num_field_entries
+    2,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    ChatListRoomRes_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::chat::ChatListRoomRes>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // .common.Result result = 1;
+    {::_pbi::TcParser::FastMtS1,
+     {10, 1, 0,
+      PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_.result_)}},
+    // repeated .chat.ChatRoomInfo rooms = 2;
+    {::_pbi::TcParser::FastMtR1,
+     {18, 0, 1,
+      PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_.rooms_)}},
+    // uint32 total = 3;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ChatListRoomRes, _impl_.total_), 2>(),
+     {24, 2, 0,
+      PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_.total_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // .common.Result result = 1;
+    {PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_.result_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // repeated .chat.ChatRoomInfo rooms = 2;
+    {PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_.rooms_), _Internal::kHasBitsOffset + 0, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // uint32 total = 3;
+    {PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_.total_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::common::Result>()},
+      {::_pbi::TcParser::GetTable<::chat::ChatRoomInfo>()},
+  }},
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void ChatListRoomRes::Clear() {
+// @@protoc_insertion_point(message_clear_start:chat.ChatListRoomRes)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
+      _impl_.rooms_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.result_ != nullptr);
+      _impl_.result_->Clear();
+    }
+  }
+  _impl_.total_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ChatListRoomRes::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ChatListRoomRes& this_ = static_cast<const ChatListRoomRes&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ChatListRoomRes::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ChatListRoomRes& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:chat.ChatListRoomRes)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .common.Result result = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.result_, this_._impl_.result_->GetCachedSize(), target,
+        stream);
+  }
+
+  // repeated .chat.ChatRoomInfo rooms = 2;
+  if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_rooms_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_rooms().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              2, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // uint32 total = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_total() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_total(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:chat.ChatListRoomRes)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ChatListRoomRes::ByteSizeLong(const MessageLite& base) {
+  const ChatListRoomRes& this_ = static_cast<const ChatListRoomRes&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ChatListRoomRes::ByteSizeLong() const {
+  const ChatListRoomRes& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:chat.ChatListRoomRes)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // repeated .chat.ChatRoomInfo rooms = 2;
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_rooms_size();
+      for (const auto& msg : this_._internal_rooms()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .common.Result result = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.result_);
+    }
+    // uint32 total = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_total() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_total());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ChatListRoomRes::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<ChatListRoomRes*>(&to_msg);
+  auto& from = static_cast<const ChatListRoomRes&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:chat.ChatListRoomRes)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_rooms()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_rooms());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.result_ != nullptr);
+      if (_this->_impl_.result_ == nullptr) {
+        _this->_impl_.result_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.result_);
+      } else {
+        _this->_impl_.result_->MergeFrom(*from._impl_.result_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_total() != 0) {
+        _this->_impl_.total_ = from._impl_.total_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ChatListRoomRes::CopyFrom(const ChatListRoomRes& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:chat.ChatListRoomRes)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ChatListRoomRes::InternalSwap(ChatListRoomRes* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.rooms_.InternalSwap(&other->_impl_.rooms_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_.total_)
+      + sizeof(ChatListRoomRes::_impl_.total_)
+      - PROTOBUF_FIELD_OFFSET(ChatListRoomRes, _impl_.result_)>(
+          reinterpret_cast<char*>(&_impl_.result_),
+          reinterpret_cast<char*>(&other->_impl_.result_));
+}
+
+::google::protobuf::Metadata ChatListRoomRes::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

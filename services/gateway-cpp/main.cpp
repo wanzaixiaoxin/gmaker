@@ -620,11 +620,19 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
     // 普通响应：广播或单播
     if (pkt.payload.Size() < 8) return;
     
+    bool is_room_bcast = (pkt.header.flags & static_cast<uint32_t>(gs::net::Flag::ROOM_BCAST)) != 0;
     uint64_t conn_id = ReadU64BE(pkt.payload.Data());
     
     // 检查是否为房间广播
     std::vector<uint64_t> targets;
-    {
+    if (is_room_bcast) {
+        uint64_t room_id = conn_id; // payload 前 8 字节为 room_id
+        std::lock_guard<std::mutex> lk(room_mtx_);
+        auto rit = room_members_.find(room_id);
+        if (rit != room_members_.end()) {
+            targets.assign(rit->second.begin(), rit->second.end());
+        }
+    } else {
         std::lock_guard<std::mutex> lk(room_mtx_);
         auto it = conn_room_.find(conn_id);
         if (it != conn_room_.end()) {
@@ -705,7 +713,9 @@ AsyncUpstreamPool* Gateway::RouteToPool(uint32_t cmd_id) {
     if (cmd_id >= 0x00010000 && cmd_id <= 0x0001FFFF) {
         svc_type = "biz";
     } else if (cmd_id >= 0x00001000 && cmd_id <= 0x0000FFFF) {
-        svc_type = "login";
+        // Common commands: login/register are now handled by HTTP login service;
+        // any remaining common-range packets go to biz.
+        svc_type = "biz";
     } else if (cmd_id >= 0x00020000 && cmd_id <= 0x0002FFFF) {
         svc_type = "realtime";
     } else if (cmd_id >= 0x00030000 && cmd_id <= 0x0003FFFF) {

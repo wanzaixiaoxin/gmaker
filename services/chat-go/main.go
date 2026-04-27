@@ -39,6 +39,8 @@ const (
 	CmdChatGetHistoryRes = uint32(protocol.CmdChat_CMD_CHAT_GET_HISTORY_RES)
 	CmdChatCloseRoomReq  = uint32(protocol.CmdChat_CMD_CHAT_CLOSE_ROOM_REQ)
 	CmdChatCloseRoomRes  = uint32(protocol.CmdChat_CMD_CHAT_CLOSE_ROOM_RES)
+	CmdChatListRoomReq   = uint32(protocol.CmdChat_CMD_CHAT_LIST_ROOM_REQ)
+	CmdChatListRoomRes   = uint32(protocol.CmdChat_CMD_CHAT_LIST_ROOM_RES)
 
 	// DBProxy 命令
 	CmdDBQuery    = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_QUERY)
@@ -171,8 +173,11 @@ func main() {
 
 	// 通过 Registry 发现 DBProxy
 	var chatSvc *chat.ChatService
+	var dbClient chat.DBProxyClient
 	dbproxyOnData := func(_ *net.TCPConn, pkt *net.Packet) {
-		// DBProxy 响应由 rpc.Client 处理
+		if dbClient != nil {
+			dbClient.OnPacket(pkt)
+		}
 	}
 	upstreamMgr := discovery.NewUpstreamManager(sd)
 	upstreamMgr.AddInterest("dbproxy", dbproxyOnData)
@@ -180,7 +185,6 @@ func main() {
 		log.Warnf("subscribe dbproxy upstream failed: %v", err)
 	}
 
-	var dbClient chat.DBProxyClient
 	dbproxyPool := upstreamMgr.GetPool("dbproxy")
 	if dbproxyPool == nil || dbproxyPool.TotalCount() == 0 {
 		log.Warnf("no dbproxy found in registry, using fallback config")

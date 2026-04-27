@@ -18,6 +18,11 @@ type Client struct {
 func NewClient(pool *net.UpstreamPool) *Client {
 	c := &Client{pool: pool}
 	c.rpc = rpc.NewClientWithPool(pool)
+	pool.SetOnData(func(_ *net.TCPConn, pkt *net.Packet) {
+		if c.rpc != nil {
+			c.rpc.OnPacket(pkt)
+		}
+	})
 	return c
 }
 
@@ -35,4 +40,11 @@ func (c *Client) Close() {}
 // Call 通用 RPC 调用，业务层通过此接口访问 DBProxy
 func (c *Client) Call(ctx context.Context, cmdID uint32, payload []byte) (*net.Packet, error) {
 	return c.rpc.Call(ctx, cmdID, payload)
+}
+
+// OnPacket 处理 DBProxy 回包
+func (c *Client) OnPacket(pkt *net.Packet) {
+	if c.rpc != nil {
+		c.rpc.OnPacket(pkt)
+	}
 }

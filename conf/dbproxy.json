@@ -12,5 +12,8 @@
   "discovery": {
     "type": "registry",
     "addrs": ["127.0.0.1:2379"]
+  },
+  "mysql": {
+    "dsn": "root:123456@tcp(192.168.0.85:3306)/gmaker?charset=utf8mb4"
   }
 }

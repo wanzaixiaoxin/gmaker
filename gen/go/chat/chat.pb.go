@@ -800,6 +800,124 @@ func (x *ChatGetHistoryRes) GetMsgs() []*ChatMessage {
 	return nil
 }
 
+type ChatListRoomReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Page  uint32 `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`   // 从 1 开始
+	Limit uint32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"` // 默认 20，最大 100
+}
+
+func (x *ChatListRoomReq) Reset() {
+	*x = ChatListRoomReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_chat_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ChatListRoomReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChatListRoomReq) ProtoMessage() {}
+
+func (x *ChatListRoomReq) ProtoReflect() protoreflect.Message {
+	mi := &file_chat_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChatListRoomReq.ProtoReflect.Descriptor instead.
+func (*ChatListRoomReq) Descriptor() ([]byte, []int) {
+	return file_chat_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ChatListRoomReq) GetPage() uint32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ChatListRoomReq) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type ChatListRoomRes struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Result *common.Result  `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	Rooms  []*ChatRoomInfo `protobuf:"bytes,2,rep,name=rooms,proto3" json:"rooms,omitempty"`
+	Total  uint32          `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
+}
+
+func (x *ChatListRoomRes) Reset() {
+	*x = ChatListRoomRes{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_chat_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ChatListRoomRes) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChatListRoomRes) ProtoMessage() {}
+
+func (x *ChatListRoomRes) ProtoReflect() protoreflect.Message {
+	mi := &file_chat_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChatListRoomRes.ProtoReflect.Descriptor instead.
+func (*ChatListRoomRes) Descriptor() ([]byte, []int) {
+	return file_chat_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ChatListRoomRes) GetResult() *common.Result {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+func (x *ChatListRoomRes) GetRooms() []*ChatRoomInfo {
+	if x != nil {
+		return x.Rooms
+	}
+	return nil
+}
+
+func (x *ChatListRoomRes) GetTotal() uint32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
 type ChatCloseRoomReq struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -812,7 +930,7 @@ type ChatCloseRoomReq struct {
 func (x *ChatCloseRoomReq) Reset() {
 	*x = ChatCloseRoomReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_chat_proto_msgTypes[13]
+		mi := &file_chat_proto_msgTypes[15]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -825,7 +943,7 @@ func (x *ChatCloseRoomReq) String() string {
 func (*ChatCloseRoomReq) ProtoMessage() {}
 
 func (x *ChatCloseRoomReq) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_proto_msgTypes[13]
+	mi := &file_chat_proto_msgTypes[15]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -838,7 +956,7 @@ func (x *ChatCloseRoomReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatCloseRoomReq.ProtoReflect.Descriptor instead.
 func (*ChatCloseRoomReq) Descriptor() ([]byte, []int) {
-	return file_chat_proto_rawDescGZIP(), []int{13}
+	return file_chat_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ChatCloseRoomReq) GetRoomId() uint64 {
@@ -866,7 +984,7 @@ type ChatCloseRoomRes struct {
 func (x *ChatCloseRoomRes) Reset() {
 	*x = ChatCloseRoomRes{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_chat_proto_msgTypes[14]
+		mi := &file_chat_proto_msgTypes[16]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -879,7 +997,7 @@ func (x *ChatCloseRoomRes) String() string {
 func (*ChatCloseRoomRes) ProtoMessage() {}
 
 func (x *ChatCloseRoomRes) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_proto_msgTypes[14]
+	mi := &file_chat_proto_msgTypes[16]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -892,7 +1010,7 @@ func (x *ChatCloseRoomRes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatCloseRoomRes.ProtoReflect.Descriptor instead.
 func (*ChatCloseRoomRes) Descriptor() ([]byte, []int) {
-	return file_chat_proto_rawDescGZIP(), []int{14}
+	return file_chat_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ChatCloseRoomRes) GetResult() *common.Result {
@@ -988,18 +1106,30 @@ var file_chat_proto_rawDesc = []byte{
 	0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x52, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x12, 0x25,
 	0x0a, 0x04, 0x6d, 0x73, 0x67, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x63,
 	0x68, 0x61, 0x74, 0x2e, 0x43, 0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x52,
-	0x04, 0x6d, 0x73, 0x67, 0x73, 0x22, 0x4c, 0x0a, 0x10, 0x43, 0x68, 0x61, 0x74, 0x43, 0x6c, 0x6f,
-	0x73, 0x65, 0x52, 0x6f, 0x6f, 0x6d, 0x52, 0x65, 0x71, 0x12, 0x17, 0x0a, 0x07, 0x72, 0x6f, 0x6f,
-	0x6d, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x72, 0x6f, 0x6f, 0x6d,
-	0x49, 0x64, 0x12, 0x1f, 0x0a, 0x0b, 0x6f, 0x70, 0x65, 0x72, 0x61, 0x74, 0x6f, 0x72, 0x5f, 0x69,
-	0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0a, 0x6f, 0x70, 0x65, 0x72, 0x61, 0x74, 0x6f,
-	0x72, 0x49, 0x64, 0x22, 0x3a, 0x0a, 0x10, 0x43, 0x68, 0x61, 0x74, 0x43, 0x6c, 0x6f, 0x73, 0x65,
-	0x52, 0x6f, 0x6f, 0x6d, 0x52, 0x65, 0x73, 0x12, 0x26, 0x0a, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c,
-	0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e,
-	0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x52, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x42,
-	0x25, 0x5a, 0x23, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x6d,
-	0x61, 0x6b, 0x65, 0x72, 0x2f, 0x6c, 0x75, 0x66, 0x66, 0x61, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x67,
-	0x6f, 0x2f, 0x63, 0x68, 0x61, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x04, 0x6d, 0x73, 0x67, 0x73, 0x22, 0x3b, 0x0a, 0x0f, 0x43, 0x68, 0x61, 0x74, 0x4c, 0x69, 0x73,
+	0x74, 0x52, 0x6f, 0x6f, 0x6d, 0x52, 0x65, 0x71, 0x12, 0x12, 0x0a, 0x04, 0x70, 0x61, 0x67, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x70, 0x61, 0x67, 0x65, 0x12, 0x14, 0x0a, 0x05,
+	0x6c, 0x69, 0x6d, 0x69, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x6c, 0x69, 0x6d,
+	0x69, 0x74, 0x22, 0x79, 0x0a, 0x0f, 0x43, 0x68, 0x61, 0x74, 0x4c, 0x69, 0x73, 0x74, 0x52, 0x6f,
+	0x6f, 0x6d, 0x52, 0x65, 0x73, 0x12, 0x26, 0x0a, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x52,
+	0x65, 0x73, 0x75, 0x6c, 0x74, 0x52, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x12, 0x28, 0x0a,
+	0x05, 0x72, 0x6f, 0x6f, 0x6d, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x63,
+	0x68, 0x61, 0x74, 0x2e, 0x43, 0x68, 0x61, 0x74, 0x52, 0x6f, 0x6f, 0x6d, 0x49, 0x6e, 0x66, 0x6f,
+	0x52, 0x05, 0x72, 0x6f, 0x6f, 0x6d, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x74, 0x6f, 0x74, 0x61, 0x6c,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x22, 0x4c, 0x0a,
+	0x10, 0x43, 0x68, 0x61, 0x74, 0x43, 0x6c, 0x6f, 0x73, 0x65, 0x52, 0x6f, 0x6f, 0x6d, 0x52, 0x65,
+	0x71, 0x12, 0x17, 0x0a, 0x07, 0x72, 0x6f, 0x6f, 0x6d, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x04, 0x52, 0x06, 0x72, 0x6f, 0x6f, 0x6d, 0x49, 0x64, 0x12, 0x1f, 0x0a, 0x0b, 0x6f, 0x70,
+	0x65, 0x72, 0x61, 0x74, 0x6f, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52,
+	0x0a, 0x6f, 0x70, 0x65, 0x72, 0x61, 0x74, 0x6f, 0x72, 0x49, 0x64, 0x22, 0x3a, 0x0a, 0x10, 0x43,
+	0x68, 0x61, 0x74, 0x43, 0x6c, 0x6f, 0x73, 0x65, 0x52, 0x6f, 0x6f, 0x6d, 0x52, 0x65, 0x73, 0x12,
+	0x26, 0x0a, 0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x0e, 0x2e, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x52,
+	0x06, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x42, 0x25, 0x5a, 0x23, 0x67, 0x69, 0x74, 0x68, 0x75,
+	0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x67, 0x6d, 0x61, 0x6b, 0x65, 0x72, 0x2f, 0x6c, 0x75, 0x66,
+	0x66, 0x61, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x67, 0x6f, 0x2f, 0x63, 0x68, 0x61, 0x74, 0x62, 0x06,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1014,7 +1144,7 @@ func file_chat_proto_rawDescGZIP() []byte {
 	return file_chat_proto_rawDescData
 }
 
-var file_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_chat_proto_goTypes = []interface{}{
 	(*ChatRoomInfo)(nil),      // 0: chat.ChatRoomInfo
 	(*ChatMessage)(nil),       // 1: chat.ChatMessage
@@ -1029,28 +1159,32 @@ var file_chat_proto_goTypes = []interface{}{
 	(*ChatMsgNotify)(nil),     // 10: chat.ChatMsgNotify
 	(*ChatGetHistoryReq)(nil), // 11: chat.ChatGetHistoryReq
 	(*ChatGetHistoryRes)(nil), // 12: chat.ChatGetHistoryRes
-	(*ChatCloseRoomReq)(nil),  // 13: chat.ChatCloseRoomReq
-	(*ChatCloseRoomRes)(nil),  // 14: chat.ChatCloseRoomRes
-	(*common.Result)(nil),     // 15: common.Result
+	(*ChatListRoomReq)(nil),   // 13: chat.ChatListRoomReq
+	(*ChatListRoomRes)(nil),   // 14: chat.ChatListRoomRes
+	(*ChatCloseRoomReq)(nil),  // 15: chat.ChatCloseRoomReq
+	(*ChatCloseRoomRes)(nil),  // 16: chat.ChatCloseRoomRes
+	(*common.Result)(nil),     // 17: common.Result
 }
 var file_chat_proto_depIdxs = []int32{
-	15, // 0: chat.ChatCreateRoomRes.result:type_name -> common.Result
+	17, // 0: chat.ChatCreateRoomRes.result:type_name -> common.Result
 	0,  // 1: chat.ChatCreateRoomRes.room:type_name -> chat.ChatRoomInfo
-	15, // 2: chat.ChatJoinRoomRes.result:type_name -> common.Result
+	17, // 2: chat.ChatJoinRoomRes.result:type_name -> common.Result
 	0,  // 3: chat.ChatJoinRoomRes.room:type_name -> chat.ChatRoomInfo
 	1,  // 4: chat.ChatJoinRoomRes.recent_msgs:type_name -> chat.ChatMessage
-	15, // 5: chat.ChatLeaveRoomRes.result:type_name -> common.Result
-	15, // 6: chat.ChatSendMsgRes.result:type_name -> common.Result
+	17, // 5: chat.ChatLeaveRoomRes.result:type_name -> common.Result
+	17, // 6: chat.ChatSendMsgRes.result:type_name -> common.Result
 	1,  // 7: chat.ChatSendMsgRes.msg:type_name -> chat.ChatMessage
 	1,  // 8: chat.ChatMsgNotify.msg:type_name -> chat.ChatMessage
-	15, // 9: chat.ChatGetHistoryRes.result:type_name -> common.Result
+	17, // 9: chat.ChatGetHistoryRes.result:type_name -> common.Result
 	1,  // 10: chat.ChatGetHistoryRes.msgs:type_name -> chat.ChatMessage
-	15, // 11: chat.ChatCloseRoomRes.result:type_name -> common.Result
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	17, // 11: chat.ChatListRoomRes.result:type_name -> common.Result
+	0,  // 12: chat.ChatListRoomRes.rooms:type_name -> chat.ChatRoomInfo
+	17, // 13: chat.ChatCloseRoomRes.result:type_name -> common.Result
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_chat_proto_init() }
@@ -1216,7 +1350,7 @@ func file_chat_proto_init() {
 			}
 		}
 		file_chat_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ChatCloseRoomReq); i {
+			switch v := v.(*ChatListRoomReq); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1228,6 +1362,30 @@ func file_chat_proto_init() {
 			}
 		}
 		file_chat_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ChatListRoomRes); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_chat_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ChatCloseRoomReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_chat_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ChatCloseRoomRes); i {
 			case 0:
 				return &v.state
@@ -1246,7 +1404,7 @@ func file_chat_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_chat_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -13,6 +13,7 @@ import (
 	"github.com/gmaker/luffa/common/go/net"
 	"github.com/gmaker/luffa/common/go/redis"
 	"github.com/gmaker/luffa/common/go/rpc"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/gmaker/luffa/common/go/trace"
 	chatpb "github.com/gmaker/luffa/gen/go/chat"
 	commonpb "github.com/gmaker/luffa/gen/go/common"
@@ -35,6 +36,8 @@ const (
 	CmdChatGetHistoryRes = uint32(protocol.CmdChat_CMD_CHAT_GET_HISTORY_RES)
 	CmdChatCloseRoomReq  = uint32(protocol.CmdChat_CMD_CHAT_CLOSE_ROOM_REQ)
 	CmdChatCloseRoomRes  = uint32(protocol.CmdChat_CMD_CHAT_CLOSE_ROOM_RES)
+	CmdChatListRoomReq   = uint32(protocol.CmdChat_CMD_CHAT_LIST_ROOM_REQ)
+	CmdChatListRoomRes   = uint32(protocol.CmdChat_CMD_CHAT_LIST_ROOM_RES)
 
 	CmdMySQLExec     = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_EXEC)
 	CmdMySQLExecRes  = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_EXEC_RES)
@@ -48,6 +51,7 @@ const (
 type DBProxyClient interface {
 	Connect() error
 	Call(ctx context.Context, cmdID uint32, payload []byte) (*net.Packet, error)
+	OnPacket(pkt *net.Packet)
 }
 
 type ChatService struct {
@@ -105,6 +109,9 @@ func HandlePacket(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, srv *net
 	case CmdChatCloseRoomReq:
 		log.Infof("[%s] close_room req", traceID)
 		HandleCloseRoom(conn, pkt, svc, traceID)
+	case CmdChatListRoomReq:
+		log.Infof("[%s] list_room req", traceID)
+		HandleListRooms(conn, pkt, svc, traceID)
 	default:
 		log.Warnf("unknown cmd_id: 0x%08X", pkt.CmdID)
 	}
@@ -174,6 +181,7 @@ func HandleCreateRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trac
 			"created_at": now,
 		})
 		svc.Redis.Set(ctx, roomInfoKey(uint64(roomID)), string(info), 0)
+		svc.Redis.RawClient().ZAdd(ctx, "chat:rooms:active", goredis.Z{Score: float64(now), Member: strconv.FormatInt(roomID, 10)})
 	} else {
 		svc.memMu.Lock()
 		svc.memRooms[uint64(roomID)] = roomInfo
@@ -227,6 +235,7 @@ func HandleJoinRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceI
 	// Redis 记录成员
 	if svc.Redis != nil {
 		svc.Redis.RawClient().SAdd(ctx, roomMembersKey(req.RoomId), req.PlayerId).Result()
+		svc.Redis.RawClient().SAdd(ctx, playerRoomsKey(req.PlayerId), req.RoomId).Result()
 	}
 
 	// 获取近期消息
@@ -282,6 +291,7 @@ func HandleLeaveRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trace
 
 	if svc.Redis != nil {
 		svc.Redis.RawClient().SRem(ctx, roomMembersKey(req.RoomId), req.PlayerId).Result()
+		svc.Redis.RawClient().SRem(ctx, playerRoomsKey(req.PlayerId), req.RoomId).Result()
 	}
 
 	sendProto(conn, pkt.SeqID, CmdChatLeaveRoomRes, &chatpb.ChatLeaveRoomRes{
@@ -454,6 +464,7 @@ func HandleCloseRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trace
 		})
 		svc.Redis.Set(ctx, roomInfoKey(req.RoomId), string(info), 0)
 		svc.Redis.RawClient().Del(ctx, roomMembersKey(req.RoomId)).Result()
+		svc.Redis.RawClient().ZRem(ctx, "chat:rooms:active", strconv.FormatUint(req.RoomId, 10)).Result()
 	}
 	svc.memMu.Lock()
 	if r, ok := svc.memRooms[req.RoomId]; ok {
@@ -469,6 +480,113 @@ func HandleCloseRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trace
 
 	sendProto(conn, pkt.SeqID, CmdChatCloseRoomRes, &chatpb.ChatCloseRoomRes{
 		Result: &commonpb.Result{Ok: true},
+	})
+}
+
+func HandleListRooms(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string) {
+	var req chatpb.ChatListRoomReq
+	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
+		sendProto(conn, pkt.SeqID, CmdChatListRoomRes, &chatpb.ChatListRoomRes{
+			Result: &commonpb.Result{Ok: false, Code: 400, Msg: "bad request"},
+		})
+		return
+	}
+
+	ctx := trace.WithContext(context.Background(), traceID)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	page := req.Page
+	if page == 0 {
+		page = 1
+	}
+	limit := req.Limit
+	if limit == 0 || limit > 100 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	var rooms []*chatpb.ChatRoomInfo
+	var total uint32
+
+	if svc.DB != nil {
+		// 先查总数
+		countSql := "SELECT COUNT(*) AS cnt FROM chat_rooms WHERE status = 0"
+		countReq := &dbproxypb.MySQLQueryReq{Uid: 1, Sql: countSql}
+		countData, _ := proto.Marshal(countReq)
+		countResPkt, err := svc.DB.Call(ctx, CmdMySQLQuery, countData)
+		if err == nil && countResPkt != nil {
+			var countRes dbproxypb.MySQLQueryRes
+			if proto.Unmarshal(countResPkt.Payload, &countRes) == nil && countRes.Ok && len(countRes.Rows) > 0 {
+				for _, col := range countRes.Rows[0].Columns {
+					if col.Name == "cnt" {
+						cnt, _ := strconv.ParseUint(col.Value, 10, 32)
+						total = uint32(cnt)
+						break
+					}
+				}
+			}
+		}
+
+		// 查列表
+		listSql := "SELECT room_id, name, creator_id, status, created_at, closed_at FROM chat_rooms WHERE status = 0 ORDER BY created_at DESC LIMIT ? OFFSET ?"
+		listReq := &dbproxypb.MySQLQueryReq{Uid: 1, Sql: listSql, Args: []string{strconv.FormatUint(uint64(limit), 10), strconv.FormatUint(uint64(offset), 10)}}
+		listData, _ := proto.Marshal(listReq)
+		listResPkt, err := svc.DB.Call(ctx, CmdMySQLQuery, listData)
+		if err == nil && listResPkt != nil {
+			var listRes dbproxypb.MySQLQueryRes
+			if proto.Unmarshal(listResPkt.Payload, &listRes) == nil && listRes.Ok {
+				for _, row := range listRes.Rows {
+					rooms = append(rooms, parseRoomRow(row))
+				}
+			}
+		}
+	} else if svc.Redis != nil {
+		// Redis 模式：从有序集合 chat:rooms:active 获取
+		roomIDs, _ := svc.Redis.RawClient().ZRevRange(ctx, "chat:rooms:active", int64(offset), int64(offset+limit)-1).Result()
+		for _, ridStr := range roomIDs {
+			rid, _ := strconv.ParseUint(ridStr, 10, 64)
+			if room, err := svc.GetRoom(ctx, rid); err == nil && room.Status == 0 {
+				rooms = append(rooms, room)
+			}
+		}
+		// 总数
+		cnt, _ := svc.Redis.RawClient().ZCard(ctx, "chat:rooms:active").Result()
+		total = uint32(cnt)
+	} else {
+		// 内存回退
+		svc.memMu.RLock()
+		var all []*chatpb.ChatRoomInfo
+		for _, r := range svc.memRooms {
+			if r.Status == 0 {
+				all = append(all, r)
+			}
+		}
+		svc.memMu.RUnlock()
+		// 简单按 created_at 降序
+		for i := 0; i < len(all)-1; i++ {
+			for j := i + 1; j < len(all); j++ {
+				if all[i].CreatedAt < all[j].CreatedAt {
+					all[i], all[j] = all[j], all[i]
+				}
+			}
+		}
+		total = uint32(len(all))
+		start := offset
+		if start > uint32(len(all)) {
+			start = uint32(len(all))
+		}
+		end := start + limit
+		if end > uint32(len(all)) {
+			end = uint32(len(all))
+		}
+		rooms = all[start:end]
+	}
+
+	sendProto(conn, pkt.SeqID, CmdChatListRoomRes, &chatpb.ChatListRoomRes{
+		Result: &commonpb.Result{Ok: true},
+		Rooms:  rooms,
+		Total:  total,
 	})
 }
 
@@ -562,6 +680,10 @@ func roomMembersKey(roomID uint64) string {
 	return fmt.Sprintf("chat:room:%d:members", roomID)
 }
 
+func playerRoomsKey(playerID uint64) string {
+	return fmt.Sprintf("player:%d:rooms", playerID)
+}
+
 // ==================== Helper ====================
 
 func sendProto(conn *net.TCPConn, seqID uint32, cmdID uint32, msg proto.Message) {
@@ -646,6 +768,11 @@ func NewDBProxyClient(addrs []string) *dbProxyClient {
 func NewDBProxyClientWithPool(pool *net.UpstreamPool) *dbProxyClient {
 	c := &dbProxyClient{pool: pool}
 	c.rpc = rpc.NewClientWithPool(pool)
+	pool.SetOnData(func(_ *net.TCPConn, pkt *net.Packet) {
+		if c.rpc != nil {
+			c.rpc.OnPacket(pkt)
+		}
+	})
 	return c
 }
 
@@ -653,6 +780,12 @@ type dbProxyClient struct {
 	addrs []string
 	pool  *net.UpstreamPool
 	rpc   *rpc.Client
+}
+
+func (c *dbProxyClient) OnPacket(pkt *net.Packet) {
+	if c.rpc != nil {
+		c.rpc.OnPacket(pkt)
+	}
 }
 
 func (c *dbProxyClient) Connect() error {

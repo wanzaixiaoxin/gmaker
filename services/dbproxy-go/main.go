@@ -31,6 +31,9 @@ type DBProxyConfig struct {
 		Type  string   `json:"type"`
 		Addrs []string `json:"addrs"`
 	} `json:"discovery"`
+	MySQL struct {
+		DSN string `json:"dsn"`
+	} `json:"mysql"`
 }
 
 func main() {
@@ -54,9 +57,13 @@ func main() {
 
 	// MySQL
 	var mproxy *mysql.Proxy
-	if *mysqlDSNs != "" {
+	dsnList := *mysqlDSNs
+	if dsnList == "" && cfg.MySQL.DSN != "" {
+		dsnList = cfg.MySQL.DSN
+	}
+	if dsnList != "" {
 		var cfgs []mysql.Config
-		for _, dsn := range strings.Split(*mysqlDSNs, ",") {
+		for _, dsn := range strings.Split(dsnList, ",") {
 			cfgs = append(cfgs, mysql.Config{
 				DSN:         dsn,
 				MaxOpenConn: 20,

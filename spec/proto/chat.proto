@@ -92,6 +92,19 @@ message ChatGetHistoryRes {
     repeated ChatMessage msgs   = 2;
 }
 
+// ==================== 聊天室列表 ====================
+
+message ChatListRoomReq {
+    uint32 page  = 1;  // 从 1 开始
+    uint32 limit = 2;  // 默认 20，最大 100
+}
+
+message ChatListRoomRes {
+    common.Result        result = 1;
+    repeated ChatRoomInfo rooms  = 2;
+    uint32               total   = 3;
+}
+
 // ==================== 关闭聊天室 ====================
 
 message ChatCloseRoomReq {

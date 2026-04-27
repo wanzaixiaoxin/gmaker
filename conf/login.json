@@ -1,0 +1,27 @@
+{
+  "service": {
+    "service_type": "login",
+    "node_id": "login-1",
+    "log_level": "info",
+    "log_file": "",
+    "metrics_addr": ":9084"
+  },
+  "network": {
+    "host": "0.0.0.0",
+    "port": 8084
+  },
+  "discovery": {
+    "type": "registry",
+    "addrs": ["127.0.0.1:2379"]
+  },
+  "redis": {
+    "addrs": ["192.168.0.85:6379"],
+    "password": "",
+    "pool_size": 20
+  },
+  "dbproxy": {
+    "nodes": [
+      {"host": "127.0.0.1", "port": 3307}
+    ]
+  }
+}

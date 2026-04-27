@@ -128,8 +128,11 @@ func main() {
 
 	// 通过服务发现订阅 DBProxy
 	var playerSvc *service.PlayerService
+	var dbClient *dbproxy.Client
 	dbproxyOnData := func(_ *net.TCPConn, pkt *net.Packet) {
-		// DBProxy 响应由 rpc.Client 处理，此回调在 NewDBProxyClient 中通过 pool 绑定
+		if dbClient != nil {
+			dbClient.OnPacket(pkt)
+		}
 	}
 	upstreamMgr := discovery.NewUpstreamManager(sd)
 	upstreamMgr.AddInterest("dbproxy", dbproxyOnData)
@@ -149,7 +152,7 @@ func main() {
 		log.Infof("Biz discovered dbproxy from registry, nodes=%d", dbproxyPool.TotalCount())
 	}
 
-	dbClient := dbproxy.NewClient(dbproxyPool)
+	dbClient = dbproxy.NewClient(dbproxyPool)
 	if err := dbClient.Connect(); err != nil {
 		log.Warnf("connect dbproxy failed: %v, running without dbproxy", err)
 	} else {

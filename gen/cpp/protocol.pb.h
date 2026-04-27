@@ -368,6 +368,8 @@ enum CmdBiz : int {
   CMD_BIZ_PONG = 65541,
   CMD_BIZ_UPDATE_PLAYER_REQ = 65542,
   CMD_BIZ_UPDATE_PLAYER_RES = 65543,
+  CMD_BIZ_GET_PLAYER_ROOMS_REQ = 65544,
+  CMD_BIZ_GET_PLAYER_ROOMS_RES = 65545,
   CmdBiz_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   CmdBiz_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -378,11 +380,11 @@ extern const uint32_t CmdBiz_internal_data_[];
 inline constexpr CmdBiz CmdBiz_MIN =
     static_cast<CmdBiz>(0);
 inline constexpr CmdBiz CmdBiz_MAX =
-    static_cast<CmdBiz>(65543);
+    static_cast<CmdBiz>(65545);
 [[nodiscard]] inline bool CmdBiz_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, CmdBiz_internal_data_);
 }
-inline constexpr int CmdBiz_ARRAYSIZE = 65543 + 1;
+inline constexpr int CmdBiz_ARRAYSIZE = 65545 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 CmdBiz_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(CmdBiz) {
@@ -415,6 +417,8 @@ enum CmdChat : int {
   CMD_CHAT_GET_HISTORY_RES = 196618,
   CMD_CHAT_CLOSE_ROOM_REQ = 196619,
   CMD_CHAT_CLOSE_ROOM_RES = 196620,
+  CMD_CHAT_LIST_ROOM_REQ = 196621,
+  CMD_CHAT_LIST_ROOM_RES = 196622,
   CmdChat_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   CmdChat_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -425,11 +429,11 @@ extern const uint32_t CmdChat_internal_data_[];
 inline constexpr CmdChat CmdChat_MIN =
     static_cast<CmdChat>(0);
 inline constexpr CmdChat CmdChat_MAX =
-    static_cast<CmdChat>(196620);
+    static_cast<CmdChat>(196622);
 [[nodiscard]] inline bool CmdChat_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, CmdChat_internal_data_);
 }
-inline constexpr int CmdChat_ARRAYSIZE = 196620 + 1;
+inline constexpr int CmdChat_ARRAYSIZE = 196622 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 CmdChat_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(CmdChat) {

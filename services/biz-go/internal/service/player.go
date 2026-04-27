@@ -13,6 +13,7 @@ import (
 	"github.com/gmaker/luffa/services/biz-go/internal/dbproxy"
 
 	bizpb "github.com/gmaker/luffa/gen/go/biz"
+	chatpb "github.com/gmaker/luffa/gen/go/chat"
 	dbproxypb "github.com/gmaker/luffa/gen/go/dbproxy"
 	protocol "github.com/gmaker/luffa/gen/go/protocol"
 	"google.golang.org/protobuf/proto"
@@ -155,6 +156,37 @@ func (s *PlayerService) SetToken(ctx context.Context, playerID uint64, token str
 	}
 	key := fmt.Sprintf("token:%d", playerID)
 	return s.Redis.Set(ctx, key, token, time.Duration(ttlSec)*time.Second)
+}
+
+// GetPlayerRooms 获取玩家加入的聊天室列表（从 Redis）
+func (s *PlayerService) GetPlayerRooms(ctx context.Context, playerID uint64) ([]*chatpb.ChatRoomInfo, error) {
+	if s.Redis == nil {
+		return nil, fmt.Errorf("redis not available")
+	}
+	key := fmt.Sprintf("player:%d:rooms", playerID)
+	roomIDs, err := s.Redis.RawClient().SMembers(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	var rooms []*chatpb.ChatRoomInfo
+	for _, ridStr := range roomIDs {
+		rid, _ := strconv.ParseUint(ridStr, 10, 64)
+		if rid == 0 {
+			continue
+		}
+		// 查询房间基本信息（从 Redis room info）
+		infoKey := fmt.Sprintf("chat:room:%d:info", rid)
+		infoStr, err := s.Redis.Get(ctx, infoKey)
+		if err != nil || infoStr == "" {
+			// Redis 中没有，跳过（或可从 MySQL 查，简化处理）
+			continue
+		}
+		var info chatpb.ChatRoomInfo
+		if proto.Unmarshal([]byte(infoStr), &info) == nil {
+			rooms = append(rooms, &info)
+		}
+	}
+	return rooms, nil
 }
 
 // EnsurePlayerTable 确保 players 表存在

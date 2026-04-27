@@ -2,9 +2,7 @@ package handler
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -14,21 +12,21 @@ import (
 	"github.com/gmaker/luffa/services/biz-go/internal/service"
 
 	bizpb "github.com/gmaker/luffa/gen/go/biz"
+	chatpb "github.com/gmaker/luffa/gen/go/chat"
 	commonpb "github.com/gmaker/luffa/gen/go/common"
-	loginpb "github.com/gmaker/luffa/gen/go/login"
 	protocol "github.com/gmaker/luffa/gen/go/protocol"
 	"google.golang.org/protobuf/proto"
 )
 
 const (
-	cmdLoginReq        = uint32(protocol.CmdCommon_CMD_CMN_LOGIN_REQ)
-	cmdLoginRes        = uint32(protocol.CmdCommon_CMD_CMN_LOGIN_RES)
-	cmdGetPlayerReq    = uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_REQ)
-	cmdGetPlayerRes    = uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_RES)
-	cmdUpdatePlayerReq = uint32(protocol.CmdBiz_CMD_BIZ_UPDATE_PLAYER_REQ)
-	cmdUpdatePlayerRes = uint32(protocol.CmdBiz_CMD_BIZ_UPDATE_PLAYER_RES)
-	cmdPing            = uint32(protocol.CmdBiz_CMD_BIZ_PING)
-	cmdPong            = uint32(protocol.CmdBiz_CMD_BIZ_PONG)
+	cmdGetPlayerReq       = uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_REQ)
+	cmdGetPlayerRes       = uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_RES)
+	cmdUpdatePlayerReq    = uint32(protocol.CmdBiz_CMD_BIZ_UPDATE_PLAYER_REQ)
+	cmdUpdatePlayerRes    = uint32(protocol.CmdBiz_CMD_BIZ_UPDATE_PLAYER_RES)
+	cmdGetPlayerRoomsReq  = uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_ROOMS_REQ)
+	cmdGetPlayerRoomsRes  = uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_ROOMS_RES)
+	cmdPing               = uint32(protocol.CmdBiz_CMD_BIZ_PING)
+	cmdPong               = uint32(protocol.CmdBiz_CMD_BIZ_PONG)
 )
 
 // HandleBizPacket 业务包分发
@@ -47,51 +45,20 @@ func HandleBizPacket(conn *net.TCPConn, pkt *net.Packet, svc *service.PlayerServ
 	}
 
 	switch pkt.CmdID {
-	case cmdLoginReq:
-		log.Infof("[%s] login req", traceID)
-		handleLogin(conn, pkt, svc, traceID, gatewayConnID)
 	case cmdGetPlayerReq:
 		log.Infof("[%s] get_player req", traceID)
 		handleGetPlayer(conn, pkt, svc, traceID, gatewayConnID)
 	case cmdUpdatePlayerReq:
 		log.Infof("[%s] update_player req", traceID)
 		handleUpdatePlayer(conn, pkt, svc, traceID, gatewayConnID)
+	case cmdGetPlayerRoomsReq:
+		log.Infof("[%s] get_player_rooms req", traceID)
+		handleGetPlayerRooms(conn, pkt, svc, traceID, gatewayConnID)
 	case cmdPing:
 		handlePing(conn, pkt, traceID, gatewayConnID)
 	default:
 		log.Warnf("unknown cmd_id: 0x%08X", pkt.CmdID)
 	}
-}
-
-func handleLogin(conn *net.TCPConn, pkt *net.Packet, svc *service.PlayerService, traceID string, gatewayConnID uint64) {
-	var req loginpb.LoginReq
-	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
-		sendLoginRes(conn, pkt.SeqID, 1, "", 0, 0, gatewayConnID)
-		return
-	}
-
-	ctx := trace.WithContext(context.Background(), traceID)
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-
-	player, err := svc.QueryPlayerByAccount(ctx, req.Account)
-	if err != nil {
-		player, err = svc.CreatePlayer(ctx, req.Account, hashPassword(req.Password))
-		if err != nil {
-			svc.Log.WithTrace(traceID).Errorf("create player failed: %v", err)
-			sendLoginRes(conn, pkt.SeqID, 1, "", 0, 0, gatewayConnID)
-			return
-		}
-	}
-
-	token := generateToken(player.PlayerId)
-	expireAt := uint64(time.Now().Add(24 * time.Hour).Unix())
-
-	if err := svc.SetToken(ctx, player.PlayerId, token, 24*3600); err != nil {
-		svc.Log.WithTrace(traceID).Errorf("set token failed: %v", err)
-	}
-
-	sendLoginRes(conn, pkt.SeqID, 0, token, player.PlayerId, expireAt, gatewayConnID)
 }
 
 func handleGetPlayer(conn *net.TCPConn, pkt *net.Packet, svc *service.PlayerService, traceID string, gatewayConnID uint64) {
@@ -132,6 +99,26 @@ func handleUpdatePlayer(conn *net.TCPConn, pkt *net.Packet, svc *service.PlayerS
 	sendUpdatePlayerRes(conn, pkt.SeqID, 0, gatewayConnID)
 }
 
+func handleGetPlayerRooms(conn *net.TCPConn, pkt *net.Packet, svc *service.PlayerService, traceID string, gatewayConnID uint64) {
+	var req bizpb.GetPlayerRoomsReq
+	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
+		sendGetPlayerRoomsRes(conn, pkt.SeqID, 1, nil, gatewayConnID)
+		return
+	}
+
+	ctx := trace.WithContext(context.Background(), traceID)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	rooms, err := svc.GetPlayerRooms(ctx, req.PlayerId)
+	if err != nil {
+		svc.Log.WithTrace(traceID).Errorf("get player rooms failed: %v", err)
+		sendGetPlayerRoomsRes(conn, pkt.SeqID, 1, nil, gatewayConnID)
+		return
+	}
+	sendGetPlayerRoomsRes(conn, pkt.SeqID, 0, rooms, gatewayConnID)
+}
+
 func handlePing(conn *net.TCPConn, pkt *net.Packet, traceID string, gatewayConnID uint64) {
 	var req bizpb.Ping
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
@@ -141,16 +128,6 @@ func handlePing(conn *net.TCPConn, pkt *net.Packet, traceID string, gatewayConnI
 	res := &bizpb.Pong{ClientTime: req.ClientTime, ServerTime: uint64(time.Now().UnixMilli())}
 	logger.Info(fmt.Sprintf("[Flow] Biz -> Gateway: cmd=0x%08X seq=%d (pong)", cmdPong, pkt.SeqID))
 	SendProto(conn, pkt.SeqID, cmdPong, res, gatewayConnID)
-}
-
-func sendLoginRes(conn *net.TCPConn, seqID uint32, code uint32, token string, playerID uint64, expireAt uint64, gatewayConnID uint64) {
-	res := &loginpb.LoginRes{
-		Result:   &commonpb.Result{Ok: code == 0, Code: code},
-		Token:    token,
-		PlayerId: playerID,
-		ExpireAt: expireAt,
-	}
-	SendProto(conn, seqID, cmdLoginRes, res, gatewayConnID)
 }
 
 func sendGetPlayerRes(conn *net.TCPConn, seqID uint32, code uint32, player *bizpb.PlayerBase, gatewayConnID uint64) {
@@ -166,6 +143,14 @@ func sendUpdatePlayerRes(conn *net.TCPConn, seqID uint32, code uint32, gatewayCo
 		Result: &commonpb.Result{Ok: code == 0, Code: code},
 	}
 	SendProto(conn, seqID, cmdUpdatePlayerRes, res, gatewayConnID)
+}
+
+func sendGetPlayerRoomsRes(conn *net.TCPConn, seqID uint32, code uint32, rooms []*chatpb.ChatRoomInfo, gatewayConnID uint64) {
+	res := &bizpb.GetPlayerRoomsRes{
+		Result: &commonpb.Result{Ok: code == 0, Code: code},
+		Rooms:  rooms,
+	}
+	SendProto(conn, seqID, cmdGetPlayerRoomsRes, res, gatewayConnID)
 }
 
 // SendProto 发送 protobuf 响应给 Gateway
@@ -191,14 +176,4 @@ func SendProto(conn *net.TCPConn, seqID uint32, cmdID uint32, msg proto.Message,
 		Payload: payload,
 	}
 	conn.SendPacket(pkt)
-}
-
-func hashPassword(pwd string) string {
-	h := sha256.Sum256([]byte(pwd))
-	return hex.EncodeToString(h[:])
-}
-
-func generateToken(playerID uint64) string {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%d:%d", playerID, time.Now().UnixNano())))
-	return hex.EncodeToString(h[:16])
 }

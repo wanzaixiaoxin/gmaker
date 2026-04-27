@@ -57,6 +57,13 @@ func (p *UpstreamPool) AddNode(addr string) {
 	p.nodes = append(p.nodes, n)
 }
 
+// SetOnData 动态设置收到数据时的回调（用于 Registry 发现模式后绑定 rpc.Client）
+func (p *UpstreamPool) SetOnData(onData func(*TCPConn, *Packet)) {
+	p.mu.Lock()
+	p.onData = onData
+	p.mu.Unlock()
+}
+
 // RemoveNode 移除节点
 func (p *UpstreamPool) RemoveNode(addr string) {
 	p.mu.Lock()

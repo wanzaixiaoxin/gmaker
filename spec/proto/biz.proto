@@ -4,6 +4,7 @@ package biz;
 option go_package = "github.com/gmaker/luffa/gen/go/biz";
 
 import "common.proto";
+import "chat.proto";
 
 // ==================== 玩家基础数据 ====================
 
@@ -54,6 +55,17 @@ message UpdatePlayerReq {
 
 message UpdatePlayerRes {
     common.Result result = 1;
+}
+
+// ==================== 用户聊天室列表 ====================
+
+message GetPlayerRoomsReq {
+    uint64 player_id = 1;
+}
+
+message GetPlayerRoomsRes {
+    common.Result        result = 1;
+    repeated chat.ChatRoomInfo rooms = 2;
 }
 
 // ==================== 心跳保活（业务层） ====================
