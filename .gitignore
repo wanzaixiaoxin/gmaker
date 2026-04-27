@@ -43,8 +43,11 @@
 *.dwo
 
 build/
+build*/
 bin/
 .claude/
 .arts/
 .codeartsdoer/
 3rd/protobuf/protobuf-34.1/
+3rd/libuv/
+3rd/rapidjson/

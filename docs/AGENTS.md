@@ -105,12 +105,17 @@ gmaker/
 
 ## 4. 构建与测试命令
 
-### 环境要求（已验证 Windows + MSYS2/MinGW）
-- Go 1.22+
-- protoc 25.1+ + `protoc-gen-go` + `protoc-gen-go-grpc`
-- CMake 3.16+ + MSVC 2022（Windows）或 MinGW
-- etcd（可选；未安装时 Registry 可用 `-store memory` 运行）
-- MySQL 8.0 + Redis 7（仅 Phase 2 测试及完整部署需要）
+### 环境要求（已验证 Windows + MSVC 2022）
+- **Go** 1.22+
+- **CMake** 3.16+ + MSVC 2022（Windows）或 MinGW（Linux）
+- **Protobuf** 34.1+（C++ 库 + `protoc`；CMake 优先找系统安装，其次 `3rd/protobuf/` 本地拷贝）
+- **etcd**（可选；未安装时 Registry 可用 `-store memory` 运行）
+- **MySQL 8.0 + Redis 7**（仅 Phase 2 测试及完整部署需要）
+
+> **第三方依赖获取策略**：
+> - `hiredis` → Git Submodule（`git submodule update --init`）
+> - `libuv`、`rapidjson`、`toml11` → CMake `FetchContent`（自动下载/编译，零配置）
+> - `protobuf` → 需预先安装（系统包管理器）或手动放置本地编译产物到 `3rd/protobuf/protobuf-34.1/`
 
 ### 常用命令
 

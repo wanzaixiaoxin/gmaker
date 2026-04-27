@@ -71,17 +71,23 @@ if errorlevel 1 (
     goto summary
 )
 
-where protoc >nul 2>nul
-if errorlevel 1 (
-    if not exist "C:\Program Files\protobuf\include" (
-        if not exist "C:\vcpkg\installed" (
-            if not exist "3rd\protobuf\protobuf-34.1\src\google\protobuf" (
-                echo   [SKIP] Protobuf C++ not detected.
-                echo          Install via vcpkg: vcpkg install protobuf
-                goto summary
-            )
-        )
-    )
+:: 检查 protobuf C++ 库（优先本地预编译，其次系统安装）
+set "PROTOBUF_READY=0"
+if exist "3rd\protobuf\protobuf-34.1\build\Release\protoc.exe" set "PROTOBUF_READY=1"
+where protoc >nul 2>nul && set "PROTOBUF_READY=1"
+
+if "%PROTOBUF_READY%"=="0" (
+    echo   [SKIP] Protobuf C++ library not found.
+    echo.
+    echo          To build C++ services, install protobuf first:
+    echo            vcpkg install protobuf                      ^(recommended on Windows^)
+    echo            sudo apt install libprotobuf-dev protobuf-compiler   ^(Ubuntu/Debian^)
+    echo            brew install protobuf                       ^(macOS^)
+    echo.
+    echo          Or place a local prebuilt copy in:
+    echo            3rd\protobuf\protobuf-34.1\
+    echo.
+    goto summary
 )
 
 if not exist build mkdir build

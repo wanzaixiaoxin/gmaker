@@ -8,7 +8,8 @@ GO_SERVICES    := services/registry-go
 CPP_SERVICES   := services/gateway-cpp services/realtime-cpp
 COMMON_GO      := common/go
 COMMON_CPP     := common/cpp/gs
-PROTOC         ?= 3rd/protobuf/protobuf-34.1/build/Release/protoc.exe
+# 优先使用系统 protoc，否则回退到本地预编译路径
+PROTOC         ?= $(shell command -v protoc 2>/dev/null || echo 3rd/protobuf/protobuf-34.1/build/Release/protoc.exe)
 
 # ==================== Protobuf 生成 ====================
 proto:

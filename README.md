@@ -74,14 +74,36 @@ gmaker/
 - **Go** 1.22+
 - **CMake** 3.16+
 - **MSVC 2022**（C++ 服务）
+- **Protobuf** 34.1+（C++ 开发库 + `protoc` 编译器；见下方安装说明）
 - **etcd**（可选；未安装时 Registry 可用 `-store memory` 运行）
 - **MySQL 8.0 + Redis 7**（仅 Phase 2 测试及完整部署需要）
 
-> 本项目已内置 protobuf 34.1 源码与预编译产物于 `3rd/protobuf/`，无需额外安装 protoc。
+> **依赖获取方式**：
+> - `hiredis` → Git Submodule（`git submodule update --init`）
+> - `rapidjson`、`libuv`、`toml11` → CMake `FetchContent`（首次构建自动下载）
+> - `protobuf` → **需自行安装**（系统包管理器或本地编译；见下方）
 
 ---
 
 ## 编译
+
+### 安装 Protobuf（C++ 服务必需）
+
+CMake 优先查找**系统安装的 protobuf**，其次查找 `3rd/protobuf/protobuf-34.1/` 本地拷贝。
+
+```bash
+# Windows (vcpkg 推荐)
+vcpkg install protobuf
+# 然后设置环境变量：set CMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+
+# Ubuntu / Debian
+sudo apt install libprotobuf-dev protobuf-compiler
+
+# macOS
+brew install protobuf
+```
+
+> 如果你无法使用包管理器，可将 protobuf 34.1 源码下载到 `3rd/protobuf/protobuf-34.1/` 后手动 CMake 编译，或运行 `scripts\setup-deps.bat` 查看详细指引。
 
 ### Windows（推荐）
 

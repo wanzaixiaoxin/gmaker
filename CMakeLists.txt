@@ -9,17 +9,31 @@ if(MSVC)
 endif()
 
 # ==================== 第三方库 ====================
-# libuv: 异步 I/O 库（C++ 网络层基础）
-# 使用预编译静态库 + 头文件方式引入（不再 add_subdirectory 编译源码）
+# ==================== libuv: 异步 I/O 库 ====================
+# 优先查找本地预编译库（向后兼容），否则用 FetchContent 自动下载编译
 set(UV_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rd/libuv/include)
 find_library(UV_LIB uv
     PATHS ${CMAKE_CURRENT_SOURCE_DIR}/3rd/libuv/lib/win-x64
     NO_DEFAULT_PATH
 )
-if(NOT UV_LIB)
-    message(FATAL_ERROR "libuv prebuilt library not found. Please build libuv and place the library in 3rd/libuv/lib/<platform>/")
+
+if(UV_LIB)
+    message(STATUS "Found local libuv: ${UV_LIB}")
+    set(UV_TARGET ${UV_LIB})
+else()
+    message(STATUS "Local libuv not found, fetching via FetchContent...")
+    include(FetchContent)
+    FetchContent_Declare(
+        libuv
+        GIT_REPOSITORY https://github.com/libuv/libuv.git
+        GIT_TAG        v1.48.0
+    )
+    set(LIBUV_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(libuv)
+    set(UV_TARGET uv_a)
+    set(UV_INCLUDE_DIR ${libuv_SOURCE_DIR}/include)
+    message(STATUS "libuv fetched and built as static target: uv_a")
 endif()
-message(STATUS "Found libuv: ${UV_LIB}")
 
 include(FetchContent)
 
@@ -32,60 +46,108 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(toml11)
 
-# rapidjson: 高性能 JSON 解析/生成库（header-only，本地拷贝）
-set(RAPIDJSON_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rd)
+# ==================== rapidjson: header-only JSON 库 ====================
+# 优先查找本地拷贝，否则 FetchContent 自动下载
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/3rd/rapidjson/rapidjson.h)
+    set(RAPIDJSON_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rd)
+    message(STATUS "Found local rapidjson")
+else()
+    message(STATUS "Local rapidjson not found, fetching via FetchContent...")
+    include(FetchContent)
+    FetchContent_Declare(
+        rapidjson
+        URL https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz
+        URL_HASH SHA256=bf7ced29704a1e696fbccf2a2b4ea068e7774fa37f6d7dd4039d0787f8bed98e
+    )
+    FetchContent_GetProperties(rapidjson)
+    if(NOT rapidjson_POPULATED)
+        FetchContent_Populate(rapidjson)
+    endif()
+    set(RAPIDJSON_INCLUDE_DIR ${rapidjson_SOURCE_DIR}/include)
+    message(STATUS "rapidjson fetched: ${rapidjson_SOURCE_DIR}")
+endif()
 
 # hiredis: Redis C 客户端库（本地源码构建）
 set(ENABLE_SSL OFF CACHE BOOL "" FORCE)
 set(DISABLE_TESTS ON CACHE BOOL "" FORCE)
 add_subdirectory(3rd/hiredis)
 
-# protobuf: 协议序列化库（从本地构建树引入）
-set(PROTOBUF_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/3rd/protobuf/protobuf-34.1)
-set(PROTOBUF_INCLUDE_DIR ${PROTOBUF_ROOT}/src)
-set(PROTOBUF_LIB_DIR ${PROTOBUF_ROOT}/build/Release)
-set(PROTOC_EXECUTABLE ${PROTOBUF_LIB_DIR}/protoc.exe)
+# ==================== protobuf: 协议序列化库 ====================
+# 优先级：1) 系统安装 (find_package)  2) 本地 3rd/protobuf/  3) 报错并提示安装
+find_package(protobuf CONFIG QUIET)
 
-find_library(PROTOBUF_LIBRARY libprotobuf
-    PATHS ${PROTOBUF_LIB_DIR}
-    NO_DEFAULT_PATH
-)
-if(NOT PROTOBUF_LIBRARY)
-    message(FATAL_ERROR "libprotobuf not found in ${PROTOBUF_LIB_DIR}")
+if(protobuf_FOUND)
+    message(STATUS "Found system protobuf ${protobuf_VERSION}")
+    if(NOT TARGET protobuf::libprotobuf)
+        message(FATAL_ERROR "System protobuf found but target protobuf::libprotobuf is missing. "
+            "This may indicate a broken or partial installation.")
+    endif()
+    # 使用系统 protoc
+    if(TARGET protobuf::protoc)
+        set(CMAKE_PROTOC_EXECUTABLE $<TARGET_FILE:protobuf::protoc>)
+    else()
+        find_program(CMAKE_PROTOC_EXECUTABLE protoc REQUIRED)
+    endif()
+else()
+    message(STATUS "System protobuf not found, falling back to local 3rd/protobuf/")
+
+    set(PROTOBUF_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/3rd/protobuf/protobuf-34.1)
+    set(PROTOBUF_INCLUDE_DIR ${PROTOBUF_ROOT}/src)
+    set(PROTOBUF_LIB_DIR ${PROTOBUF_ROOT}/build/Release)
+    set(PROTOC_EXECUTABLE ${PROTOBUF_LIB_DIR}/protoc.exe)
+
+    find_library(PROTOBUF_LIBRARY libprotobuf
+        PATHS ${PROTOBUF_LIB_DIR}
+        NO_DEFAULT_PATH
+    )
+    if(NOT PROTOBUF_LIBRARY)
+        message(FATAL_ERROR "Protobuf C++ library not found.\n"
+            "Please install protobuf development files for your platform:\n"
+            "  Windows (vcpkg):   vcpkg install protobuf\n"
+            "                     (ensure vcpkg CMake toolchain is set)\n"
+            "  Ubuntu/Debian:     sudo apt install libprotobuf-dev protobuf-compiler\n"
+            "  CentOS/RHEL:       sudo yum install protobuf-devel protobuf-compiler\n"
+            "  macOS:             brew install protobuf\n"
+            "  Arch:              sudo pacman -S protobuf\n"
+            "\n"
+            "Or build locally and place in 3rd/protobuf/protobuf-34.1/:\n"
+            "  1. Download https://github.com/protocolbuffers/protobuf/releases/download/v34.1/protobuf-34.1.zip\n"
+            "  2. cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -Dprotobuf_BUILD_TESTS=OFF\n"
+            "  3. cmake --build build --config Release")
+    endif()
+
+    find_library(UTF8_VALIDITY_LIBRARY libutf8_validity
+        PATHS ${PROTOBUF_ROOT}/build/third_party/utf8_range/Release
+        NO_DEFAULT_PATH
+    )
+    if(NOT UTF8_VALIDITY_LIBRARY)
+        message(FATAL_ERROR "libutf8_validity not found in local protobuf build. "
+            "Your local protobuf build may be incomplete.")
+    endif()
+
+    file(GLOB_RECURSE ABSL_LIBS
+        "${PROTOBUF_ROOT}/build/_deps/absl-build/absl_*.lib"
+    )
+    if(NOT ABSL_LIBS)
+        message(FATAL_ERROR "abseil libraries not found in ${PROTOBUF_ROOT}/build/_deps/absl-build. "
+            "Your local protobuf build may be incomplete.")
+    endif()
+
+    message(STATUS "Found local libprotobuf: ${PROTOBUF_LIBRARY}")
+    message(STATUS "Found local abseil libs: ${ABSL_LIBS}")
+
+    add_library(protobuf::libprotobuf STATIC IMPORTED GLOBAL)
+    set_target_properties(protobuf::libprotobuf PROPERTIES
+        IMPORTED_LOCATION ${PROTOBUF_LIBRARY}
+        INTERFACE_INCLUDE_DIRECTORIES "${PROTOBUF_INCLUDE_DIR};${PROTOBUF_ROOT}/build/_deps/absl-src"
+    )
+    target_link_libraries(protobuf::libprotobuf INTERFACE
+        ${UTF8_VALIDITY_LIBRARY}
+        ${ABSL_LIBS}
+    )
+
+    set(CMAKE_PROTOC_EXECUTABLE ${PROTOC_EXECUTABLE})
 endif()
-
-find_library(UTF8_VALIDITY_LIBRARY libutf8_validity
-    PATHS ${PROTOBUF_ROOT}/build/third_party/utf8_range/Release
-    NO_DEFAULT_PATH
-)
-if(NOT UTF8_VALIDITY_LIBRARY)
-    message(FATAL_ERROR "libutf8_validity not found")
-endif()
-
-# protobuf 34.1 依赖 abseil，收集所有已编译的 absl 静态库
-file(GLOB_RECURSE ABSL_LIBS
-    "${PROTOBUF_ROOT}/build/_deps/absl-build/absl_*.lib"
-)
-if(NOT ABSL_LIBS)
-    message(FATAL_ERROR "abseil libraries not found in ${PROTOBUF_ROOT}/build/_deps/absl-build")
-endif()
-
-message(STATUS "Found libprotobuf: ${PROTOBUF_LIBRARY}")
-message(STATUS "Found abseil libs: ${ABSL_LIBS}")
-
-# 创建 imported target 以保持与现有代码的兼容性
-add_library(protobuf::libprotobuf STATIC IMPORTED GLOBAL)
-set_target_properties(protobuf::libprotobuf PROPERTIES
-    IMPORTED_LOCATION ${PROTOBUF_LIBRARY}
-    INTERFACE_INCLUDE_DIRECTORIES "${PROTOBUF_INCLUDE_DIR};${PROTOBUF_ROOT}/build/_deps/absl-src"
-)
-target_link_libraries(protobuf::libprotobuf INTERFACE
-    ${UTF8_VALIDITY_LIBRARY}
-    ${ABSL_LIBS}
-)
-
-# 若后续需要编译 .proto 文件，可复用此变量
-set(CMAKE_PROTOC_EXECUTABLE ${PROTOC_EXECUTABLE})
 
 # ==================== etcd-cpp-apiv3（可选）====================
 # C++ 服务直接连接 etcd 需要此库。
@@ -196,7 +258,7 @@ target_include_directories(gateway-cpp PRIVATE
     ${UV_INCLUDE_DIR}
     ${RAPIDJSON_INCLUDE_DIR}
 )
-target_link_libraries(gateway-cpp toml11::toml11 protobuf::libprotobuf ${UV_LIB} hiredis)
+target_link_libraries(gateway-cpp toml11::toml11 protobuf::libprotobuf ${UV_TARGET} hiredis)
 if(ENABLE_ETCD_DISCOVERY)
     target_compile_definitions(gateway-cpp PRIVATE ENABLE_ETCD_DISCOVERY=1)
     target_link_libraries(gateway-cpp etcd-cpp-api)
@@ -233,7 +295,7 @@ target_include_directories(realtime-cpp PRIVATE
     ${UV_INCLUDE_DIR}
     ${RAPIDJSON_INCLUDE_DIR}
 )
-target_link_libraries(realtime-cpp toml11::toml11 protobuf::libprotobuf ${UV_LIB} hiredis)
+target_link_libraries(realtime-cpp toml11::toml11 protobuf::libprotobuf ${UV_TARGET} hiredis)
 if(ENABLE_ETCD_DISCOVERY)
     target_compile_definitions(realtime-cpp PRIVATE ENABLE_ETCD_DISCOVERY=1)
     target_link_libraries(realtime-cpp etcd-cpp-api)
@@ -273,7 +335,7 @@ target_include_directories(test-async-net PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp
 )
 target_include_directories(test-async-net PRIVATE ${UV_INCLUDE_DIR})
-target_link_libraries(test-async-net ${UV_LIB})
+target_link_libraries(test-async-net ${UV_TARGET})
 if(WIN32)
     target_link_libraries(test-async-net ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
 elseif(UNIX AND NOT APPLE)
@@ -308,7 +370,7 @@ set(PERF_TEST_INCLUDES
     ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp
     ${UV_INCLUDE_DIR}
 )
-set(PERF_TEST_LIBS ${UV_LIB})
+set(PERF_TEST_LIBS ${UV_TARGET})
 set(PERF_TEST_WIN_LIBS ws2_32 bcrypt iphlpapi psapi userenv dbghelp)
 set(PERF_TEST_UNIX_LIBS pthread dl rt)
 set(PERF_TEST_APPLE_LIBS pthread)
