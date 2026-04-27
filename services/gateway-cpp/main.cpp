@@ -8,6 +8,7 @@
 #include <chrono>
 #include <csignal>
 #include <atomic>
+#include <cstring>
 #include "gateway_config.hpp"
 #include "gs/net/async/ws_server.hpp"
 #include "gs/net/async/tcp_server.hpp"
@@ -30,6 +31,8 @@ using namespace gs::net::async;
 using namespace gs::crypto;
 
 std::string ToHex(uint32_t v);
+
+bool DecodeClientPacket(const Buffer& data, Packet& pkt);
 
 // HandshakeMiddleware 处理 Gateway-Client 握手
 class HandshakeMiddleware : public Middleware {
@@ -90,6 +93,46 @@ private:
     std::shared_ptr<gs::logger::Logger> logger_;
 };
 
+class WebSocketPacketConnection : public IConnection {
+public:
+    explicit WebSocketPacketConnection(gs::net::websocket::WebSocketConnection* ws)
+        : ws_(ws), id_(ws ? (ws->ID() | (1ull << 63)) : 0) {}
+
+    uint64_t ID() const override { return id_; }
+
+    void Close() override {
+        auto* ws = ws_.load();
+        if (ws) ws->Close();
+    }
+
+    bool SendPacket(const Packet& pkt) override {
+        auto data = EncodePacket(pkt);
+        return Send(data);
+    }
+
+    bool Send(std::vector<uint8_t> data) override {
+        return Send(Buffer::FromVector(std::move(data)));
+    }
+
+    bool Send(const Buffer& data) override {
+        auto* ws = ws_.load();
+        return ws && ws->SendMessage(gs::net::websocket::MessageType::Binary, data);
+    }
+
+    bool SendBatch(const std::vector<Buffer>& buffers) override {
+        auto* ws = ws_.load();
+        return ws && ws->SendMessageBatch(gs::net::websocket::MessageType::Binary, buffers);
+    }
+
+    void Detach() {
+        ws_.store(nullptr);
+    }
+
+private:
+    std::atomic<gs::net::websocket::WebSocketConnection*> ws_{nullptr};
+    uint64_t id_ = 0;
+};
+
 // Gateway 主类
 class Gateway {
 public:
@@ -103,6 +146,11 @@ private:
     void OnClientConnect(IConnection* conn);
     void OnClientPacket(IConnection* conn, Packet& pkt);
     void OnClientClose(IConnection* conn);
+    void OnWebSocketConnect(gs::net::websocket::WebSocketConnection* conn);
+    void OnWebSocketMessage(gs::net::websocket::WebSocketConnection* conn,
+                            gs::net::websocket::MessageType type,
+                            Buffer& message);
+    void OnWebSocketClose(gs::net::websocket::WebSocketConnection* conn);
     void OnUpstreamPacket(IConnection* conn, Packet& pkt);
     
     // 根据命令 ID 路由到对应的上游池
@@ -111,13 +159,14 @@ private:
     void HeartbeatLoop();
     
     std::unique_ptr<AsyncTCPServer> server_;
-    std::unique_ptr<gs::gateway::websocket::WebSocketServer> ws_server_;
+    std::unique_ptr<gs::net::websocket::WebSocketServer> ws_server_;
     std::unique_ptr<gs::discovery::UpstreamManager> upstream_mgr_;
     std::unique_ptr<AsyncWriteCoalescer> coalescer_;
     std::unique_ptr<gs::discovery::ServiceDiscovery> sd_;
 
     std::mutex sessions_mtx_;
     std::unordered_map<uint64_t, IConnection*> clients_;
+    std::unordered_map<uint64_t, std::shared_ptr<WebSocketPacketConnection>> ws_clients_;
     std::vector<uint8_t> master_key_;
     std::unique_ptr<gs::replay::Checker> replay_checker_;
     
@@ -234,6 +283,32 @@ bool EncryptionMiddleware::OnPacket(IConnection* conn, Packet& pkt) {
     return true;
 }
 
+bool DecodeClientPacket(const Buffer& data, Packet& pkt) {
+    if (data.Size() < HEADER_SIZE || data.Size() > MAX_PACKET_LEN) {
+        return false;
+    }
+    const uint8_t* p = data.Data();
+    if (!p) return false;
+
+    Header h = DecodeHeader(p);
+    if (h.magic != MAGIC_VALUE || h.length != data.Size()) {
+        return false;
+    }
+    if (h.length < HEADER_SIZE || h.length > MAX_PACKET_LEN) {
+        return false;
+    }
+
+    pkt.header = h;
+    size_t payload_len = data.Size() - HEADER_SIZE;
+    if (payload_len > 0) {
+        pkt.payload = Buffer::Allocate(payload_len);
+        std::memcpy(pkt.payload.Data(), p + HEADER_SIZE, payload_len);
+    } else {
+        pkt.payload = Buffer();
+    }
+    return true;
+}
+
 bool Gateway::Start(const gs::gateway::Config& cfg) {
     cfg_ = cfg;
     master_key_ = gs::gateway::ParseMasterKey(cfg);
@@ -271,17 +346,17 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
 
     // 启动 WebSocket 服务器（如果配置端口 > 0）
     if (cfg.websocket_port > 0) {
-        gs::gateway::websocket::WebSocketServer::Config ws_cfg;
+        gs::net::websocket::WebSocketServer::Config ws_cfg;
         ws_cfg.port = cfg.websocket_port;
         ws_cfg.max_conn = cfg.max_connections;
-        ws_server_ = std::make_unique<gs::gateway::websocket::WebSocketServer>(ws_cfg);
+        ws_server_ = std::make_unique<gs::net::websocket::WebSocketServer>(ws_cfg);
         ws_server_->SetCallbacks(
-            [this](gs::gateway::websocket::WebSocketConnection* c) { OnClientConnect(c); },
-            [this](gs::gateway::websocket::WebSocketConnection* c, Packet& p) { OnClientPacket(c, p); },
-            [this](gs::gateway::websocket::WebSocketConnection* c) { OnClientClose(c); }
+            [this](gs::net::websocket::WebSocketConnection* c) { OnWebSocketConnect(c); },
+            [this](gs::net::websocket::WebSocketConnection* c,
+                   gs::net::websocket::MessageType t,
+                   Buffer& m) { OnWebSocketMessage(c, t, m); },
+            [this](gs::net::websocket::WebSocketConnection* c) { OnWebSocketClose(c); }
         );
-        ws_server_->Use(handshake_mw_);
-        ws_server_->Use(encryption_mw_);
         if (!ws_server_->Start()) {
             if (logger_) logger_->Warn("Failed to start WebSocket server on port " + std::to_string(cfg.websocket_port));
         } else {
@@ -370,6 +445,93 @@ void Gateway::OnClientConnect(IConnection* conn) {
     clients_[conn->ID()] = conn;
     conn_gauge_->Inc();
     if (logger_) logger_->Info("Client connected: " + std::to_string(conn->ID()));
+}
+
+void Gateway::OnWebSocketConnect(gs::net::websocket::WebSocketConnection* conn) {
+    auto adapter = std::make_shared<WebSocketPacketConnection>(conn);
+    {
+        std::lock_guard<std::mutex> lk(sessions_mtx_);
+        ws_clients_[adapter->ID()] = adapter;
+        clients_[adapter->ID()] = adapter.get();
+    }
+    conn_gauge_->Inc();
+    if (logger_) logger_->Info("Client connected: " + std::to_string(adapter->ID()));
+}
+
+void Gateway::OnWebSocketMessage(gs::net::websocket::WebSocketConnection* conn,
+                                 gs::net::websocket::MessageType type,
+                                 Buffer& message) {
+    if (type != gs::net::websocket::MessageType::Binary) {
+        conn->Close();
+        return;
+    }
+
+    std::shared_ptr<WebSocketPacketConnection> adapter;
+    {
+        std::lock_guard<std::mutex> lk(sessions_mtx_);
+        uint64_t app_conn_id = conn->ID() | (1ull << 63);
+        auto it = ws_clients_.find(app_conn_id);
+        if (it != ws_clients_.end()) {
+            adapter = it->second;
+        }
+    }
+    if (!adapter) {
+        conn->Close();
+        return;
+    }
+
+    Packet pkt;
+    if (!DecodeClientPacket(message, pkt)) {
+        if (logger_) logger_->Warn("Invalid WebSocket packet from client " + std::to_string(conn->ID()));
+        conn->Close();
+        return;
+    }
+
+    if (pkt.header.cmd_id == protocol::CMD_SYS_HANDSHAKE) {
+        if (!handshake_mw_->OnPacket(adapter.get(), pkt)) {
+            return;
+        }
+    }
+    if (!encryption_mw_->OnPacket(adapter.get(), pkt)) {
+        return;
+    }
+    OnClientPacket(adapter.get(), pkt);
+}
+
+void Gateway::OnWebSocketClose(gs::net::websocket::WebSocketConnection* conn) {
+    std::shared_ptr<WebSocketPacketConnection> adapter;
+    {
+        std::lock_guard<std::mutex> lk(sessions_mtx_);
+        uint64_t app_conn_id = conn->ID() | (1ull << 63);
+        auto it = ws_clients_.find(app_conn_id);
+        if (it != ws_clients_.end()) {
+            adapter = it->second;
+            ws_clients_.erase(it);
+        }
+    }
+    if (!adapter) return;
+    adapter->Detach();
+
+    {
+        std::lock_guard<std::mutex> lk(room_mtx_);
+        auto it = conn_room_.find(adapter->ID());
+        if (it != conn_room_.end()) {
+            auto rit = room_members_.find(it->second);
+            if (rit != room_members_.end()) {
+                rit->second.erase(adapter->ID());
+                if (rit->second.empty()) room_members_.erase(rit);
+            }
+            conn_room_.erase(it);
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lk(sessions_mtx_);
+        clients_.erase(adapter->ID());
+        handshake_mw_->RemoveSession(adapter->ID());
+    }
+    conn_gauge_->Dec();
+    if (logger_) logger_->Info("Client disconnected: " + std::to_string(adapter->ID()));
 }
 
 void Gateway::OnClientPacket(IConnection* conn, Packet& pkt) {
@@ -501,13 +663,23 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
     if (targets.empty()) {
         auto it = clients_.find(conn_id);
         if (it != clients_.end()) {
-            coalescer_->Enqueue(it->second, res);
+            auto ws_it = ws_clients_.find(conn_id);
+            if (ws_it != ws_clients_.end()) {
+                coalescer_->Enqueue(std::static_pointer_cast<IConnection>(ws_it->second), res);
+            } else {
+                coalescer_->Enqueue(it->second, res);
+            }
         }
     } else {
         for (auto cid : targets) {
             auto it = clients_.find(cid);
             if (it != clients_.end()) {
-                coalescer_->Enqueue(it->second, res);
+                auto ws_it = ws_clients_.find(cid);
+                if (ws_it != ws_clients_.end()) {
+                    coalescer_->Enqueue(std::static_pointer_cast<IConnection>(ws_it->second), res);
+                } else {
+                    coalescer_->Enqueue(it->second, res);
+                }
             }
         }
     }

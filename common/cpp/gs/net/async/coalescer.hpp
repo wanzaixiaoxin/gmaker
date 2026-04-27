@@ -7,6 +7,7 @@
 #include <mutex>
 #include <atomic>
 #include <cstdint>
+#include <memory>
 
 struct uv_timer_s;
 using uv_timer_t = uv_timer_s;
@@ -29,9 +30,11 @@ public:
 
     // 添加一个包到发送缓冲（线程安全）
     void Enqueue(IConnection* conn, const Packet& pkt);
+    void Enqueue(std::shared_ptr<IConnection> conn, const Packet& pkt);
 
     // 添加已编码的 Buffer 到发送缓冲（线程安全，零拷贝共享场景）
     void Enqueue(IConnection* conn, const Buffer& data);
+    void Enqueue(std::shared_ptr<IConnection> conn, const Buffer& data);
 
     // 广播：将同一包发给多个连接
     void Broadcast(const std::vector<IConnection*>& conns, const Packet& pkt);
@@ -44,6 +47,7 @@ private:
 
     struct Pending {
         IConnection* conn = nullptr;
+        std::shared_ptr<IConnection> owner;
         Buffer data; // 已编码的 packet bytes
     };
 

@@ -1,15 +1,31 @@
 #include "ws_connection.hpp"
-#include "gs/net/packet.hpp"
-#include <cstring>
 #include <algorithm>
+#include <cctype>
+#include <cstring>
 
 namespace gs {
-namespace gateway {
+namespace net {
 namespace websocket {
 
 namespace {
 
+std::string ToLower(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return s;
+}
+
+std::string Trim(std::string s) {
+    size_t start = s.find_first_not_of(" \t");
+    if (start == std::string::npos) return "";
+    size_t end = s.find_last_not_of(" \t\r\n");
+    return s.substr(start, end - start + 1);
+}
+
 bool HeaderContains(const std::string& headers, const char* key, const char* value) {
+    const std::string key_cmp = ToLower(key);
+    const std::string value_cmp = ToLower(value);
     size_t pos = 0;
     while (pos < headers.size()) {
         size_t line_end = headers.find("\r\n", pos);
@@ -17,18 +33,10 @@ bool HeaderContains(const std::string& headers, const char* key, const char* val
         std::string line = headers.substr(pos, line_end - pos);
         size_t colon = line.find(':');
         if (colon != std::string::npos) {
-            std::string hkey = line.substr(0, colon);
-            std::transform(hkey.begin(), hkey.end(), hkey.begin(), ::tolower);
-            std::string hkey_cmp(key);
-            std::transform(hkey_cmp.begin(), hkey_cmp.end(), hkey_cmp.begin(), ::tolower);
-            if (hkey == hkey_cmp) {
-                std::string hval = line.substr(colon + 1);
-                size_t start = hval.find_first_not_of(" \t");
-                if (start != std::string::npos) hval = hval.substr(start);
-                std::transform(hval.begin(), hval.end(), hval.begin(), ::tolower);
-                std::string vcmp(value);
-                std::transform(vcmp.begin(), vcmp.end(), vcmp.begin(), ::tolower);
-                if (hval.find(vcmp) != std::string::npos) return true;
+            std::string hkey = ToLower(line.substr(0, colon));
+            if (hkey == key_cmp) {
+                std::string hval = ToLower(Trim(line.substr(colon + 1)));
+                if (hval.find(value_cmp) != std::string::npos) return true;
             }
         }
         pos = line_end + 2;
@@ -37,6 +45,7 @@ bool HeaderContains(const std::string& headers, const char* key, const char* val
 }
 
 std::string ExtractHeader(const std::string& headers, const char* key) {
+    const std::string key_cmp = ToLower(key);
     size_t pos = 0;
     while (pos < headers.size()) {
         size_t line_end = headers.find("\r\n", pos);
@@ -44,15 +53,9 @@ std::string ExtractHeader(const std::string& headers, const char* key) {
         std::string line = headers.substr(pos, line_end - pos);
         size_t colon = line.find(':');
         if (colon != std::string::npos) {
-            std::string hkey = line.substr(0, colon);
-            std::transform(hkey.begin(), hkey.end(), hkey.begin(), ::tolower);
-            std::string hkey_cmp(key);
-            std::transform(hkey_cmp.begin(), hkey_cmp.end(), hkey_cmp.begin(), ::tolower);
-            if (hkey == hkey_cmp) {
-                std::string hval = line.substr(colon + 1);
-                size_t start = hval.find_first_not_of(" \t");
-                if (start != std::string::npos) return hval.substr(start);
-                return "";
+            std::string hkey = ToLower(line.substr(0, colon));
+            if (hkey == key_cmp) {
+                return Trim(line.substr(colon + 1));
             }
         }
         pos = line_end + 2;
@@ -60,9 +63,26 @@ std::string ExtractHeader(const std::string& headers, const char* key) {
     return "";
 }
 
-} // anonymous namespace
+bool IsHttpGetUpgrade(const std::string& request) {
+    size_t line_end = request.find("\r\n");
+    if (line_end == std::string::npos) return false;
+    std::string line = request.substr(0, line_end);
+    return line.rfind("GET ", 0) == 0 && line.find(" HTTP/1.1") != std::string::npos;
+}
 
-// ============================================================
+bool IsControlOpcode(uint8_t opcode) {
+    return opcode == OPCODE_CLOSE || opcode == OPCODE_PING || opcode == OPCODE_PONG;
+}
+
+bool IsMessageOpcode(uint8_t opcode) {
+    return opcode == OPCODE_TEXT || opcode == OPCODE_BINARY;
+}
+
+MessageType ToMessageType(uint8_t opcode) {
+    return opcode == OPCODE_TEXT ? MessageType::Text : MessageType::Binary;
+}
+
+} // namespace
 
 WebSocketConnection::WebSocketConnection(gs::net::async::AsyncEventLoop* loop, uint64_t id)
     : loop_(loop), id_(id) {}
@@ -80,9 +100,9 @@ bool WebSocketConnection::InitFromAccepted(uv_tcp_t* client) {
     return true;
 }
 
-void WebSocketConnection::SetCallbacks(DataCallback on_data, CloseCallback on_close) {
-    on_data_ = on_data;
-    on_close_ = on_close;
+void WebSocketConnection::SetCallbacks(MessageCallback on_message, CloseCallback on_close) {
+    on_message_ = std::move(on_message);
+    on_close_ = std::move(on_close);
 }
 
 void WebSocketConnection::Close() {
@@ -95,6 +115,8 @@ void WebSocketConnection::Close() {
 }
 
 void WebSocketConnection::DoClose() {
+    closing_.store(true);
+    state_.store(State::kClosing);
     if (handle_ && !uv_is_closing((uv_handle_t*)handle_)) {
         uv_close((uv_handle_t*)handle_, OnCloseDone);
     }
@@ -124,6 +146,10 @@ void WebSocketConnection::OnRead(uv_stream_t* stream, intptr_t nread, const uv_b
 
 void WebSocketConnection::OnDataReceived(const uint8_t* data, size_t len) {
     if (state_.load() == State::kHandshaking) {
+        if (handshake_buf_.size() + len > MAX_HANDSHAKE_BYTES) {
+            Close();
+            return;
+        }
         handshake_buf_.insert(handshake_buf_.end(), data, data + len);
         if (ProcessHandshake()) {
             if (!handshake_buf_.empty()) {
@@ -136,7 +162,7 @@ void WebSocketConnection::OnDataReceived(const uint8_t* data, size_t len) {
         }
     } else if (state_.load() == State::kConnected) {
         if (ws_read_buf_.Readable() + len > MAX_READ_BUF_BYTES) {
-            Close();
+            FailProtocol(1009);
             return;
         }
         ws_read_buf_.Append(data, len);
@@ -147,25 +173,22 @@ void WebSocketConnection::OnDataReceived(const uint8_t* data, size_t len) {
 bool WebSocketConnection::ProcessHandshake() {
     auto it = std::search(handshake_buf_.begin(), handshake_buf_.end(),
                           std::begin("\r\n\r\n"), std::end("\r\n\r\n") - 1);
-    if (it == handshake_buf_.end()) {
-        if (handshake_buf_.size() > 8192) {
-            Close();
-        }
-        return false;
-    }
+    if (it == handshake_buf_.end()) return false;
 
     std::string request(handshake_buf_.begin(), it + 4);
     size_t header_end = static_cast<size_t>(it - handshake_buf_.begin()) + 4;
     handshake_buf_.erase(handshake_buf_.begin(), handshake_buf_.begin() + header_end);
 
-    if (!HeaderContains(request, "Upgrade", "websocket") ||
+    if (!IsHttpGetUpgrade(request) ||
+        !HeaderContains(request, "Upgrade", "websocket") ||
         !HeaderContains(request, "Connection", "upgrade")) {
         Close();
         return false;
     }
 
     std::string ws_key = ExtractHeader(request, "sec-websocket-key");
-    if (ws_key.empty()) {
+    std::string version = ExtractHeader(request, "sec-websocket-version");
+    if (ws_key.empty() || version != "13") {
         Close();
         return false;
     }
@@ -178,216 +201,223 @@ bool WebSocketConnection::ProcessHandshake() {
         "Sec-WebSocket-Accept: " + accept + "\r\n"
         "\r\n";
 
-    SendWSFrame(gs::net::Buffer::FromVector(
-        std::vector<uint8_t>(response.begin(), response.end())));
+    QueueFrame(gs::net::Buffer::FromVector(std::vector<uint8_t>(response.begin(), response.end())));
     return true;
 }
 
 void WebSocketConnection::ProcessWSFrames() {
     while (state_.load() == State::kConnected) {
-        if (ws_read_buf_.Readable() < 2) break;
+        size_t readable = ws_read_buf_.Readable();
+        if (readable < 2) break;
 
-        // Peek frame header to calculate total length
+        WSFrame frame;
         uint8_t hdr[2];
         ws_read_buf_.ReadAt(0, hdr, 2);
-        bool masked = (hdr[1] & 0x80) != 0;
+        frame.fin = (hdr[0] & 0x80) != 0;
+        frame.opcode = hdr[0] & 0x0F;
+        frame.masked = (hdr[1] & 0x80) != 0;
         uint64_t payload_len = hdr[1] & 0x7F;
         size_t header_len = 2;
-        if (payload_len == 126) {
-            header_len += 2;
-        } else if (payload_len == 127) {
-            header_len += 8;
+
+        if ((hdr[0] & 0x70) != 0 || !frame.masked) {
+            FailProtocol(1002);
+            return;
         }
-        if (masked) header_len += 4;
 
         if (payload_len == 126) {
-            if (ws_read_buf_.Readable() < header_len) break;
+            if (readable < 4) break;
             uint8_t ext[2];
             ws_read_buf_.ReadAt(2, ext, 2);
             payload_len = ((uint64_t)ext[0] << 8) | ext[1];
+            if (payload_len < 126) {
+                FailProtocol(1002);
+                return;
+            }
+            header_len = 4;
         } else if (payload_len == 127) {
-            if (ws_read_buf_.Readable() < header_len) break;
+            if (readable < 10) break;
             uint8_t ext[8];
             ws_read_buf_.ReadAt(2, ext, 8);
+            if ((ext[0] & 0x80) != 0) {
+                FailProtocol(1002);
+                return;
+            }
             payload_len = 0;
             for (int i = 0; i < 8; ++i) {
                 payload_len = (payload_len << 8) | ext[i];
             }
+            if (payload_len < 65536) {
+                FailProtocol(1002);
+                return;
+            }
+            header_len = 10;
+        }
+
+        header_len += 4;
+        if (payload_len > MAX_MESSAGE_BYTES || payload_len > static_cast<uint64_t>(SIZE_MAX - header_len)) {
+            FailProtocol(1009);
+            return;
         }
 
         size_t total_len = header_len + static_cast<size_t>(payload_len);
-        if (ws_read_buf_.Readable() < total_len) break;
+        if (readable < total_len) break;
 
-        // 读取 mask key
-        uint8_t mask_key[4] = {0};
-        if (masked) {
-            size_t mask_offset = header_len - 4;
-            ws_read_buf_.ReadAt(mask_offset, mask_key, 4);
+        size_t payload_offset = header_len;
+        frame.payload_len = payload_len;
+        ws_read_buf_.ReadAt(header_len - 4, frame.mask_key, 4);
+
+        uint8_t opcode = frame.opcode;
+        if (opcode != OPCODE_CONTINUATION &&
+            opcode != OPCODE_TEXT &&
+            opcode != OPCODE_BINARY &&
+            opcode != OPCODE_CLOSE &&
+            opcode != OPCODE_PING &&
+            opcode != OPCODE_PONG) {
+            FailProtocol(1002);
+            return;
         }
 
-        // 处理帧 payload
-        size_t payload_offset = header_len;
-        uint8_t opcode = hdr[0] & 0x0F;
+        bool is_control = opcode == OPCODE_CLOSE || opcode == OPCODE_PING || opcode == OPCODE_PONG;
+        if (is_control && (!frame.fin || payload_len > 125)) {
+            FailProtocol(1002);
+            return;
+        }
 
-        switch (opcode) {
-            case 0x2: { // binary frame
-                if (payload_len >= gs::net::HEADER_SIZE) {
-                    // 快速路径：如果整帧连续，直接解析
-                    if (ws_read_buf_.IsContiguous(payload_offset, payload_len)) {
-                        const uint8_t* p = ws_read_buf_.DataAt(payload_offset);
-                        if (masked) UnmaskWSPayload(const_cast<uint8_t*>(p), static_cast<size_t>(payload_len), mask_key);
-                        HandleBinaryPayload(p, static_cast<size_t>(payload_len));
-                    } else {
-                        std::vector<uint8_t> temp(payload_len);
-                        ws_read_buf_.ReadAt(payload_offset, temp.data(), payload_len);
-                        if (masked) UnmaskWSPayload(temp.data(), temp.size(), mask_key);
-                        HandleBinaryPayload(temp.data(), temp.size());
-                    }
-                }
-                break;
-            }
-            case 0x8: { // close
-                Close();
+        std::vector<uint8_t> payload_vec;
+        payload_vec.resize(static_cast<size_t>(payload_len));
+        if (payload_len > 0) {
+            ws_read_buf_.ReadAt(payload_offset, payload_vec.data(), payload_vec.size());
+            UnmaskWSPayload(payload_vec.data(), payload_vec.size(), frame.mask_key);
+        }
+        uint8_t* payload = payload_vec.data();
+        size_t payload_size = payload_vec.size();
+
+        if (opcode == OPCODE_CLOSE) {
+            SendCloseAndDrain(1000);
+            return;
+        }
+
+        if (opcode == OPCODE_PING) {
+            QueueFrame(EncodeWSPongFrame(payload, payload_size));
+            ws_read_buf_.Consume(total_len);
+            continue;
+        }
+
+        if (opcode == OPCODE_PONG) {
+            ws_read_buf_.Consume(total_len);
+            continue;
+        }
+
+        if (IsMessageOpcode(opcode)) {
+            if (fragmenting_) {
+                FailProtocol(1002);
                 return;
             }
-            case 0x9: { // ping
-                SendWSFrame(EncodeWSPongFrame());
-                break;
+            if (frame.fin) {
+                auto msg = gs::net::Buffer::FromVector(std::move(payload_vec));
+                if (on_message_) {
+                    on_message_(this, ToMessageType(opcode), msg);
+                }
+            } else {
+                fragmenting_ = true;
+                fragmented_opcode_ = opcode;
+                fragmented_payload_ = std::move(payload_vec);
             }
-            case 0xA: { // pong
-                break;
-            }
-            case 0x1: { // text frame - ignore
-                break;
-            }
-            default:
-                break;
+            ws_read_buf_.Consume(total_len);
+            continue;
         }
 
-        ws_read_buf_.Consume(total_len);
+        if (opcode == OPCODE_CONTINUATION) {
+            if (!fragmenting_) {
+                FailProtocol(1002);
+                return;
+            }
+            if (fragmented_payload_.size() + payload_size > MAX_MESSAGE_BYTES) {
+                FailProtocol(1009);
+                return;
+            }
+            fragmented_payload_.insert(fragmented_payload_.end(), payload, payload + payload_size);
+            if (frame.fin) {
+                auto msg = gs::net::Buffer::FromVector(std::move(fragmented_payload_));
+                auto msg_type = ToMessageType(fragmented_opcode_);
+                fragmented_payload_.clear();
+                fragmented_opcode_ = 0;
+                fragmenting_ = false;
+                if (on_message_) {
+                    on_message_(this, msg_type, msg);
+                }
+            }
+            ws_read_buf_.Consume(total_len);
+            continue;
+        }
+
+        FailProtocol(1002);
+        return;
     }
 }
-
-void WebSocketConnection::HandleBinaryPayload(const uint8_t* data, size_t len) {
-    uint16_t magic = gs::net::ReadU16BE(data + 4);
-    if (magic != gs::net::MAGIC_VALUE) return;
-
-    gs::net::Packet pkt;
-    pkt.header.length = static_cast<uint32_t>(len);
-    pkt.header.magic = magic;
-    pkt.header.cmd_id = gs::net::ReadU32BE(data + 6);
-    pkt.header.seq_id = gs::net::ReadU32BE(data + 10);
-    pkt.header.flags = gs::net::ReadU32BE(data + 14);
-    size_t payload_len = len - gs::net::HEADER_SIZE;
-    if (payload_len > 0) {
-        pkt.payload = gs::net::Buffer::Allocate(payload_len);
-        std::memcpy(pkt.payload.Data(), data + gs::net::HEADER_SIZE, payload_len);
-    }
-    if (on_data_) {
-        on_data_(this, pkt);
-    }
-}
-
-// ==================== 发送接口 ====================
 
 bool WebSocketConnection::Send(std::vector<uint8_t> data) {
     return Send(gs::net::Buffer::FromVector(std::move(data)));
 }
 
 bool WebSocketConnection::Send(const gs::net::Buffer& data) {
-    if (closed_.load() || closing_.load() || !handle_) return false;
-    auto frame = EncodeWSBinaryFrame(data.Data(), data.Size());
-    bool should_pause_read = false;
-    {
-        std::lock_guard<std::mutex> lk(write_mtx_);
-        write_queue_.push(frame);
-        write_queue_bytes_ += frame.Size();
-        if (write_queue_bytes_ > MAX_WRITE_QUEUE_BYTES && !read_paused_) {
-            read_paused_ = true;
-            should_pause_read = true;
-        }
-    }
-    if (should_pause_read && handle_) {
-        loop_->Post([self = shared_from_this()]() {
-            if (self->handle_) uv_read_stop((uv_stream_t*)self->handle_);
-        });
-    }
-    bool expected = false;
-    if (writing_.compare_exchange_strong(expected, true)) {
-        loop_->Post([self = shared_from_this()]() {
-            self->ProcessWriteQueue();
-        });
-    }
-    return true;
+    return SendMessage(MessageType::Binary, data);
 }
 
 bool WebSocketConnection::SendBatch(const std::vector<gs::net::Buffer>& buffers) {
-    if (closed_.load() || closing_.load() || !handle_ || buffers.empty()) return false;
-    bool should_pause_read = false;
-    {
-        std::lock_guard<std::mutex> lk(write_mtx_);
-        for (const auto& b : buffers) {
-            auto frame = EncodeWSBinaryFrame(b.Data(), b.Size());
-            write_queue_bytes_ += frame.Size();
-            write_queue_.push(std::move(frame));
-        }
-        if (write_queue_bytes_ > MAX_WRITE_QUEUE_BYTES && !read_paused_) {
-            read_paused_ = true;
-            should_pause_read = true;
-        }
+    return SendMessageBatch(MessageType::Binary, buffers);
+}
+
+bool WebSocketConnection::SendMessage(MessageType type, const gs::net::Buffer& data) {
+    if (!IsWritable()) return false;
+    uint8_t opcode = type == MessageType::Text ? OPCODE_TEXT : OPCODE_BINARY;
+    std::vector<gs::net::Buffer> parts;
+    parts.reserve(2);
+    parts.push_back(EncodeWSFrameHeader(opcode, data.Size()));
+    if (data.Size() > 0) {
+        parts.push_back(data.Slice(0, data.Size()));
     }
-    if (should_pause_read && handle_) {
-        loop_->Post([self = shared_from_this()]() {
-            if (self->handle_) uv_read_stop((uv_stream_t*)self->handle_);
-        });
-    }
-    bool expected = false;
-    if (writing_.compare_exchange_strong(expected, true)) {
-        loop_->Post([self = shared_from_this()]() {
-            self->ProcessWriteQueue();
-        });
-    }
+    QueueFrameParts(std::move(parts));
     return true;
 }
 
-bool WebSocketConnection::SendPacket(const gs::net::Packet& pkt) {
-    auto data = gs::net::EncodePacket(pkt);
-    return Send(data);
+bool WebSocketConnection::SendMessageBatch(MessageType type, const std::vector<gs::net::Buffer>& messages) {
+    if (!IsWritable() || messages.empty()) return false;
+    uint8_t opcode = type == MessageType::Text ? OPCODE_TEXT : OPCODE_BINARY;
+    std::vector<gs::net::Buffer> parts;
+    parts.reserve(messages.size() * 2);
+    for (const auto& msg : messages) {
+        parts.push_back(EncodeWSFrameHeader(opcode, msg.Size()));
+        if (msg.Size() > 0) {
+            parts.push_back(msg.Slice(0, msg.Size()));
+        }
+    }
+    QueueFrameParts(std::move(parts));
+    return true;
 }
 
 bool WebSocketConnection::SendFrameBuffer(const gs::net::Buffer& frame) {
-    if (closed_.load() || closing_.load() || !handle_) return false;
-    bool should_pause_read = false;
-    {
-        std::lock_guard<std::mutex> lk(write_mtx_);
-        write_queue_.push(frame.Slice(0, frame.Size()));
-        write_queue_bytes_ += frame.Size();
-        if (write_queue_bytes_ > MAX_WRITE_QUEUE_BYTES && !read_paused_) {
-            read_paused_ = true;
-            should_pause_read = true;
-        }
-    }
-    if (should_pause_read && handle_) {
-        loop_->Post([self = shared_from_this()]() {
-            if (self->handle_) uv_read_stop((uv_stream_t*)self->handle_);
-        });
-    }
-    bool expected = false;
-    if (writing_.compare_exchange_strong(expected, true)) {
-        loop_->Post([self = shared_from_this()]() {
-            self->ProcessWriteQueue();
-        });
-    }
+    if (!IsWritable()) return false;
+    QueueFrame(frame.Slice(0, frame.Size()));
     return true;
 }
 
-void WebSocketConnection::SendWSFrame(gs::net::Buffer frame) {
-    if (closed_.load() || closing_.load() || !handle_) return;
+void WebSocketConnection::QueueFrame(gs::net::Buffer frame) {
+    std::vector<gs::net::Buffer> parts;
+    parts.push_back(std::move(frame));
+    QueueFrameParts(std::move(parts));
+}
+
+void WebSocketConnection::QueueFrameParts(std::vector<gs::net::Buffer> parts) {
+    if (parts.empty() || closed_.load() || closing_.load() || !handle_) return;
+
     bool should_pause_read = false;
     {
         std::lock_guard<std::mutex> lk(write_mtx_);
-        write_queue_.push(std::move(frame));
-        write_queue_bytes_ += write_queue_.back().Size();
+        for (auto& part : parts) {
+            write_queue_bytes_ += part.Size();
+            write_queue_.push(std::move(part));
+        }
         if (write_queue_bytes_ > MAX_WRITE_QUEUE_BYTES && !read_paused_) {
             read_paused_ = true;
             should_pause_read = true;
@@ -412,23 +442,28 @@ void WebSocketConnection::ProcessWriteQueue() {
         return;
     }
 
-    constexpr size_t MAX_BATCH = 64;
-    std::vector<gs::net::Buffer> batch;
-    batch.reserve(MAX_BATCH);
-    static thread_local std::vector<uv_buf_t> tls_ubufs;
-    tls_ubufs.clear();
+    constexpr size_t MAX_BATCH = 128;
+    auto* req = new WriteReq;
+    req->conn = shared_from_this();
+    req->buffers.reserve(MAX_BATCH);
+    std::vector<uv_buf_t> ubufs;
+    ubufs.reserve(MAX_BATCH);
 
     bool should_resume_read = false;
     {
         std::lock_guard<std::mutex> lk(write_mtx_);
-        while (!write_queue_.empty() && batch.size() < MAX_BATCH) {
+        while (!write_queue_.empty() && req->buffers.size() < MAX_BATCH) {
             auto& front = write_queue_.front();
             write_queue_bytes_ -= front.Size();
-            batch.push_back(std::move(front));
+            req->buffers.push_back(std::move(front));
             write_queue_.pop();
         }
-        if (batch.empty()) {
+        if (req->buffers.empty()) {
             writing_.store(false);
+            if (close_after_write_.exchange(false)) {
+                DoClose();
+            }
+            delete req;
             return;
         }
         if (read_paused_ && write_queue_bytes_ < WRITE_RESUME_THRESHOLD) {
@@ -441,27 +476,38 @@ void WebSocketConnection::ProcessWriteQueue() {
         uv_read_start((uv_stream_t*)handle_, OnAlloc, OnRead);
     }
 
-    auto* req = new uv_write_t;
-    req->data = this;
-    for (auto& b : batch) {
+    req->req.data = req;
+    for (auto& b : req->buffers) {
+        if (b.Size() == 0) continue;
         uv_buf_t uvbuf;
         uvbuf.base = reinterpret_cast<char*>(const_cast<uint8_t*>(b.Data()));
         uvbuf.len = static_cast<unsigned int>(b.Size());
-        tls_ubufs.push_back(uvbuf);
+        ubufs.push_back(uvbuf);
     }
 
-    int r = uv_write(req, (uv_stream_t*)handle_, tls_ubufs.data(),
-                     static_cast<unsigned int>(tls_ubufs.size()), OnWriteDone);
-    if (r != 0) {
+    if (ubufs.empty()) {
         delete req;
+        ProcessWriteQueue();
+        return;
+    }
+
+    int r = uv_write(&req->req, (uv_stream_t*)handle_, ubufs.data(),
+                     static_cast<unsigned int>(ubufs.size()), OnWriteDone);
+    if (r != 0) {
         writing_.store(false);
-        Close();
+        auto self = req->conn;
+        delete req;
+        if (self) self->Close();
     }
 }
 
-void WebSocketConnection::OnWriteDone(uv_write_t* req, int status) {
-    auto* conn = static_cast<WebSocketConnection*>(req->data);
-    delete req;
+void WebSocketConnection::OnWriteDone(uv_write_t* uv_req, int status) {
+    auto* req = static_cast<WriteReq*>(uv_req->data);
+    std::shared_ptr<WebSocketConnection> conn;
+    if (req) {
+        conn = std::move(req->conn);
+        delete req;
+    }
     if (!conn) return;
     if (status < 0) {
         conn->Close();
@@ -481,6 +527,28 @@ void WebSocketConnection::OnCloseDone(uv_handle_t* handle) {
     conn->keep_alive_.reset();
 }
 
+bool WebSocketConnection::IsWritable() const {
+    return !closed_.load() && !closing_.load() && !close_after_write_.load() && handle_ != nullptr;
+}
+
+void WebSocketConnection::FailProtocol(uint16_t code) {
+    SendCloseAndDrain(code);
+}
+
+void WebSocketConnection::SendCloseAndDrain(uint16_t code) {
+    if (closed_.load() || closing_.load()) return;
+    if (handle_) {
+        QueueFrame(EncodeWSCloseFrame(code));
+        closed_.store(true);
+        close_after_write_.store(true);
+        if (!writing_.load()) {
+            DoClose();
+        }
+        return;
+    }
+    Close();
+}
+
 } // namespace websocket
-} // namespace gateway
+} // namespace net
 } // namespace gs

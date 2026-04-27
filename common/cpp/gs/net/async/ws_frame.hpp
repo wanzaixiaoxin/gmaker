@@ -1,13 +1,18 @@
 #pragma once
 
-#include <cstdint>
-#include <vector>
-#include <string>
 #include "gs/net/buffer.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <string>
 
 namespace gs {
-namespace gateway {
+namespace net {
 namespace websocket {
+
+enum class MessageType : uint8_t {
+    Text = 0x1,
+    Binary = 0x2
+};
 
 struct WSFrame {
     bool fin = true;
@@ -17,23 +22,28 @@ struct WSFrame {
     uint8_t mask_key[4] = {0};
 };
 
-// 尝试从 data 中解析一个完整的 WebSocket 帧
-// 返回值: >0 表示成功，为消耗的总字节数（header + payload）
-//         0 表示数据不足
-//        -1 表示协议错误
+constexpr uint8_t OPCODE_CONTINUATION = 0x0;
+constexpr uint8_t OPCODE_TEXT = 0x1;
+constexpr uint8_t OPCODE_BINARY = 0x2;
+constexpr uint8_t OPCODE_CLOSE = 0x8;
+constexpr uint8_t OPCODE_PING = 0x9;
+constexpr uint8_t OPCODE_PONG = 0xA;
+
+// Returns consumed bytes on success, 0 when more data is needed, and -1 on protocol error.
 intptr_t ParseWSFrame(const uint8_t* data, size_t len, WSFrame& out, size_t& payload_offset);
 
-// 对 payload 进行 in-place unmask
 void UnmaskWSPayload(uint8_t* payload, size_t len, const uint8_t mask_key[4]);
 
-// 服务器 -> 客户端 的帧编码（无 mask）
+// Server-to-client frames are not masked.
+gs::net::Buffer EncodeWSFrameHeader(uint8_t opcode, size_t payload_len);
+gs::net::Buffer EncodeWSFrame(uint8_t opcode, const uint8_t* payload, size_t len);
 gs::net::Buffer EncodeWSBinaryFrame(const uint8_t* payload, size_t len);
-gs::net::Buffer EncodeWSCloseFrame(uint16_t code = 1000);
-gs::net::Buffer EncodeWSPongFrame();
+gs::net::Buffer EncodeWSTextFrame(const uint8_t* payload, size_t len);
+gs::net::Buffer EncodeWSCloseFrame(uint16_t code = 1000, const uint8_t* reason = nullptr, size_t reason_len = 0);
+gs::net::Buffer EncodeWSPongFrame(const uint8_t* payload = nullptr, size_t len = 0);
 
-// 计算 Sec-WebSocket-Accept（SHA1 + Base64）
 std::string ComputeWSAccept(const std::string& ws_key);
 
 } // namespace websocket
-} // namespace gateway
+} // namespace net
 } // namespace gs

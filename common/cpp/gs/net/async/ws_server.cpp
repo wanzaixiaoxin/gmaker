@@ -2,7 +2,6 @@
 #include "gs/net/async/event_loop.hpp"
 #include "ws_frame.hpp"
 #include <uv.h>
-#include <iostream>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -10,10 +9,12 @@
 #endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#else
+#include <unistd.h>
 #endif
 
 namespace gs {
-namespace gateway {
+namespace net {
 namespace websocket {
 
 WebSocketServer::WebSocketServer(const Config& cfg) : cfg_(cfg) {}
@@ -25,14 +26,12 @@ WebSocketServer::~WebSocketServer() {
 bool WebSocketServer::Start() {
     if (running_.exchange(true)) return false;
 
-    // Accept loop
     loop_ = std::make_unique<gs::net::async::AsyncEventLoop>();
     if (!loop_->Init()) {
         running_.store(false);
         return false;
     }
 
-    // Worker loops：数量 = CPU 核心数
     unsigned hw = std::thread::hardware_concurrency();
     if (hw == 0) hw = 4;
     for (unsigned i = 0; i < hw; ++i) {
@@ -83,7 +82,6 @@ bool WebSocketServer::Start() {
         return false;
     }
 
-    // 启动 worker 线程
     for (auto& worker : worker_loops_) {
         worker_threads_.emplace_back([w = worker.get()]() {
             w->Run();
@@ -123,25 +121,30 @@ void WebSocketServer::Stop() {
 }
 
 void WebSocketServer::SetCallbacks(ConnectCallback on_connect,
-                                    DataCallback on_data,
-                                    CloseCallback on_close) {
-    on_connect_ = on_connect;
-    on_data_    = on_data;
-    on_close_   = on_close;
+                                   MessageCallback on_message,
+                                   CloseCallback on_close) {
+    on_connect_ = std::move(on_connect);
+    on_message_ = std::move(on_message);
+    on_close_   = std::move(on_close);
 }
 
-void WebSocketServer::Use(std::shared_ptr<gs::net::Middleware> mw) {
-    middlewares_.push_back(std::move(mw));
-}
-
-void WebSocketServer::Broadcast(const gs::net::Packet& pkt) {
-    auto data = gs::net::EncodePacket(pkt);
-    auto ws_frame = EncodeWSBinaryFrame(data.Data(), data.Size());
+void WebSocketServer::Broadcast(MessageType type, const gs::net::Buffer& message) {
+    uint8_t opcode = type == MessageType::Text ? OPCODE_TEXT : OPCODE_BINARY;
+    auto ws_frame = EncodeWSFrame(opcode, message.Data(), message.Size());
 
     std::lock_guard<std::mutex> lk(conn_mtx_);
     for (auto& [id, conn] : conns_) {
-        conn->SendFrameBuffer(ws_frame.Slice(0, ws_frame.Size()));
+        conn->SendFrameBuffer(ws_frame);
     }
+}
+
+void WebSocketServer::BroadcastBinary(const gs::net::Buffer& message) {
+    Broadcast(MessageType::Binary, message);
+}
+
+size_t WebSocketServer::ConnectionCount() const {
+    std::lock_guard<std::mutex> lk(conn_mtx_);
+    return conns_.size();
 }
 
 void WebSocketServer::OnAccept(uv_tcp_t* client) {
@@ -155,7 +158,6 @@ void WebSocketServer::OnAccept(uv_tcp_t* client) {
         }
     }
 
-    // 获取底层 fd/socket，并复制一份
 #ifdef _WIN32
     uv_os_fd_t fd;
     if (uv_fileno((uv_handle_t*)client, &fd) != 0) {
@@ -187,11 +189,9 @@ void WebSocketServer::OnAccept(uv_tcp_t* client) {
     }
 #endif
 
-    // Round-robin 选择 worker loop
     size_t idx = next_worker_.fetch_add(1) % worker_loops_.size();
     auto* worker_loop = worker_loops_[idx].get();
 
-    // 在 worker loop 上重建 uv_tcp_t
     auto* worker_client = new uv_tcp_t;
     if (uv_tcp_init(worker_loop->RawLoop(), worker_client) != 0) {
         delete worker_client;
@@ -219,7 +219,6 @@ void WebSocketServer::OnAccept(uv_tcp_t* client) {
         return;
     }
 
-    // 关闭原 client（关闭 original_sock/original_fd，dup 的仍然有效）
     uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
 
     uint64_t id = ++conn_id_counter_;
@@ -230,7 +229,7 @@ void WebSocketServer::OnAccept(uv_tcp_t* client) {
     }
 
     conn->SetCallbacks(
-        [this](WebSocketConnection* c, gs::net::Packet& p) { OnConnData(c, p); },
+        [this](WebSocketConnection* c, MessageType t, gs::net::Buffer& m) { OnConnMessage(c, t, m); },
         [this](WebSocketConnection* c) { OnConnClose(c); }
     );
 
@@ -244,14 +243,9 @@ void WebSocketServer::OnAccept(uv_tcp_t* client) {
     }
 }
 
-void WebSocketServer::OnConnData(WebSocketConnection* conn, gs::net::Packet& pkt) {
-    for (auto& mw : middlewares_) {
-        if (!mw->OnPacket(conn, pkt)) {
-            return;
-        }
-    }
-    if (on_data_) {
-        on_data_(conn, pkt);
+void WebSocketServer::OnConnMessage(WebSocketConnection* conn, MessageType type, gs::net::Buffer& message) {
+    if (on_message_) {
+        on_message_(conn, type, message);
     }
 }
 
@@ -270,5 +264,5 @@ void WebSocketServer::RunEventLoop() {
 }
 
 } // namespace websocket
-} // namespace gateway
+} // namespace net
 } // namespace gs
