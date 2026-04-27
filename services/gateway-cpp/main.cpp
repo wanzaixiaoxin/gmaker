@@ -635,51 +635,64 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
         }
     }
 
-    // 准备响应包
-    Packet res;
-    res.header = pkt.header;
-    res.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.Size() - 8);
+    // 准备响应包模板：payload 前 8 字节是目标 conn_id，不下发给客户端。
+    Packet plain_res;
+    plain_res.header = pkt.header;
+    plain_res.header.flags &= ~static_cast<uint32_t>(gs::net::Flag::ENCRYPT);
+    plain_res.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.Size() - 8);
     if (pkt.payload.Size() > 8) {
-        res.payload = Buffer(std::vector<uint8_t>(pkt.payload.Data() + 8, pkt.payload.Data() + pkt.payload.Size()));
+        plain_res.payload = Buffer(std::vector<uint8_t>(pkt.payload.Data() + 8, pkt.payload.Data() + pkt.payload.Size()));
     }
 
-    // 加密
-    auto session_key = handshake_mw_->GetSessionKey(conn_id);
-    if (!session_key.empty() && res.payload.Size() > 0) {
+    auto build_response_for = [&](uint64_t target_id, Packet& out) -> bool {
+        out = plain_res;
+        if (out.payload.Size() == 0) {
+            out.header.length = HEADER_SIZE;
+            return true;
+        }
+
+        auto session_key = handshake_mw_->GetSessionKey(target_id);
+        if (session_key.empty()) {
+            if (logger_) logger_->Warn("No session key for response target " + std::to_string(target_id));
+            return false;
+        }
+
         try {
             auto encrypted = EncryptPacketPayload(session_key,
-                std::vector<uint8_t>(res.payload.Data(), res.payload.Data() + res.payload.Size()));
-            res.payload = Buffer::FromVector(encrypted);
-            res.header.length = HEADER_SIZE + static_cast<uint32_t>(res.payload.Size());
-            res.header.flags |= static_cast<uint32_t>(gs::net::Flag::ENCRYPT);
+                std::vector<uint8_t>(out.payload.Data(), out.payload.Data() + out.payload.Size()));
+            out.payload = Buffer::FromVector(std::move(encrypted));
+            out.header.length = HEADER_SIZE + static_cast<uint32_t>(out.payload.Size());
+            out.header.flags |= static_cast<uint32_t>(gs::net::Flag::ENCRYPT);
+            return true;
         } catch (const std::exception& e) {
-            if (logger_) logger_->Error("Encryption failed: " + std::string(e.what()));
-            return;
+            if (logger_) logger_->Error("Encryption failed for target " + std::to_string(target_id) + ": " + std::string(e.what()));
+            return false;
         }
-    }
+    };
 
-    // 发送
-    std::lock_guard<std::mutex> lk(sessions_mtx_);
+    auto enqueue_to_client = [&](uint64_t target_id, const Packet& response) {
+        std::lock_guard<std::mutex> lk(sessions_mtx_);
+        auto it = clients_.find(target_id);
+        if (it == clients_.end()) return;
+
+        auto ws_it = ws_clients_.find(target_id);
+        if (ws_it != ws_clients_.end()) {
+            coalescer_->Enqueue(std::static_pointer_cast<IConnection>(ws_it->second), response);
+        } else {
+            coalescer_->Enqueue(it->second, response);
+        }
+    };
+
     if (targets.empty()) {
-        auto it = clients_.find(conn_id);
-        if (it != clients_.end()) {
-            auto ws_it = ws_clients_.find(conn_id);
-            if (ws_it != ws_clients_.end()) {
-                coalescer_->Enqueue(std::static_pointer_cast<IConnection>(ws_it->second), res);
-            } else {
-                coalescer_->Enqueue(it->second, res);
-            }
+        Packet response;
+        if (build_response_for(conn_id, response)) {
+            enqueue_to_client(conn_id, response);
         }
     } else {
         for (auto cid : targets) {
-            auto it = clients_.find(cid);
-            if (it != clients_.end()) {
-                auto ws_it = ws_clients_.find(cid);
-                if (ws_it != ws_clients_.end()) {
-                    coalescer_->Enqueue(std::static_pointer_cast<IConnection>(ws_it->second), res);
-                } else {
-                    coalescer_->Enqueue(it->second, res);
-                }
+            Packet response;
+            if (build_response_for(cid, response)) {
+                enqueue_to_client(cid, response);
             }
         }
     }

@@ -132,8 +132,16 @@ void WebSocketServer::Broadcast(MessageType type, const gs::net::Buffer& message
     uint8_t opcode = type == MessageType::Text ? OPCODE_TEXT : OPCODE_BINARY;
     auto ws_frame = EncodeWSFrame(opcode, message.Data(), message.Size());
 
-    std::lock_guard<std::mutex> lk(conn_mtx_);
-    for (auto& [id, conn] : conns_) {
+    std::vector<std::shared_ptr<WebSocketConnection>> snapshot;
+    {
+        std::lock_guard<std::mutex> lk(conn_mtx_);
+        snapshot.reserve(conns_.size());
+        for (auto& [id, conn] : conns_) {
+            snapshot.push_back(conn);
+        }
+    }
+
+    for (auto& conn : snapshot) {
         conn->SendFrameBuffer(ws_frame);
     }
 }
@@ -192,42 +200,16 @@ void WebSocketServer::OnAccept(uv_tcp_t* client) {
     size_t idx = next_worker_.fetch_add(1) % worker_loops_.size();
     auto* worker_loop = worker_loops_[idx].get();
 
-    auto* worker_client = new uv_tcp_t;
-    if (uv_tcp_init(worker_loop->RawLoop(), worker_client) != 0) {
-        delete worker_client;
 #ifdef _WIN32
-        closesocket(dup_sock);
+    uv_os_sock_t os_sock = dup_sock;
 #else
-        close(dup_fd);
+    uv_os_sock_t os_sock = dup_fd;
 #endif
-        uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
-        return;
-    }
-
-#ifdef _WIN32
-    if (uv_tcp_open(worker_client, dup_sock) != 0) {
-#else
-    if (uv_tcp_open(worker_client, dup_fd) != 0) {
-#endif
-        uv_close((uv_handle_t*)worker_client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
-#ifdef _WIN32
-        closesocket(dup_sock);
-#else
-        close(dup_fd);
-#endif
-        uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
-        return;
-    }
 
     uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
 
     uint64_t id = ++conn_id_counter_;
     auto conn = std::make_shared<WebSocketConnection>(worker_loop, id);
-    if (!conn->InitFromAccepted(worker_client)) {
-        uv_close((uv_handle_t*)worker_client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
-        return;
-    }
-
     conn->SetCallbacks(
         [this](WebSocketConnection* c, MessageType t, gs::net::Buffer& m) { OnConnMessage(c, t, m); },
         [this](WebSocketConnection* c) { OnConnClose(c); }
@@ -238,9 +220,59 @@ void WebSocketServer::OnAccept(uv_tcp_t* client) {
         conns_[id] = conn;
     }
 
-    if (on_connect_) {
-        on_connect_(conn.get());
-    }
+    worker_loop->Post([this, worker_loop, conn, os_sock]() {
+        if (!running_.load()) {
+            std::lock_guard<std::mutex> lk(conn_mtx_);
+            conns_.erase(conn->ID());
+#ifdef _WIN32
+            closesocket(os_sock);
+#else
+            close(os_sock);
+#endif
+            return;
+        }
+
+        auto* worker_client = new uv_tcp_t;
+        if (uv_tcp_init(worker_loop->RawLoop(), worker_client) != 0) {
+            delete worker_client;
+            {
+                std::lock_guard<std::mutex> lk(conn_mtx_);
+                conns_.erase(conn->ID());
+            }
+#ifdef _WIN32
+            closesocket(os_sock);
+#else
+            close(os_sock);
+#endif
+            return;
+        }
+
+        if (uv_tcp_open(worker_client, os_sock) != 0) {
+            {
+                std::lock_guard<std::mutex> lk(conn_mtx_);
+                conns_.erase(conn->ID());
+            }
+            uv_close((uv_handle_t*)worker_client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+#ifdef _WIN32
+            closesocket(os_sock);
+#else
+            close(os_sock);
+#endif
+            return;
+        }
+
+        if (!conn->InitFromAccepted(worker_client)) {
+            {
+                std::lock_guard<std::mutex> lk(conn_mtx_);
+                conns_.erase(conn->ID());
+            }
+            uv_close((uv_handle_t*)worker_client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+            return;
+        }
+        if (on_connect_) {
+            on_connect_(conn.get());
+        }
+    });
 }
 
 void WebSocketServer::OnConnMessage(WebSocketConnection* conn, MessageType type, gs::net::Buffer& message) {

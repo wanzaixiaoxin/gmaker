@@ -66,8 +66,8 @@ std::string ExtractHeader(const std::string& headers, const char* key) {
 bool IsHttpGetUpgrade(const std::string& request) {
     size_t line_end = request.find("\r\n");
     if (line_end == std::string::npos) return false;
-    std::string line = request.substr(0, line_end);
-    return line.rfind("GET ", 0) == 0 && line.find(" HTTP/1.1") != std::string::npos;
+    std::string line = ToLower(request.substr(0, line_end));
+    return line.rfind("get ", 0) == 0 && line.find(" http/1.1") != std::string::npos;
 }
 
 bool IsControlOpcode(uint8_t opcode) {
@@ -85,7 +85,7 @@ MessageType ToMessageType(uint8_t opcode) {
 } // namespace
 
 WebSocketConnection::WebSocketConnection(gs::net::async::AsyncEventLoop* loop, uint64_t id)
-    : loop_(loop), id_(id) {}
+    : loop_(loop), id_(id), write_req_(std::make_unique<WriteReq>()) {}
 
 WebSocketConnection::~WebSocketConnection() {
     if (handle_ && !closing_.load()) {
@@ -96,6 +96,11 @@ WebSocketConnection::~WebSocketConnection() {
 bool WebSocketConnection::InitFromAccepted(uv_tcp_t* client) {
     handle_ = client;
     handle_->data = this;
+    if (!StartTimer()) {
+        handle_->data = nullptr;
+        handle_ = nullptr;
+        return false;
+    }
     StartRead();
     return true;
 }
@@ -117,8 +122,11 @@ void WebSocketConnection::Close() {
 void WebSocketConnection::DoClose() {
     closing_.store(true);
     state_.store(State::kClosing);
+    StopTimer();
     if (handle_ && !uv_is_closing((uv_handle_t*)handle_)) {
         uv_close((uv_handle_t*)handle_, OnCloseDone);
+    } else if (!handle_) {
+        keep_alive_.reset();
     }
 }
 
@@ -158,6 +166,7 @@ void WebSocketConnection::OnDataReceived(const uint8_t* data, size_t len) {
             handshake_buf_.clear();
             handshake_buf_.shrink_to_fit();
             state_.store(State::kConnected);
+            MarkFrameActivity();
             ProcessWSFrames();
         }
     } else if (state_.load() == State::kConnected) {
@@ -283,29 +292,34 @@ void WebSocketConnection::ProcessWSFrames() {
             return;
         }
 
-        std::vector<uint8_t> payload_vec;
-        payload_vec.resize(static_cast<size_t>(payload_len));
-        if (payload_len > 0) {
-            ws_read_buf_.ReadAt(payload_offset, payload_vec.data(), payload_vec.size());
-            UnmaskWSPayload(payload_vec.data(), payload_vec.size(), frame.mask_key);
-        }
-        uint8_t* payload = payload_vec.data();
-        size_t payload_size = payload_vec.size();
+        size_t payload_size = static_cast<size_t>(payload_len);
+        MarkFrameActivity();
 
-        if (opcode == OPCODE_CLOSE) {
-            SendCloseAndDrain(1000);
-            return;
-        }
+        if (is_control) {
+            uint8_t control_payload[125];
+            if (payload_size > 0) {
+                ws_read_buf_.ReadAt(payload_offset, control_payload, payload_size);
+                UnmaskWSPayload(control_payload, payload_size, frame.mask_key);
+            }
+            const uint8_t* control_data = payload_size > 0 ? control_payload : nullptr;
 
-        if (opcode == OPCODE_PING) {
-            QueueFrame(EncodeWSPongFrame(payload, payload_size));
-            ws_read_buf_.Consume(total_len);
-            continue;
-        }
+            if (opcode == OPCODE_CLOSE) {
+                SendCloseAndDrain(1000);
+                return;
+            }
 
-        if (opcode == OPCODE_PONG) {
-            ws_read_buf_.Consume(total_len);
-            continue;
+            if (opcode == OPCODE_PING) {
+                QueueFrame(EncodeWSPongFrame(control_data, payload_size));
+                ws_read_buf_.Consume(total_len);
+                continue;
+            }
+
+            if (opcode == OPCODE_PONG) {
+                ping_outstanding_ = false;
+                ping_deadline_ms_ = 0;
+                ws_read_buf_.Consume(total_len);
+                continue;
+            }
         }
 
         if (IsMessageOpcode(opcode)) {
@@ -314,16 +328,26 @@ void WebSocketConnection::ProcessWSFrames() {
                 return;
             }
             if (frame.fin) {
-                auto msg = gs::net::Buffer::FromVector(std::move(payload_vec));
+                auto msg = gs::net::Buffer::Allocate(payload_size);
+                if (payload_size > 0) {
+                    ws_read_buf_.ReadAt(payload_offset, msg.Data(), payload_size);
+                    UnmaskWSPayload(msg.Data(), payload_size, frame.mask_key);
+                }
+                ws_read_buf_.Consume(total_len);
                 if (on_message_) {
                     on_message_(this, ToMessageType(opcode), msg);
                 }
             } else {
+                std::vector<uint8_t> payload_vec(payload_size);
+                if (payload_size > 0) {
+                    ws_read_buf_.ReadAt(payload_offset, payload_vec.data(), payload_size);
+                    UnmaskWSPayload(payload_vec.data(), payload_size, frame.mask_key);
+                }
                 fragmenting_ = true;
                 fragmented_opcode_ = opcode;
                 fragmented_payload_ = std::move(payload_vec);
+                ws_read_buf_.Consume(total_len);
             }
-            ws_read_buf_.Consume(total_len);
             continue;
         }
 
@@ -336,18 +360,25 @@ void WebSocketConnection::ProcessWSFrames() {
                 FailProtocol(1009);
                 return;
             }
-            fragmented_payload_.insert(fragmented_payload_.end(), payload, payload + payload_size);
+            if (payload_size > 0) {
+                std::vector<uint8_t> payload_vec(payload_size);
+                ws_read_buf_.ReadAt(payload_offset, payload_vec.data(), payload_size);
+                UnmaskWSPayload(payload_vec.data(), payload_size, frame.mask_key);
+                fragmented_payload_.insert(fragmented_payload_.end(), payload_vec.data(), payload_vec.data() + payload_size);
+            }
             if (frame.fin) {
                 auto msg = gs::net::Buffer::FromVector(std::move(fragmented_payload_));
                 auto msg_type = ToMessageType(fragmented_opcode_);
                 fragmented_payload_.clear();
                 fragmented_opcode_ = 0;
                 fragmenting_ = false;
+                ws_read_buf_.Consume(total_len);
                 if (on_message_) {
                     on_message_(this, msg_type, msg);
                 }
+            } else {
+                ws_read_buf_.Consume(total_len);
             }
-            ws_read_buf_.Consume(total_len);
             continue;
         }
 
@@ -443,11 +474,19 @@ void WebSocketConnection::ProcessWriteQueue() {
     }
 
     constexpr size_t MAX_BATCH = 128;
-    auto* req = new WriteReq;
+    auto* req = write_req_.get();
+    if (!req) {
+        writing_.store(false);
+        return;
+    }
     req->conn = shared_from_this();
-    req->buffers.reserve(MAX_BATCH);
-    std::vector<uv_buf_t> ubufs;
-    ubufs.reserve(MAX_BATCH);
+    req->buffers.clear();
+    if (req->buffers.capacity() < MAX_BATCH) {
+        req->buffers.reserve(MAX_BATCH);
+    }
+    static thread_local std::vector<uv_buf_t> tls_ubufs;
+    tls_ubufs.clear();
+    tls_ubufs.reserve(MAX_BATCH);
 
     bool should_resume_read = false;
     {
@@ -463,7 +502,6 @@ void WebSocketConnection::ProcessWriteQueue() {
             if (close_after_write_.exchange(false)) {
                 DoClose();
             }
-            delete req;
             return;
         }
         if (read_paused_ && write_queue_bytes_ < WRITE_RESUME_THRESHOLD) {
@@ -482,21 +520,23 @@ void WebSocketConnection::ProcessWriteQueue() {
         uv_buf_t uvbuf;
         uvbuf.base = reinterpret_cast<char*>(const_cast<uint8_t*>(b.Data()));
         uvbuf.len = static_cast<unsigned int>(b.Size());
-        ubufs.push_back(uvbuf);
+        tls_ubufs.push_back(uvbuf);
     }
 
-    if (ubufs.empty()) {
-        delete req;
+    if (tls_ubufs.empty()) {
+        req->conn.reset();
+        req->buffers.clear();
         ProcessWriteQueue();
         return;
     }
 
-    int r = uv_write(&req->req, (uv_stream_t*)handle_, ubufs.data(),
-                     static_cast<unsigned int>(ubufs.size()), OnWriteDone);
+    int r = uv_write(&req->req, (uv_stream_t*)handle_, tls_ubufs.data(),
+                     static_cast<unsigned int>(tls_ubufs.size()), OnWriteDone);
     if (r != 0) {
         writing_.store(false);
         auto self = req->conn;
-        delete req;
+        req->conn.reset();
+        req->buffers.clear();
         if (self) self->Close();
     }
 }
@@ -506,7 +546,7 @@ void WebSocketConnection::OnWriteDone(uv_write_t* uv_req, int status) {
     std::shared_ptr<WebSocketConnection> conn;
     if (req) {
         conn = std::move(req->conn);
-        delete req;
+        req->buffers.clear();
     }
     if (!conn) return;
     if (status < 0) {
@@ -525,6 +565,13 @@ void WebSocketConnection::OnCloseDone(uv_handle_t* handle) {
     conn->state_.store(State::kClosed);
     if (cb) cb(conn);
     conn->keep_alive_.reset();
+}
+
+void WebSocketConnection::OnTimer(uv_timer_t* timer) {
+    auto* conn = static_cast<WebSocketConnection*>(timer->data);
+    if (conn) {
+        conn->CheckLiveness();
+    }
 }
 
 bool WebSocketConnection::IsWritable() const {
@@ -547,6 +594,83 @@ void WebSocketConnection::SendCloseAndDrain(uint16_t code) {
         return;
     }
     Close();
+}
+
+bool WebSocketConnection::StartTimer() {
+    if (!loop_ || !loop_->RawLoop() || timer_) return false;
+
+    timer_ = new uv_timer_t;
+    if (uv_timer_init(loop_->RawLoop(), timer_) != 0) {
+        delete timer_;
+        timer_ = nullptr;
+        return false;
+    }
+
+    timer_->data = this;
+    uint64_t now = NowMs();
+    accepted_at_ms_ = now;
+    last_activity_ms_ = now;
+    last_ping_ms_ = now;
+    int r = uv_timer_start(timer_, OnTimer, TIMER_INTERVAL_MS, TIMER_INTERVAL_MS);
+    if (r != 0) {
+        uv_close((uv_handle_t*)timer_, [](uv_handle_t* h) {
+            delete (uv_timer_t*)h;
+        });
+        timer_ = nullptr;
+        return false;
+    }
+    return true;
+}
+
+void WebSocketConnection::StopTimer() {
+    if (!timer_) return;
+    uv_timer_stop(timer_);
+    if (!uv_is_closing((uv_handle_t*)timer_)) {
+        uv_close((uv_handle_t*)timer_, [](uv_handle_t* h) {
+            delete (uv_timer_t*)h;
+        });
+    }
+    timer_ = nullptr;
+}
+
+void WebSocketConnection::CheckLiveness() {
+    if (closed_.load() || closing_.load()) return;
+
+    uint64_t now = NowMs();
+    State state = state_.load();
+    if (state == State::kHandshaking) {
+        if (now - accepted_at_ms_ >= HANDSHAKE_TIMEOUT_MS) {
+            Close();
+        }
+        return;
+    }
+    if (state != State::kConnected) return;
+
+    if (ping_outstanding_ && now >= ping_deadline_ms_) {
+        Close();
+        return;
+    }
+
+    if (now - last_activity_ms_ >= IDLE_TIMEOUT_MS) {
+        Close();
+        return;
+    }
+
+    if (!ping_outstanding_ && now - last_ping_ms_ >= PING_INTERVAL_MS) {
+        QueueFrame(EncodeWSFrame(OPCODE_PING, nullptr, 0));
+        ping_outstanding_ = true;
+        last_ping_ms_ = now;
+        ping_deadline_ms_ = now + PONG_TIMEOUT_MS;
+    }
+}
+
+uint64_t WebSocketConnection::NowMs() const {
+    if (!loop_ || !loop_->RawLoop()) return 0;
+    return uv_now(loop_->RawLoop());
+}
+
+void WebSocketConnection::MarkFrameActivity() {
+    last_activity_ms_ = NowMs();
 }
 
 } // namespace websocket

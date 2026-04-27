@@ -96,18 +96,18 @@ void SHA1Update(SHA1Ctx* ctx, const uint8_t* data, size_t len) {
 void SHA1Final(uint8_t digest[20], SHA1Ctx* ctx) {
     uint64_t finalcount = ctx->count;
     size_t i = (size_t)((finalcount >> 3) & 63);
-    uint8_t end[72];
-    end[i++] = 0x80;
+
+    ctx->buffer[i++] = 0x80;
     if (i > 56) {
-        memset(end + i, 0, 64 - i);
-        SHA1Transform(ctx->state, end);
+        memset(ctx->buffer + i, 0, 64 - i);
+        SHA1Transform(ctx->state, ctx->buffer);
         i = 0;
     }
-    memset(end + i, 0, 56 - i);
+    memset(ctx->buffer + i, 0, 56 - i);
     for (int b = 0; b < 8; ++b) {
-        end[56 + b] = (uint8_t)((finalcount >> ((7 - b) * 8)) & 0xFF);
+        ctx->buffer[56 + b] = (uint8_t)((finalcount >> ((7 - b) * 8)) & 0xFF);
     }
-    SHA1Transform(ctx->state, end);
+    SHA1Transform(ctx->state, ctx->buffer);
     for (i = 0; i < 20; ++i) {
         digest[i] = (uint8_t)((ctx->state[i >> 2] >> ((3 - (i & 3)) * 8)) & 0xFF);
     }
