@@ -2,6 +2,7 @@
 
 #include "../iconnection.hpp"
 #include "../packet.hpp"
+#include "../ring_buffer.hpp"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -96,26 +97,10 @@ private:
     CloseCallback on_close_;
     ConnectCallback on_connect_;
 
-    // 环形读缓冲区：替代 vector + memmove compact
-    class RingBuffer {
-    public:
-        explicit RingBuffer(size_t cap = 1024 * 1024);  // 1MB 初始容量，减少扩容
-        void Append(const uint8_t* data, size_t len);
-        size_t Readable() const;
-        bool IsContiguous(size_t offset, size_t len) const;
-        const uint8_t* DataAt(size_t offset) const;
-        void ReadAt(size_t offset, uint8_t* out, size_t len) const;
-        void Consume(size_t len);
-    private:
-        void EnsureSpace(size_t len);
-        std::vector<uint8_t> buf_;
-        size_t rpos_ = 0;
-        size_t wpos_ = 0;
-        size_t size_ = 0;
-    };
+    // 使用公共 RingBuffer（见 ../ring_buffer.hpp）
 
     std::mutex read_mtx_;
-    RingBuffer read_ring_buf_;
+    gs::net::RingBuffer read_ring_buf_;
     bool read_paused_ = false;
 
     // 写队列（批量 gather write）

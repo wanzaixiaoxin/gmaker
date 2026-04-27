@@ -18,6 +18,7 @@ Config LoadConfig(const std::string& path) {
     
     auto network = json.GetObject("network");
     cfg.listen_port = static_cast<uint16_t>(network.GetInt("port", 8081));
+    cfg.websocket_port = static_cast<uint16_t>(network.GetInt("websocket_port", 0));
     cfg.max_connections = static_cast<int>(network.GetInt("max_connections", 10000));
     
     auto discovery = json.GetObject("discovery");
@@ -43,6 +44,7 @@ void PrintConfig(const Config& cfg) {
     std::cout << "Service Type:     " << cfg.service_type << std::endl;
     std::cout << "Node ID:          " << cfg.node_id << std::endl;
     std::cout << "Listen port:      " << cfg.listen_port << std::endl;
+    std::cout << "WebSocket port:   " << (cfg.websocket_port ? std::to_string(cfg.websocket_port) : "disabled") << std::endl;
     std::cout << "Max connections:  " << cfg.max_connections << std::endl;
     std::cout << "Metrics addr:     " << cfg.metrics_addr << std::endl;
     std::cout << "Log level:        " << cfg.log_level << std::endl;

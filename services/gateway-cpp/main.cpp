@@ -9,6 +9,7 @@
 #include <csignal>
 #include <atomic>
 #include "gateway_config.hpp"
+#include "gs/net/async/ws_server.hpp"
 #include "gs/net/async/tcp_server.hpp"
 #include "gs/net/async/upstream.hpp"
 #include "gs/net/async/coalescer.hpp"
@@ -99,9 +100,9 @@ public:
     void Wait();
 
 private:
-    void OnClientConnect(AsyncTCPConnection* conn);
-    void OnClientPacket(AsyncTCPConnection* conn, Packet& pkt);
-    void OnClientClose(AsyncTCPConnection* conn);
+    void OnClientConnect(IConnection* conn);
+    void OnClientPacket(IConnection* conn, Packet& pkt);
+    void OnClientClose(IConnection* conn);
     void OnUpstreamPacket(IConnection* conn, Packet& pkt);
     
     // 根据命令 ID 路由到对应的上游池
@@ -110,12 +111,13 @@ private:
     void HeartbeatLoop();
     
     std::unique_ptr<AsyncTCPServer> server_;
+    std::unique_ptr<gs::gateway::websocket::WebSocketServer> ws_server_;
     std::unique_ptr<gs::discovery::UpstreamManager> upstream_mgr_;
     std::unique_ptr<AsyncWriteCoalescer> coalescer_;
     std::unique_ptr<gs::discovery::ServiceDiscovery> sd_;
-    
+
     std::mutex sessions_mtx_;
-    std::unordered_map<uint64_t, AsyncTCPConnection*> clients_;
+    std::unordered_map<uint64_t, IConnection*> clients_;
     std::vector<uint8_t> master_key_;
     std::unique_ptr<gs::replay::Checker> replay_checker_;
     
@@ -265,7 +267,27 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
         if (logger_) logger_->Error("Failed to start gateway server");
         return false;
     }
-    if (logger_) logger_->Info("Gateway server started on port " + std::to_string(cfg.listen_port));
+    if (logger_) logger_->Info("Gateway TCP server started on port " + std::to_string(cfg.listen_port));
+
+    // 启动 WebSocket 服务器（如果配置端口 > 0）
+    if (cfg.websocket_port > 0) {
+        gs::gateway::websocket::WebSocketServer::Config ws_cfg;
+        ws_cfg.port = cfg.websocket_port;
+        ws_cfg.max_conn = cfg.max_connections;
+        ws_server_ = std::make_unique<gs::gateway::websocket::WebSocketServer>(ws_cfg);
+        ws_server_->SetCallbacks(
+            [this](gs::gateway::websocket::WebSocketConnection* c) { OnClientConnect(c); },
+            [this](gs::gateway::websocket::WebSocketConnection* c, Packet& p) { OnClientPacket(c, p); },
+            [this](gs::gateway::websocket::WebSocketConnection* c) { OnClientClose(c); }
+        );
+        ws_server_->Use(handshake_mw_);
+        ws_server_->Use(encryption_mw_);
+        if (!ws_server_->Start()) {
+            if (logger_) logger_->Warn("Failed to start WebSocket server on port " + std::to_string(cfg.websocket_port));
+        } else {
+            if (logger_) logger_->Info("Gateway WebSocket server started on port " + std::to_string(cfg.websocket_port));
+        }
+    }
 
     // 初始化写聚合器
     coalescer_ = std::make_unique<AsyncWriteCoalescer>(server_->EventLoop(), cfg.coalescer_interval_ms);
@@ -321,6 +343,7 @@ void Gateway::Stop() {
     if (heartbeat_thread_.joinable()) heartbeat_thread_.join();
     
     if (server_) server_->Stop();
+    if (ws_server_) ws_server_->Stop();
     if (coalescer_) coalescer_->Stop();
     if (upstream_mgr_) upstream_mgr_->Stop();
     if (sd_) sd_->Close();
@@ -342,14 +365,14 @@ void Gateway::Wait() {
     stop_cv_.wait(lk, [this] { return stop_flag_; });
 }
 
-void Gateway::OnClientConnect(AsyncTCPConnection* conn) {
+void Gateway::OnClientConnect(IConnection* conn) {
     std::lock_guard<std::mutex> lk(sessions_mtx_);
     clients_[conn->ID()] = conn;
     conn_gauge_->Inc();
     if (logger_) logger_->Info("Client connected: " + std::to_string(conn->ID()));
 }
 
-void Gateway::OnClientPacket(AsyncTCPConnection* conn, Packet& pkt) {
+void Gateway::OnClientPacket(IConnection* conn, Packet& pkt) {
     auto start = std::chrono::steady_clock::now();
     req_counter_->Inc();
 
@@ -380,7 +403,7 @@ void Gateway::OnClientPacket(AsyncTCPConnection* conn, Packet& pkt) {
     req_latency_->Observe(static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
 }
 
-void Gateway::OnClientClose(AsyncTCPConnection* conn) {
+void Gateway::OnClientClose(IConnection* conn) {
     // 清理 room 成员
     {
         std::lock_guard<std::mutex> lk(room_mtx_);

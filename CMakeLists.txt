@@ -172,6 +172,7 @@ endif()
 # libuv 异步网络封装层（已统一替代阻塞模型）
 set(CPP_ASYNC_NET_SOURCES
     common/cpp/gs/net/buffer.cpp
+    common/cpp/gs/net/ring_buffer.cpp
     common/cpp/gs/net/thread_pool.cpp
     common/cpp/gs/net/async/io_thread.cpp
     common/cpp/gs/net/async/event_loop.cpp
@@ -180,6 +181,9 @@ set(CPP_ASYNC_NET_SOURCES
     common/cpp/gs/net/async/tcp_server.cpp
     common/cpp/gs/net/async/upstream.cpp
     common/cpp/gs/net/async/coalescer.cpp
+    common/cpp/gs/net/async/ws_frame.cpp
+    common/cpp/gs/net/async/ws_connection.cpp
+    common/cpp/gs/net/async/ws_server.cpp
 )
 
 set(CPP_RPC_SOURCES

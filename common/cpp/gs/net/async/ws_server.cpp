@@ -1,0 +1,274 @@
+#include "ws_server.hpp"
+#include "gs/net/async/event_loop.hpp"
+#include "ws_frame.hpp"
+#include <uv.h>
+#include <iostream>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#endif
+
+namespace gs {
+namespace gateway {
+namespace websocket {
+
+WebSocketServer::WebSocketServer(const Config& cfg) : cfg_(cfg) {}
+
+WebSocketServer::~WebSocketServer() {
+    Stop();
+}
+
+bool WebSocketServer::Start() {
+    if (running_.exchange(true)) return false;
+
+    // Accept loop
+    loop_ = std::make_unique<gs::net::async::AsyncEventLoop>();
+    if (!loop_->Init()) {
+        running_.store(false);
+        return false;
+    }
+
+    // Worker loops：数量 = CPU 核心数
+    unsigned hw = std::thread::hardware_concurrency();
+    if (hw == 0) hw = 4;
+    for (unsigned i = 0; i < hw; ++i) {
+        auto worker = std::make_unique<gs::net::async::AsyncEventLoop>();
+        if (!worker->Init()) {
+            running_.store(false);
+            return false;
+        }
+        worker_loops_.push_back(std::move(worker));
+    }
+
+    listen_handle_ = new uv_tcp_t;
+    uv_tcp_init(loop_->RawLoop(), listen_handle_);
+    listen_handle_->data = this;
+
+    sockaddr_in addr{};
+    if (uv_ip4_addr(cfg_.host.c_str(), cfg_.port, &addr) != 0) {
+        uv_close((uv_handle_t*)listen_handle_, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        listen_handle_ = nullptr;
+        running_.store(false);
+        return false;
+    }
+
+    if (uv_tcp_bind(listen_handle_, (const sockaddr*)&addr, 0) != 0) {
+        uv_close((uv_handle_t*)listen_handle_, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        listen_handle_ = nullptr;
+        running_.store(false);
+        return false;
+    }
+
+    int r = uv_listen((uv_stream_t*)listen_handle_, 128,
+        [](uv_stream_t* server, int status) {
+            if (status < 0) return;
+            auto* self = static_cast<WebSocketServer*>(server->data);
+            auto* client = new uv_tcp_t;
+            uv_tcp_init(self->loop_->RawLoop(), client);
+            if (uv_accept(server, (uv_stream_t*)client) == 0) {
+                self->OnAccept(client);
+            } else {
+                uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+            }
+        });
+
+    if (r != 0) {
+        uv_close((uv_handle_t*)listen_handle_, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        listen_handle_ = nullptr;
+        running_.store(false);
+        return false;
+    }
+
+    // 启动 worker 线程
+    for (auto& worker : worker_loops_) {
+        worker_threads_.emplace_back([w = worker.get()]() {
+            w->Run();
+        });
+    }
+
+    loop_thread_ = std::thread(&WebSocketServer::RunEventLoop, this);
+    return true;
+}
+
+void WebSocketServer::Stop() {
+    if (!running_.exchange(false)) return;
+
+    if (loop_) loop_->Stop();
+    if (listen_handle_ && !uv_is_closing((uv_handle_t*)listen_handle_)) {
+        uv_close((uv_handle_t*)listen_handle_, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        listen_handle_ = nullptr;
+    }
+
+    std::unordered_map<uint64_t, std::shared_ptr<WebSocketConnection>> to_close;
+    {
+        std::lock_guard<std::mutex> lk(conn_mtx_);
+        to_close.swap(conns_);
+    }
+    for (auto& [id, conn] : to_close) {
+        conn->Close();
+    }
+
+    if (loop_thread_.joinable()) loop_thread_.join();
+
+    for (auto& worker : worker_loops_) {
+        worker->Stop();
+    }
+    for (auto& t : worker_threads_) {
+        if (t.joinable()) t.join();
+    }
+}
+
+void WebSocketServer::SetCallbacks(ConnectCallback on_connect,
+                                    DataCallback on_data,
+                                    CloseCallback on_close) {
+    on_connect_ = on_connect;
+    on_data_    = on_data;
+    on_close_   = on_close;
+}
+
+void WebSocketServer::Use(std::shared_ptr<gs::net::Middleware> mw) {
+    middlewares_.push_back(std::move(mw));
+}
+
+void WebSocketServer::Broadcast(const gs::net::Packet& pkt) {
+    auto data = gs::net::EncodePacket(pkt);
+    auto ws_frame = EncodeWSBinaryFrame(data.Data(), data.Size());
+
+    std::lock_guard<std::mutex> lk(conn_mtx_);
+    for (auto& [id, conn] : conns_) {
+        conn->SendFrameBuffer(ws_frame.Slice(0, ws_frame.Size()));
+    }
+}
+
+void WebSocketServer::OnAccept(uv_tcp_t* client) {
+    if (!client) return;
+
+    {
+        std::lock_guard<std::mutex> lk(conn_mtx_);
+        if (static_cast<int>(conns_.size()) >= cfg_.max_conn) {
+            uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+            return;
+        }
+    }
+
+    // 获取底层 fd/socket，并复制一份
+#ifdef _WIN32
+    uv_os_fd_t fd;
+    if (uv_fileno((uv_handle_t*)client, &fd) != 0) {
+        uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        return;
+    }
+    SOCKET original_sock = (SOCKET)fd;
+    WSAPROTOCOL_INFOW protocol_info;
+    if (WSADuplicateSocketW(original_sock, GetCurrentProcessId(), &protocol_info) != 0) {
+        uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        return;
+    }
+    SOCKET dup_sock = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP,
+                                  &protocol_info, 0, WSA_FLAG_OVERLAPPED);
+    if (dup_sock == INVALID_SOCKET) {
+        uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        return;
+    }
+#else
+    int original_fd;
+    if (uv_fileno((uv_handle_t*)client, &original_fd) != 0) {
+        uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        return;
+    }
+    int dup_fd = dup(original_fd);
+    if (dup_fd < 0) {
+        uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        return;
+    }
+#endif
+
+    // Round-robin 选择 worker loop
+    size_t idx = next_worker_.fetch_add(1) % worker_loops_.size();
+    auto* worker_loop = worker_loops_[idx].get();
+
+    // 在 worker loop 上重建 uv_tcp_t
+    auto* worker_client = new uv_tcp_t;
+    if (uv_tcp_init(worker_loop->RawLoop(), worker_client) != 0) {
+        delete worker_client;
+#ifdef _WIN32
+        closesocket(dup_sock);
+#else
+        close(dup_fd);
+#endif
+        uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        return;
+    }
+
+#ifdef _WIN32
+    if (uv_tcp_open(worker_client, dup_sock) != 0) {
+#else
+    if (uv_tcp_open(worker_client, dup_fd) != 0) {
+#endif
+        uv_close((uv_handle_t*)worker_client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+#ifdef _WIN32
+        closesocket(dup_sock);
+#else
+        close(dup_fd);
+#endif
+        uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        return;
+    }
+
+    // 关闭原 client（关闭 original_sock/original_fd，dup 的仍然有效）
+    uv_close((uv_handle_t*)client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+
+    uint64_t id = ++conn_id_counter_;
+    auto conn = std::make_shared<WebSocketConnection>(worker_loop, id);
+    if (!conn->InitFromAccepted(worker_client)) {
+        uv_close((uv_handle_t*)worker_client, [](uv_handle_t* h) { delete (uv_tcp_t*)h; });
+        return;
+    }
+
+    conn->SetCallbacks(
+        [this](WebSocketConnection* c, gs::net::Packet& p) { OnConnData(c, p); },
+        [this](WebSocketConnection* c) { OnConnClose(c); }
+    );
+
+    {
+        std::lock_guard<std::mutex> lk(conn_mtx_);
+        conns_[id] = conn;
+    }
+
+    if (on_connect_) {
+        on_connect_(conn.get());
+    }
+}
+
+void WebSocketServer::OnConnData(WebSocketConnection* conn, gs::net::Packet& pkt) {
+    for (auto& mw : middlewares_) {
+        if (!mw->OnPacket(conn, pkt)) {
+            return;
+        }
+    }
+    if (on_data_) {
+        on_data_(conn, pkt);
+    }
+}
+
+void WebSocketServer::OnConnClose(WebSocketConnection* conn) {
+    {
+        std::lock_guard<std::mutex> lk(conn_mtx_);
+        conns_.erase(conn->ID());
+    }
+    if (on_close_) {
+        on_close_(conn);
+    }
+}
+
+void WebSocketServer::RunEventLoop() {
+    loop_->Run();
+}
+
+} // namespace websocket
+} // namespace gateway
+} // namespace gs

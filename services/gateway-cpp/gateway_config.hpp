@@ -15,6 +15,7 @@ struct Config {
     
     // 网络配置
     uint16_t listen_port = 8081;
+    uint16_t websocket_port = 0;   // 0 表示不启用 WebSocket
     int max_connections = 10000;
     
     // Metrics 配置
