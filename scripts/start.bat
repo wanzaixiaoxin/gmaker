@@ -13,6 +13,7 @@ if /I "%CMD%"=="biz" goto :start_biz
 if /I "%CMD%"=="gateway" goto :start_gateway
 if /I "%CMD%"=="logstats" goto :start_logstats
 if /I "%CMD%"=="testclient" goto :start_testclient
+if /I "%CMD%"=="ws_testclient" goto :start_ws_testclient
 if /I "%CMD%"=="minimal" goto :start_minimal
 if /I "%CMD%"=="full" goto :start_full
 if /I "%CMD%"=="all" goto :start_all
@@ -33,7 +34,8 @@ echo   dbproxy     Start DBProxy (requires MySQL)
 echo   biz         Start Biz
 echo   gateway     Start Gateway
 echo   logstats    Start LogStats
-echo   testclient  Start TestClient (heartbeat daemon)
+echo   testclient   Start TestClient (heartbeat daemon, TCP)
+echo   ws_testclient Start TestClient (heartbeat daemon, WebSocket)
 echo   minimal     Start minimal link: Registry + Biz + Gateway
 echo   full        Start full link: Registry + DBProxy + Biz + Gateway
 echo   all         Start all services
@@ -47,32 +49,37 @@ goto :eof
 
 :start_registry
 echo Starting Registry (memory mode) ...
-start "Registry" cmd /c "bin\registry-go.exe -listen 127.0.0.1:2379 -store memory -log-file logs\registry_%LOG_TS%.log -log-level info ^& pause"
+start "Registry" cmd /k "bin\registry-go.exe -listen 127.0.0.1:2379 -store memory -log-file logs\registry_%LOG_TS%.log -log-level info"
 goto :eof
 
 :start_dbproxy
 echo Starting DBProxy ...
-start "DBProxy" cmd /c "bin\dbproxy-go.exe -config conf\dbproxy.json -mysql root:123456@tcp(127.0.0.1:3306)/gmaker ^& pause"
+start "DBProxy" cmd /k "bin\dbproxy-go.exe -config conf\dbproxy.json -mysql root:123456@tcp(127.0.0.1:3306)/gmaker"
 goto :eof
 
 :start_biz
 echo Starting Biz ...
-start "Biz" cmd /c "bin\biz-go.exe -config conf\biz.json ^& pause"
+start "Biz" cmd /k "bin\biz-go.exe -config conf\biz.json"
 goto :eof
 
 :start_gateway
 echo Starting Gateway ...
-start "Gateway" cmd /c "bin\gateway-cpp.exe --config conf\gateway.json --log-file logs\gateway_%LOG_TS%.log --log-level info ^& pause"
+start "Gateway" cmd /k "bin\gateway-cpp.exe --config conf\gateway.json --log-file logs\gateway_%LOG_TS%.log --log-level info"
 goto :eof
 
 :start_logstats
 echo Starting LogStats ...
-start "LogStats" cmd /c "bin\logstats-go.exe -listen 127.0.0.1:8085 -http :8086 -log-file logs\logstats_%LOG_TS%.log -log-level info ^& pause"
+start "LogStats" cmd /k "bin\logstats-go.exe -listen 127.0.0.1:8085 -http :8086 -log-file logs\logstats_%LOG_TS%.log -log-level info"
 goto :eof
 
 :start_testclient
-echo Starting TestClient (heartbeat daemon) ...
-start "TestClient" cmd /c "bin\testclient.exe -addr 127.0.0.1:8081 -bots 1 -scenario heartbeat -duration 0 -rate 0 -interval 5s ^& pause"
+echo Starting TestClient (heartbeat daemon, TCP) ...
+start "TestClient" cmd /k "bin\testclient.exe -addr 127.0.0.1:8081 -bots 1 -scenario heartbeat -duration 0 -rate 0 -interval 5s"
+goto :eof
+
+:start_ws_testclient
+echo Starting TestClient (heartbeat daemon, WebSocket) ...
+start "TestClient-WS" cmd /k "bin\testclient.exe -addr 127.0.0.1:8083 -ws -bots 1 -scenario rawping -duration 0 -interval 5s"
 goto :eof
 
 :start_minimal

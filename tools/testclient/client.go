@@ -46,7 +46,11 @@ type Bot struct {
 	id        int
 	addr      string
 	masterKey []byte
-	client    *net.TCPClient
+	useWS     bool
+
+	// 传输层（两者互斥，由 useWS 决定）
+	tcpClient *net.TCPClient
+	wsClient  *WSClient
 
 	mu      sync.Mutex
 	seqID   uint32
@@ -62,37 +66,67 @@ type Bot struct {
 }
 
 // NewBot 创建一个新的测试机器人
-func NewBot(id int, addr string, masterKey []byte) *Bot {
+func NewBot(id int, addr string, masterKey []byte, useWS bool) *Bot {
 	return &Bot{
 		id:        id,
 		addr:      addr,
 		masterKey: masterKey,
+		useWS:     useWS,
 		pending:   make(map[uint32]chan *net.Packet),
 	}
 }
 
 // Connect 连接到 Gateway 并完成握手
 func (b *Bot) Connect() error {
-	b.client = net.NewTCPClient(b.addr,
+	if b.useWS {
+		b.wsClient = NewWSClient(b.addr,
+			func(_ *WSConn, pkt *net.Packet) { b.onPacket(pkt) },
+			func(_ *WSConn) {},
+		)
+		if len(b.masterKey) > 0 {
+			b.wsClient.SetMasterKey(b.masterKey)
+		}
+		return b.wsClient.Connect()
+	}
+	b.tcpClient = net.NewTCPClient(b.addr,
 		func(_ *net.TCPConn, pkt *net.Packet) { b.onPacket(pkt) },
 		func(_ *net.TCPConn) {},
 	)
 	if len(b.masterKey) > 0 {
-		b.client.SetMasterKey(b.masterKey)
+		b.tcpClient.SetMasterKey(b.masterKey)
 	}
-	return b.client.Connect()
+	return b.tcpClient.Connect()
 }
 
 // Close 断开连接
 func (b *Bot) Close() {
-	if b.client != nil {
-		b.client.Close()
+	if b.wsClient != nil {
+		b.wsClient.Close()
+		b.wsClient = nil
+	}
+	if b.tcpClient != nil {
+		b.tcpClient.Close()
+		b.tcpClient = nil
 	}
 }
 
 // IsConnected 检查是否已连接
 func (b *Bot) IsConnected() bool {
-	return b.client != nil && b.client.Conn() != nil
+	if b.wsClient != nil {
+		return b.wsClient.Conn() != nil
+	}
+	return b.tcpClient != nil && b.tcpClient.Conn() != nil
+}
+
+// sendPacket 根据当前传输层发送 Packet
+func (b *Bot) sendPacket(pkt *net.Packet) bool {
+	if b.wsClient != nil {
+		return b.wsClient.Conn().SendPacket(pkt)
+	}
+	if b.tcpClient != nil {
+		return b.tcpClient.Conn().SendPacket(pkt)
+	}
+	return false
 }
 
 // onPacket 分发收到的响应到等待的 Call
@@ -144,7 +178,7 @@ func (b *Bot) Call(ctx context.Context, cmdID uint32, payload []byte) (*net.Pack
 		Payload: payload,
 	}
 
-	if !b.client.Conn().SendPacket(pkt) {
+	if !b.sendPacket(pkt) {
 		return nil, fmt.Errorf("send failed")
 	}
 

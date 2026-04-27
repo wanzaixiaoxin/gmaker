@@ -13,6 +13,7 @@ import (
 func main() {
 	var (
 		addr       = flag.String("addr", "127.0.0.1:8081", "Gateway address")
+		useWS      = flag.Bool("ws", false, "Use WebSocket instead of TCP")
 		bots       = flag.Int("bots", 1, "Number of concurrent bots")
 		scenario   = flag.String("scenario", "login", "Test scenario: login | heartbeat | flood")
 		duration   = flag.Duration("duration", 30*time.Second, "Test duration")
@@ -39,6 +40,8 @@ func main() {
 		sc = &HeartbeatScenario{Interval: 5 * time.Second}
 	case "flood":
 		sc = &FloodScenario{Rate: *rate}
+	case "rawping":
+		sc = &RawPingScenario{}
 	case "chat":
 		sc = &ChatScenario{}
 	default:
@@ -56,7 +59,7 @@ func main() {
 	// 连接所有 Bot
 	botList := make([]*Bot, 0, *bots)
 	for i := 0; i < *bots; i++ {
-		bot := NewBot(i, *addr, mk)
+		bot := NewBot(i, *addr, mk, *useWS)
 		if err := bot.Connect(); err != nil {
 			fmt.Fprintf(os.Stderr, "Bot %d connect failed: %v\n", i, err)
 			continue

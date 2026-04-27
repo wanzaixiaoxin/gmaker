@@ -149,6 +149,26 @@ func (s *FloodScenario) Run(bot *Bot, stats *GlobalStats, stopCh <-chan struct{}
 	}
 }
 
+// RawPingScenario 不登录直接发 Ping，用于快速验证连通性
+type RawPingScenario struct{}
+
+func (s *RawPingScenario) Name() string { return "rawping" }
+
+func (s *RawPingScenario) Run(bot *Bot, stats *GlobalStats, stopCh <-chan struct{}) error {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stopCh:
+			return nil
+		case <-ticker.C:
+			start := time.Now()
+			_, err := bot.Ping()
+			stats.Record(err == nil, time.Since(start))
+		}
+	}
+}
+
 // ChatScenario 聊天室测试场景
 type ChatScenario struct {
 	roomID     uint64
