@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -90,28 +91,36 @@ func HandlePacket(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, srv *net
 	_ = ctx
 	log := svc.Log.WithTrace(traceID)
 	svc.Log.Info(fmt.Sprintf("[Flow] Gateway -> Chat: cmd=0x%08X seq=%d flags=%d payload=%d", pkt.CmdID, pkt.SeqID, pkt.Flags, len(pkt.Payload)))
+	
+	// Gateway 在 payload 前附加了 conn_id（8 字节 BE），跳过
+	var gatewayConnID uint64
+	if len(pkt.Payload) >= 8 {
+		gatewayConnID = binary.BigEndian.Uint64(pkt.Payload[:8])
+		pkt.Payload = pkt.Payload[8:]
+	}
+	
 	switch pkt.CmdID {
 	case CmdChatCreateRoomReq:
 		log.Infof("[%s] create_room req", traceID)
-		HandleCreateRoom(conn, pkt, svc, traceID)
+		HandleCreateRoom(conn, pkt, svc, traceID, gatewayConnID)
 	case CmdChatJoinRoomReq:
 		log.Infof("[%s] join_room req", traceID)
-		HandleJoinRoom(conn, pkt, svc, traceID)
+		HandleJoinRoom(conn, pkt, svc, traceID, gatewayConnID)
 	case CmdChatLeaveRoomReq:
 		log.Infof("[%s] leave_room req", traceID)
-		HandleLeaveRoom(conn, pkt, svc, traceID)
+		HandleLeaveRoom(conn, pkt, svc, traceID, gatewayConnID)
 	case CmdChatSendMsgReq:
 		log.Infof("[%s] send_msg req", traceID)
-		HandleSendMsg(conn, pkt, svc, traceID)
+		HandleSendMsg(conn, pkt, svc, traceID, gatewayConnID)
 	case CmdChatGetHistoryReq:
 		log.Infof("[%s] get_history req", traceID)
-		HandleGetHistory(conn, pkt, svc, traceID)
+		HandleGetHistory(conn, pkt, svc, traceID, gatewayConnID)
 	case CmdChatCloseRoomReq:
 		log.Infof("[%s] close_room req", traceID)
-		HandleCloseRoom(conn, pkt, svc, traceID)
+		HandleCloseRoom(conn, pkt, svc, traceID, gatewayConnID)
 	case CmdChatListRoomReq:
 		log.Infof("[%s] list_room req", traceID)
-		HandleListRooms(conn, pkt, svc, traceID)
+		HandleListRooms(conn, pkt, svc, traceID, gatewayConnID)
 	default:
 		log.Warnf("unknown cmd_id: 0x%08X", pkt.CmdID)
 	}
@@ -119,12 +128,12 @@ func HandlePacket(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, srv *net
 
 // ==================== Handler ====================
 
-func HandleCreateRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string) {
+func HandleCreateRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string, gatewayConnID uint64) {
 	var req chatpb.ChatCreateRoomReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendProto(conn, pkt.SeqID, CmdChatCreateRoomRes, &chatpb.ChatCreateRoomRes{
 			Result: &commonpb.Result{Ok: false, Code: 400, Msg: "bad request"},
-		})
+		}, gatewayConnID)
 		return
 	}
 
@@ -137,7 +146,7 @@ func HandleCreateRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trac
 		svc.Log.WithTrace(traceID).Errorf("generate room id failed: %v", err)
 		sendProto(conn, pkt.SeqID, CmdChatCreateRoomRes, &chatpb.ChatCreateRoomRes{
 			Result: &commonpb.Result{Ok: false, Code: 500, Msg: "internal error"},
-		})
+		}, gatewayConnID)
 		return
 	}
 
@@ -153,14 +162,14 @@ func HandleCreateRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trac
 			svc.Log.WithTrace(traceID).Errorf("create room failed: %v", err)
 			sendProto(conn, pkt.SeqID, CmdChatCreateRoomRes, &chatpb.ChatCreateRoomRes{
 				Result: &commonpb.Result{Ok: false, Code: 500, Msg: "db error"},
-			})
+			}, gatewayConnID)
 			return
 		}
 		var execRes dbproxypb.MySQLExecRes
 		if err := proto.Unmarshal(resPkt.Payload, &execRes); err != nil || !execRes.Ok {
 			sendProto(conn, pkt.SeqID, CmdChatCreateRoomRes, &chatpb.ChatCreateRoomRes{
 				Result: &commonpb.Result{Ok: false, Code: 500, Msg: "db exec failed"},
-			})
+			}, gatewayConnID)
 			return
 		}
 	}
@@ -197,15 +206,15 @@ func HandleCreateRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trac
 			Status:    0,
 			CreatedAt: now,
 		},
-	})
+	}, gatewayConnID)
 }
 
-func HandleJoinRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string) {
+func HandleJoinRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string, gatewayConnID uint64) {
 	var req chatpb.ChatJoinRoomReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendProto(conn, pkt.SeqID, CmdChatJoinRoomRes, &chatpb.ChatJoinRoomRes{
 			Result: &commonpb.Result{Ok: false, Code: 400, Msg: "bad request"},
-		})
+		}, gatewayConnID)
 		return
 	}
 
@@ -218,19 +227,18 @@ func HandleJoinRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceI
 	if err != nil {
 		sendProto(conn, pkt.SeqID, CmdChatJoinRoomRes, &chatpb.ChatJoinRoomRes{
 			Result: &commonpb.Result{Ok: false, Code: 404, Msg: "room not found"},
-		})
+		}, gatewayConnID)
 		return
 	}
 	if room.Status != 0 {
 		sendProto(conn, pkt.SeqID, CmdChatJoinRoomRes, &chatpb.ChatJoinRoomRes{
 			Result: &commonpb.Result{Ok: false, Code: 403, Msg: "room closed"},
-		})
+		}, gatewayConnID)
 		return
 	}
 
 	// 通知 Gateway：conn_id 加入 room
-	connID := conn.ID()
-	sendRoomControl(conn, pkt.SeqID, CmdGWRoomJoin, req.RoomId, connID)
+	sendRoomControl(conn, pkt.SeqID, CmdGWRoomJoin, req.RoomId, gatewayConnID)
 
 	// Redis 记录成员
 	if svc.Redis != nil {
@@ -269,15 +277,15 @@ func HandleJoinRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceI
 		Result:     &commonpb.Result{Ok: true},
 		Room:       room,
 		RecentMsgs: recentMsgs,
-	})
+	}, gatewayConnID)
 }
 
-func HandleLeaveRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string) {
+func HandleLeaveRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string, gatewayConnID uint64) {
 	var req chatpb.ChatLeaveRoomReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendProto(conn, pkt.SeqID, CmdChatLeaveRoomRes, &chatpb.ChatLeaveRoomRes{
 			Result: &commonpb.Result{Ok: false, Code: 400, Msg: "bad request"},
-		})
+		}, gatewayConnID)
 		return
 	}
 
@@ -286,8 +294,7 @@ func HandleLeaveRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trace
 	defer cancel()
 
 	// 通知 Gateway：conn_id 离开 room
-	connID := conn.ID()
-	sendRoomControl(conn, pkt.SeqID, CmdGWRoomLeave, req.RoomId, connID)
+	sendRoomControl(conn, pkt.SeqID, CmdGWRoomLeave, req.RoomId, gatewayConnID)
 
 	if svc.Redis != nil {
 		svc.Redis.RawClient().SRem(ctx, roomMembersKey(req.RoomId), req.PlayerId).Result()
@@ -296,15 +303,15 @@ func HandleLeaveRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trace
 
 	sendProto(conn, pkt.SeqID, CmdChatLeaveRoomRes, &chatpb.ChatLeaveRoomRes{
 		Result: &commonpb.Result{Ok: true},
-	})
+	}, gatewayConnID)
 }
 
-func HandleSendMsg(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string) {
+func HandleSendMsg(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string, gatewayConnID uint64) {
 	var req chatpb.ChatSendMsgReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendProto(conn, pkt.SeqID, CmdChatSendMsgRes, &chatpb.ChatSendMsgRes{
 			Result: &commonpb.Result{Ok: false, Code: 400, Msg: "bad request"},
-		})
+		}, gatewayConnID)
 		return
 	}
 
@@ -317,7 +324,7 @@ func HandleSendMsg(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID
 	if err != nil || room.Status != 0 {
 		sendProto(conn, pkt.SeqID, CmdChatSendMsgRes, &chatpb.ChatSendMsgRes{
 			Result: &commonpb.Result{Ok: false, Code: 403, Msg: "room not available"},
-		})
+		}, gatewayConnID)
 		return
 	}
 
@@ -345,19 +352,20 @@ func HandleSendMsg(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID
 	sendProto(conn, pkt.SeqID, CmdChatSendMsgRes, &chatpb.ChatSendMsgRes{
 		Result: &commonpb.Result{Ok: true},
 		Msg:    msg,
-	})
+	}, gatewayConnID)
 
 	// 广播消息给所有 Gateway（通过 FlagRoomBcast）
+	svc.Log.Infof("[Flow] Chat -> Gateway: broadcast cmd=0x%08X seq=%d room=%d payload=%d", CmdChatMsgNotify, pkt.SeqID, req.RoomId, len(msg.String()))
 	broadcastPkt := buildRoomBroadcastPacket(pkt.SeqID, CmdChatMsgNotify, req.RoomId, msg)
 	svc.Broadcast(broadcastPkt)
 }
 
-func HandleGetHistory(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string) {
+func HandleGetHistory(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string, gatewayConnID uint64) {
 	var req chatpb.ChatGetHistoryReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendProto(conn, pkt.SeqID, CmdChatGetHistoryRes, &chatpb.ChatGetHistoryRes{
 			Result: &commonpb.Result{Ok: false, Code: 400, Msg: "bad request"},
-		})
+		}, gatewayConnID)
 		return
 	}
 
@@ -399,15 +407,15 @@ func HandleGetHistory(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trac
 	sendProto(conn, pkt.SeqID, CmdChatGetHistoryRes, &chatpb.ChatGetHistoryRes{
 		Result: &commonpb.Result{Ok: true},
 		Msgs:   msgs,
-	})
+	}, gatewayConnID)
 }
 
-func HandleCloseRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string) {
+func HandleCloseRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string, gatewayConnID uint64) {
 	var req chatpb.ChatCloseRoomReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendProto(conn, pkt.SeqID, CmdChatCloseRoomRes, &chatpb.ChatCloseRoomRes{
 			Result: &commonpb.Result{Ok: false, Code: 400, Msg: "bad request"},
-		})
+		}, gatewayConnID)
 		return
 	}
 
@@ -420,13 +428,13 @@ func HandleCloseRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trace
 	if err != nil {
 		sendProto(conn, pkt.SeqID, CmdChatCloseRoomRes, &chatpb.ChatCloseRoomRes{
 			Result: &commonpb.Result{Ok: false, Code: 404, Msg: "room not found"},
-		})
+		}, gatewayConnID)
 		return
 	}
 	if room.CreatorId != req.OperatorId {
 		sendProto(conn, pkt.SeqID, CmdChatCloseRoomRes, &chatpb.ChatCloseRoomRes{
 			Result: &commonpb.Result{Ok: false, Code: 403, Msg: "not creator"},
-		})
+		}, gatewayConnID)
 		return
 	}
 
@@ -441,14 +449,14 @@ func HandleCloseRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trace
 		if err != nil {
 			sendProto(conn, pkt.SeqID, CmdChatCloseRoomRes, &chatpb.ChatCloseRoomRes{
 				Result: &commonpb.Result{Ok: false, Code: 500, Msg: "db error"},
-			})
+			}, gatewayConnID)
 			return
 		}
 		var execRes dbproxypb.MySQLExecRes
 		if err := proto.Unmarshal(resPkt.Payload, &execRes); err != nil || !execRes.Ok {
 			sendProto(conn, pkt.SeqID, CmdChatCloseRoomRes, &chatpb.ChatCloseRoomRes{
 				Result: &commonpb.Result{Ok: false, Code: 500, Msg: "db exec failed"},
-			})
+			}, gatewayConnID)
 			return
 		}
 	}
@@ -475,20 +483,19 @@ func HandleCloseRoom(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trace
 
 	// 通知 Gateway 清理该房间的所有成员（发送 GW_ROOM_LEAVE 给所有成员对应的 Gateway）
 	// 简化：只给当前 Gateway 发送（实际多 Gateway 部署时需要在所有 Gateway 上执行）
-	connID := conn.ID()
-	sendRoomControl(conn, pkt.SeqID, CmdGWRoomLeave, req.RoomId, connID)
+	sendRoomControl(conn, pkt.SeqID, CmdGWRoomLeave, req.RoomId, gatewayConnID)
 
 	sendProto(conn, pkt.SeqID, CmdChatCloseRoomRes, &chatpb.ChatCloseRoomRes{
 		Result: &commonpb.Result{Ok: true},
-	})
+	}, gatewayConnID)
 }
 
-func HandleListRooms(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string) {
+func HandleListRooms(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID string, gatewayConnID uint64) {
 	var req chatpb.ChatListRoomReq
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		sendProto(conn, pkt.SeqID, CmdChatListRoomRes, &chatpb.ChatListRoomRes{
 			Result: &commonpb.Result{Ok: false, Code: 400, Msg: "bad request"},
-		})
+		}, gatewayConnID)
 		return
 	}
 
@@ -587,7 +594,7 @@ func HandleListRooms(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, trace
 		Result: &commonpb.Result{Ok: true},
 		Rooms:  rooms,
 		Total:  total,
-	})
+	}, gatewayConnID)
 }
 
 // ==================== Repository ====================
@@ -686,21 +693,25 @@ func playerRoomsKey(playerID uint64) string {
 
 // ==================== Helper ====================
 
-func sendProto(conn *net.TCPConn, seqID uint32, cmdID uint32, msg proto.Message) {
+func sendProto(conn *net.TCPConn, seqID uint32, cmdID uint32, msg proto.Message, gatewayConnID uint64) {
 	data, err := proto.Marshal(msg)
 	if err != nil {
 		logger.Errorf("marshal error: %v", err)
 		return
 	}
+	// 在 payload 前附加 conn_id（Gateway 路由需要）
+	payload := make([]byte, 8+len(data))
+	binary.BigEndian.PutUint64(payload, gatewayConnID)
+	copy(payload[8:], data)
 	pkt := &net.Packet{
 		Header: net.Header{
 			Magic:  net.MagicValue,
 			CmdID:  cmdID,
 			SeqID:  seqID,
 			Flags:  uint32(net.FlagRPCRes),
-			Length: uint32(net.HeaderSize + len(data)),
+			Length: uint32(net.HeaderSize + len(payload)),
 		},
-		Payload: data,
+		Payload: payload,
 	}
 	conn.SendPacket(pkt)
 }
@@ -755,8 +766,8 @@ func buildRoomBroadcastPacket(seqID uint32, cmdID uint32, roomID uint64, msg pro
 }
 
 // SendProto 是导出的辅助函数，供 main.go 使用
-func SendProto(conn *net.TCPConn, seqID uint32, cmdID uint32, msg proto.Message) {
-	sendProto(conn, seqID, cmdID, msg)
+func SendProto(conn *net.TCPConn, seqID uint32, cmdID uint32, msg proto.Message, gatewayConnID uint64) {
+	sendProto(conn, seqID, cmdID, msg, gatewayConnID)
 }
 
 // NewDBProxyClient 创建 DBProxy 客户端（兼容旧接口：传入地址列表自建 pool）

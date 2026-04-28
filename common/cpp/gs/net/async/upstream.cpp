@@ -53,10 +53,20 @@ bool AsyncUpstreamPool::Start() {
         return false;
     }
 
+    // 立即尝试连接所有节点（不依赖定时器）
+    {
+        std::lock_guard<std::mutex> lk(nodes_mtx_);
+        std::cout << "[AsyncUpstreamPool] Start: trying initial connection to " 
+                  << nodes_.size() << " nodes" << std::endl;
+        for (auto& node : nodes_) {
+            TryConnect(node.get());
+        }
+    }
+
     reconnect_timer_ = new uv_timer_t;
     uv_timer_init(loop_->RawLoop(), reconnect_timer_);
     reconnect_timer_->data = this;
-    uv_timer_start(reconnect_timer_, OnTimer, 0, 5000); // 立即执行，之后每 5s
+    uv_timer_start(reconnect_timer_, OnTimer, 5000, 5000); // 5秒后开始重试，之后每5秒
 
     return true;
 }
@@ -137,19 +147,27 @@ size_t AsyncUpstreamPool::TotalCount() const {
 }
 
 void AsyncUpstreamPool::OnReconnectTimer() {
+    std::cout << "[AsyncUpstreamPool] Reconnect timer fired" << std::endl;
     std::lock_guard<std::mutex> lk(nodes_mtx_);
     for (auto& node : nodes_) {
         if (!node->healthy.load() && !node->connecting.load()) {
+            std::cout << "[AsyncUpstreamPool] TryConnect: " << node->host << ":" << node->port << std::endl;
             TryConnect(node.get());
         }
     }
 }
 
 bool AsyncUpstreamPool::TryConnect(UpstreamNode* node) {
-    if (!node || !loop_) return false;
+    if (!node || !loop_) {
+        std::cerr << "[AsyncUpstreamPool] TryConnect failed: node=" << (node ? "valid" : "null")
+                  << ", loop=" << (loop_ ? "valid" : "null") << std::endl;
+        return false;
+    }
     node->connecting.store(true);
 
-    uint64_t conn_id = reinterpret_cast<uint64_t>(node); // 用地址做唯一 ID（简化）
+    std::cout << "[AsyncUpstreamPool] TryConnect: " << node->host << ":" << node->port << std::endl;
+
+    uint64_t conn_id = reinterpret_cast<uint64_t>(node);
     auto conn = std::make_shared<AsyncTCPConnection>(loop_, conn_id);
     conn->SetCallbacks(
         [this](AsyncTCPConnection* c, Packet& p) {
@@ -157,17 +175,21 @@ bool AsyncUpstreamPool::TryConnect(UpstreamNode* node) {
         },
         [this, node](AsyncTCPConnection* c) {
             (void)c;
+            std::cout << "[AsyncUpstreamPool] Connection closed: " << node->host << ":" << node->port << std::endl;
             UpdateHealth(node, false);
             node->connecting.store(false);
             node->conn.reset();
         }
     );
     conn->SetConnectCallback([this, node](bool success) {
+        std::cout << "[AsyncUpstreamPool] Connect callback: " << node->host << ":" << node->port
+                  << " success=" << success << std::endl;
         node->connecting.store(false);
         UpdateHealth(node, success);
     });
 
     if (!conn->Connect(node->host, node->port)) {
+        std::cerr << "[AsyncUpstreamPool] Connect call failed: " << node->host << ":" << node->port << std::endl;
         node->connecting.store(false);
         return false;
     }

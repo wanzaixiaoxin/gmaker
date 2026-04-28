@@ -538,6 +538,10 @@ void Gateway::OnClientPacket(IConnection* conn, Packet& pkt) {
     auto start = std::chrono::steady_clock::now();
     req_counter_->Inc();
 
+    if (logger_) logger_->Info("Forwarding packet: cmd=0x" + ToHex(pkt.header.cmd_id) + 
+                               " seq=" + std::to_string(pkt.header.seq_id) + 
+                               " conn=" + std::to_string(conn->ID()));
+
     // 根据命令 ID 路由到对应的上游池
     auto pool = RouteToPool(pkt.header.cmd_id);
     if (!pool) {
@@ -558,7 +562,9 @@ void Gateway::OnClientPacket(IConnection* conn, Packet& pkt) {
     pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.Size());
 
     if (!pool->SendPacket(pkt)) {
-        if (logger_) logger_->Warn("Failed to forward packet to upstream");
+        if (logger_) logger_->Warn("Failed to forward packet to upstream, cmd=0x" + ToHex(pkt.header.cmd_id));
+    } else {
+        if (logger_) logger_->Info("Packet forwarded to upstream: cmd=0x" + ToHex(pkt.header.cmd_id));
     }
 
     auto elapsed = std::chrono::steady_clock::now() - start;
@@ -588,6 +594,11 @@ void Gateway::OnClientClose(IConnection* conn) {
 }
 
 void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
+    if (logger_) logger_->Info("Received from upstream: cmd=0x" + ToHex(pkt.header.cmd_id) + 
+                               " seq=" + std::to_string(pkt.header.seq_id) + 
+                               " flags=0x" + ToHex(pkt.header.flags) +
+                               " payload=" + std::to_string(pkt.payload.Size()));
+
     // 处理 Gateway 内部控制协议
     if (pkt.header.cmd_id == protocol::CMD_GW_ROOM_JOIN) {
         if (pkt.payload.Size() >= 16) {
@@ -623,6 +634,9 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
     bool is_room_bcast = (pkt.header.flags & static_cast<uint32_t>(gs::net::Flag::ROOM_BCAST)) != 0;
     uint64_t conn_id = ReadU64BE(pkt.payload.Data());
     
+    if (logger_) logger_->Info("Processing upstream response: is_bcast=" + std::to_string(is_room_bcast) + 
+                               " conn_id=" + std::to_string(conn_id));
+    
     // 检查是否为房间广播
     std::vector<uint64_t> targets;
     if (is_room_bcast) {
@@ -631,6 +645,10 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
         auto rit = room_members_.find(room_id);
         if (rit != room_members_.end()) {
             targets.assign(rit->second.begin(), rit->second.end());
+            if (logger_) logger_->Info("Room broadcast: room=" + std::to_string(room_id) + 
+                                       " members=" + std::to_string(targets.size()));
+        } else {
+            if (logger_) logger_->Warn("Room broadcast: room=" + std::to_string(room_id) + " not found in room_members_");
         }
     } else {
         std::lock_guard<std::mutex> lk(room_mtx_);
@@ -639,7 +657,11 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
             auto rit = room_members_.find(it->second);
             if (rit != room_members_.end()) {
                 targets.assign(rit->second.begin(), rit->second.end());
+                if (logger_) logger_->Info("Unicast to room: conn=" + std::to_string(conn_id) + 
+                                           " room=" + std::to_string(it->second) + " members=" + std::to_string(targets.size()));
             }
+        } else {
+            if (logger_) logger_->Warn("Unicast: conn=" + std::to_string(conn_id) + " not found in conn_room_");
         }
     }
 
@@ -695,6 +717,10 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
         Packet response;
         if (build_response_for(conn_id, response)) {
             enqueue_to_client(conn_id, response);
+            if (logger_) logger_->Info("Response sent to client: conn=" + std::to_string(conn_id) + 
+                                       " cmd=0x" + ToHex(response.header.cmd_id));
+        } else {
+            if (logger_) logger_->Warn("Failed to build response for client: conn=" + std::to_string(conn_id));
         }
     } else {
         for (auto cid : targets) {
@@ -703,6 +729,7 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
                 enqueue_to_client(cid, response);
             }
         }
+        if (logger_) logger_->Info("Room broadcast response sent: targets=" + std::to_string(targets.size()));
     }
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"os"
@@ -224,7 +225,11 @@ func main() {
 			reqCounter.Inc()
 			log.Info(fmt.Sprintf("[Flow] OnData: cmd=0x%08X seq=%d", pkt.CmdID, pkt.SeqID))
 			if chatSvc == nil {
-				chat.SendProto(conn, pkt.SeqID, pkt.CmdID+1, &commonpb.Result{Ok: false, Code: 503, Msg: "service unavailable"})
+				var gatewayConnID uint64
+				if len(pkt.Payload) >= 8 {
+					gatewayConnID = binary.BigEndian.Uint64(pkt.Payload[:8])
+				}
+				chat.SendProto(conn, pkt.SeqID, pkt.CmdID+1, &commonpb.Result{Ok: false, Code: 503, Msg: "service unavailable"}, gatewayConnID)
 			} else {
 				chat.HandlePacket(conn, pkt, chatSvc, srv)
 			}
