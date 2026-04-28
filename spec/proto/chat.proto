@@ -64,9 +64,10 @@ message ChatLeaveRoomRes {
 // ==================== 发送消息 ====================
 
 message ChatSendMsgReq {
-    uint64 room_id   = 1;
-    uint64 sender_id = 2;
-    string content   = 3;
+    uint64 room_id    = 1;
+    uint64 sender_id  = 2;
+    string content    = 3;
+    string sender_name = 4;
 }
 
 message ChatSendMsgRes {

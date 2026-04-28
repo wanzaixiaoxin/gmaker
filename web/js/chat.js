@@ -64,11 +64,11 @@ class ChatAPI {
         );
     }
 
-    async sendMsg(roomId, senderId, content) {
+    async sendMsg(roomId, senderId, content, senderName) {
         return await this._call(
             Cmd.CHAT_SEND_MSG_REQ, Cmd.CHAT_SEND_MSG_RES,
             'chat.ChatSendMsgReq', 'chat.ChatSendMsgRes',
-            { roomId, senderId, content }
+            { roomId, senderId, content, senderName }
         );
     }
 

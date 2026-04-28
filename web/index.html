@@ -1041,6 +1041,7 @@ const LOGIN_HTTP = 'http://127.0.0.1:8084';
 let wsClient = null;
 let chatAPI = null;
 let playerID = 0;
+let playerName = '';
 let token = '';
 let currentRoom = null;
 let authMode = 'login';
@@ -1110,6 +1111,7 @@ async function doAuth() {
         }
 
         playerID = data.player_id || 0;
+        playerName = account; // 使用账号名作为临时昵称
         token = data.token || '';
         const gatewayAddr = data.gateway_addr || '127.0.0.1:8083';
         setStatus('获取到 Gateway: ' + gatewayAddr + '，正在连接 WS...');
@@ -1126,7 +1128,10 @@ async function doAuth() {
         // 监听推送
         chatAPI.onNotify((msg) => {
             if (currentRoom && msg.msg && msg.msg.roomId === currentRoom.roomId) {
-                appendMsg(msg.msg, false);
+                // 过滤掉自己发送的消息（已经在sendMsg中显示过了）
+                if (msg.msg.senderId !== playerID) {
+                    appendMsg(msg.msg, false);
+                }
             }
         });
 
@@ -1232,7 +1237,7 @@ async function sendMsg() {
     const content = input.value.trim();
     if (!content || !currentRoom) return;
     try {
-        const res = await chatAPI.sendMsg(currentRoom.roomId, playerID, content);
+        const res = await chatAPI.sendMsg(currentRoom.roomId, playerID, content, playerName);
         if (!res.result || !res.result.ok) throw new Error(res.result ? res.result.msg : '发送失败');
         appendMsg(res.msg, true);
         input.value = '';

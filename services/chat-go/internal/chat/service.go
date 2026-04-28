@@ -330,11 +330,15 @@ func HandleSendMsg(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID
 
 	msgID, _ := svc.IDGen.NextID()
 	now := uint64(time.Now().Unix())
+	senderName := req.SenderName
+	if senderName == "" {
+		senderName = fmt.Sprintf("Player%d", req.SenderId)
+	}
 	msg := &chatpb.ChatMessage{
 		MsgId:      uint64(msgID),
 		RoomId:     req.RoomId,
 		SenderId:   req.SenderId,
-		SenderName: "", // TODO: 查询玩家昵称
+		SenderName: senderName,
 		Content:    req.Content,
 		SentAt:     now,
 	}
@@ -355,8 +359,9 @@ func HandleSendMsg(conn *net.TCPConn, pkt *net.Packet, svc *ChatService, traceID
 	}, gatewayConnID)
 
 	// 广播消息给所有 Gateway（通过 FlagRoomBcast）
-	svc.Log.Infof("[Flow] Chat -> Gateway: broadcast cmd=0x%08X seq=%d room=%d payload=%d", CmdChatMsgNotify, pkt.SeqID, req.RoomId, len(msg.String()))
-	broadcastPkt := buildRoomBroadcastPacket(pkt.SeqID, CmdChatMsgNotify, req.RoomId, msg)
+	notify := &chatpb.ChatMsgNotify{Msg: msg}
+	svc.Log.Infof("[Flow] Chat -> Gateway: broadcast cmd=0x%08X seq=%d room=%d", CmdChatMsgNotify, pkt.SeqID, req.RoomId)
+	broadcastPkt := buildRoomBroadcastPacket(pkt.SeqID, CmdChatMsgNotify, req.RoomId, notify)
 	svc.Broadcast(broadcastPkt)
 }
 
