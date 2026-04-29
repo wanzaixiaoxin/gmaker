@@ -19,14 +19,21 @@ AsyncUpstreamPool::~AsyncUpstreamPool() {
 }
 
 void AsyncUpstreamPool::AddNode(const std::string& host, uint16_t port) {
-    std::lock_guard<std::mutex> lk(nodes_mtx_);
-    for (const auto& n : nodes_) {
-        if (n->host == host && n->port == port) return; // 已存在
+    UpstreamNode* node_ptr = nullptr;
+    {
+        std::lock_guard<std::mutex> lk(nodes_mtx_);
+        for (const auto& n : nodes_) {
+            if (n->host == host && n->port == port) return; // 已存在
+        }
+        auto node = std::make_unique<UpstreamNode>();
+        node->host = host;
+        node->port = port;
+        node_ptr = node.get();
+        nodes_.push_back(std::move(node));
     }
-    auto node = std::make_unique<UpstreamNode>();
-    node->host = host;
-    node->port = port;
-    nodes_.push_back(std::move(node));
+    if (running_.load() && loop_) {
+        loop_->Post([this, node_ptr]() { TryConnect(node_ptr); });
+    }
 }
 
 void AsyncUpstreamPool::RemoveNode(const std::string& host, uint16_t port) {
