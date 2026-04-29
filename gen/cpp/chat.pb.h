@@ -283,6 +283,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatSendMsgReq final : public ::goo
   // accessors -------------------------------------------------------
   enum : int {
     kContentFieldNumber = 3,
+    kSenderNameFieldNumber = 4,
     kRoomIdFieldNumber = 1,
     kSenderIdFieldNumber = 2,
   };
@@ -299,6 +300,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatSendMsgReq final : public ::goo
   const ::std::string& _internal_content() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_content(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_content();
+
+  public:
+  // string sender_name = 4;
+  void clear_sender_name() ;
+  [[nodiscard]] const ::std::string& sender_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_sender_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_sender_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_sender_name();
+  void set_allocated_sender_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_sender_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_sender_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_sender_name();
 
   public:
   // uint64 room_id = 1;
@@ -325,8 +341,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatSendMsgReq final : public ::goo
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
-                                   0, 35,
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
+                                   0, 46,
                                    2>
       _table_;
 
@@ -350,6 +366,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatSendMsgReq final : public ::goo
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr content_;
+    ::google::protobuf::internal::ArenaStringPtr sender_name_;
     ::uint64_t room_id_;
     ::uint64_t sender_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -5084,7 +5101,7 @@ inline void ChatSendMsgReq::clear_room_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.room_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
+                  0x00000004U);
 }
 inline ::uint64_t ChatSendMsgReq::room_id() const {
   // @@protoc_insertion_point(field_get:chat.ChatSendMsgReq.room_id)
@@ -5092,7 +5109,7 @@ inline ::uint64_t ChatSendMsgReq::room_id() const {
 }
 inline void ChatSendMsgReq::set_room_id(::uint64_t value) {
   _internal_set_room_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:chat.ChatSendMsgReq.room_id)
 }
 inline ::uint64_t ChatSendMsgReq::_internal_room_id() const {
@@ -5109,7 +5126,7 @@ inline void ChatSendMsgReq::clear_sender_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sender_id_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000008U);
 }
 inline ::uint64_t ChatSendMsgReq::sender_id() const {
   // @@protoc_insertion_point(field_get:chat.ChatSendMsgReq.sender_id)
@@ -5117,7 +5134,7 @@ inline ::uint64_t ChatSendMsgReq::sender_id() const {
 }
 inline void ChatSendMsgReq::set_sender_id(::uint64_t value) {
   _internal_set_sender_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:chat.ChatSendMsgReq.sender_id)
 }
 inline ::uint64_t ChatSendMsgReq::_internal_sender_id() const {
@@ -5192,6 +5209,71 @@ inline void ChatSendMsgReq::set_allocated_content(::std::string* PROTOBUF_NULLAB
     _impl_.content_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:chat.ChatSendMsgReq.content)
+}
+
+// string sender_name = 4;
+inline void ChatSendMsgReq::clear_sender_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& ChatSendMsgReq::sender_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:chat.ChatSendMsgReq.sender_name)
+  return _internal_sender_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ChatSendMsgReq::set_sender_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.sender_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:chat.ChatSendMsgReq.sender_name)
+}
+inline ::std::string* PROTOBUF_NONNULL ChatSendMsgReq::mutable_sender_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_sender_name();
+  // @@protoc_insertion_point(field_mutable:chat.ChatSendMsgReq.sender_name)
+  return _s;
+}
+inline const ::std::string& ChatSendMsgReq::_internal_sender_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sender_name_.Get();
+}
+inline void ChatSendMsgReq::_internal_set_sender_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ChatSendMsgReq::_internal_mutable_sender_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.sender_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ChatSendMsgReq::release_sender_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:chat.ChatSendMsgReq.sender_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.sender_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.sender_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ChatSendMsgReq::set_allocated_sender_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.sender_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.sender_name_.IsDefault()) {
+    _impl_.sender_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:chat.ChatSendMsgReq.sender_name)
 }
 
 // -------------------------------------------------------------------

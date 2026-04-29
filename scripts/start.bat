@@ -65,7 +65,7 @@ goto :eof
 
 :start_biz
 echo Starting Biz ...
-start "Biz" cmd /k "bin\biz-go.exe -config conf\biz.json"
+start "Biz" cmd /k "bin\biz-go.exe -config conf\biz.json -redis 127.0.0.1:6379"
 goto :eof
 
 :start_chat

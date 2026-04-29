@@ -68,6 +68,29 @@ enum CmdGatewayInternal {
     CMD_GW_UNKNOWN        = 0;
     CMD_GW_ROOM_JOIN      = 0x00001010;  // 房间加入通知
     CMD_GW_ROOM_LEAVE     = 0x00001011;  // 房间离开通知
+    CMD_GW_PLAYER_BIND    = 0x00001020;  // 玩家绑定请求（客户端→Gateway→Biz）
+    CMD_GW_PLAYER_KICK    = 0x00001021;  // 玩家被踢通知（Gateway→客户端）
+}
+
+// ============================================================
+// Gateway 玩家绑定 / 踢人协议消息
+// ============================================================
+
+// 玩家绑定请求（客户端发送给 Gateway，Gateway 附加 conn_id 后转发给 Biz）
+message PlayerBindReq {
+    uint64 player_id = 1;  // 玩家 ID
+    string token     = 2;  // 登录 Token（由 Login 服务下发）
+}
+
+// 玩家绑定响应（Biz 返回给 Gateway，Gateway 转发给客户端）
+message PlayerBindRes {
+    uint32 code = 1;  // 0 = 成功，非零见 errors.toml
+    string msg  = 2;
+}
+
+// 玩家被踢通知（Gateway 推送给客户端）
+message PlayerKickNotify {
+    string reason = 1;  // 踢人原因，如 "account login elsewhere"
 }
 
 enum CmdRegistryInternal {

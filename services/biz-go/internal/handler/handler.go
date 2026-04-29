@@ -27,6 +27,7 @@ const (
 	cmdGetPlayerRoomsRes  = uint32(protocol.CmdBiz_CMD_BIZ_GET_PLAYER_ROOMS_RES)
 	cmdPing               = uint32(protocol.CmdBiz_CMD_BIZ_PING)
 	cmdPong               = uint32(protocol.CmdBiz_CMD_BIZ_PONG)
+	cmdPlayerBind         = uint32(protocol.CmdGatewayInternal_CMD_GW_PLAYER_BIND)
 )
 
 // HandleBizPacket 业务包分发
@@ -56,6 +57,9 @@ func HandleBizPacket(conn *net.TCPConn, pkt *net.Packet, svc *service.PlayerServ
 		handleGetPlayerRooms(conn, pkt, svc, traceID, gatewayConnID)
 	case cmdPing:
 		handlePing(conn, pkt, traceID, gatewayConnID)
+	case cmdPlayerBind:
+		log.Infof("[%s] player_bind req", traceID)
+		handlePlayerBind(conn, pkt, svc, traceID, gatewayConnID)
 	default:
 		log.Warnf("unknown cmd_id: 0x%08X", pkt.CmdID)
 	}
@@ -128,6 +132,48 @@ func handlePing(conn *net.TCPConn, pkt *net.Packet, traceID string, gatewayConnI
 	res := &bizpb.Pong{ClientTime: req.ClientTime, ServerTime: uint64(time.Now().UnixMilli())}
 	logger.Info(fmt.Sprintf("[Flow] Biz -> Gateway: cmd=0x%08X seq=%d (pong)", cmdPong, pkt.SeqID))
 	SendProto(conn, pkt.SeqID, cmdPong, res, gatewayConnID)
+}
+
+func handlePlayerBind(conn *net.TCPConn, pkt *net.Packet, svc *service.PlayerService, traceID string, gatewayConnID uint64) {
+	var req protocol.PlayerBindReq
+	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
+		svc.Log.WithTrace(traceID).Warnf("player_bind parse error: %v", err)
+		sendPlayerBindRes(conn, pkt.SeqID, 1, "invalid request", gatewayConnID)
+		return
+	}
+
+	ctx := trace.WithContext(context.Background(), traceID)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	// 验证 Token（查 Redis）
+	ok, err := svc.VerifyToken(ctx, req.GetPlayerId(), req.GetToken())
+	if err != nil {
+		svc.Log.WithTrace(traceID).Warnf("player_bind token verify error: player_id=%d, err=%v", req.GetPlayerId(), err)
+		// Redis 不可用返回明确错误，避免客户端误以为是 token 错误
+		if err.Error() == "redis not available" {
+			sendPlayerBindRes(conn, pkt.SeqID, 2, "redis not available", gatewayConnID)
+		} else {
+			sendPlayerBindRes(conn, pkt.SeqID, 1, "invalid token", gatewayConnID)
+		}
+		return
+	}
+	if !ok {
+		svc.Log.WithTrace(traceID).Warnf("player_bind token mismatch: player_id=%d", req.GetPlayerId())
+		sendPlayerBindRes(conn, pkt.SeqID, 1, "invalid token", gatewayConnID)
+		return
+	}
+
+	svc.Log.WithTrace(traceID).Infof("player_bind success: player_id=%d", req.GetPlayerId())
+	sendPlayerBindRes(conn, pkt.SeqID, 0, "ok", gatewayConnID)
+}
+
+func sendPlayerBindRes(conn *net.TCPConn, seqID uint32, code uint32, msg string, gatewayConnID uint64) {
+	res := &protocol.PlayerBindRes{
+		Code: code,
+		Msg:  msg,
+	}
+	SendProto(conn, seqID, cmdPlayerBind, res, gatewayConnID)
 }
 
 func sendGetPlayerRes(conn *net.TCPConn, seqID uint32, code uint32, player *bizpb.PlayerBase, gatewayConnID uint64) {

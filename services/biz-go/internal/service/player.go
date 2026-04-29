@@ -158,6 +158,19 @@ func (s *PlayerService) SetToken(ctx context.Context, playerID uint64, token str
 	return s.Redis.Set(ctx, key, token, time.Duration(ttlSec)*time.Second)
 }
 
+// VerifyToken 验证玩家 Token（从 Redis）
+func (s *PlayerService) VerifyToken(ctx context.Context, playerID uint64, token string) (bool, error) {
+	if s.Redis == nil {
+		return false, fmt.Errorf("redis not available")
+	}
+	key := fmt.Sprintf("token:%d", playerID)
+	storedToken, err := s.Redis.Get(ctx, key)
+	if err != nil {
+		return false, err
+	}
+	return storedToken == token, nil
+}
+
 // GetPlayerRooms 获取玩家加入的聊天室列表（从 Redis）
 func (s *PlayerService) GetPlayerRooms(ctx context.Context, playerID uint64) ([]*chatpb.ChatRoomInfo, error) {
 	if s.Redis == nil {

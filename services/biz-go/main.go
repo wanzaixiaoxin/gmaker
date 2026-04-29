@@ -42,6 +42,11 @@ type BizConfig struct {
 		Type  string   `json:"type"`
 		Addrs []string `json:"addrs"`
 	} `json:"discovery"`
+	Redis struct {
+		Addrs    []string `json:"addrs"`
+		Password string   `json:"password"`
+		PoolSize int      `json:"pool_size"`
+	} `json:"redis"`
 }
 
 func main() {
@@ -109,13 +114,25 @@ func main() {
 	}
 	log.Infof("Biz registered to %s", cfg.Discovery.Type)
 
-	// 初始化 Redis 客户端（直接连接，不经过 DBProxy）
+	// 初始化 Redis 客户端（优先配置文件，其次 CLI 参数覆盖）
 	var redisClient *redis.Client
-	if *redisAddrs != "" {
+	var redisAddrsList []string
+	if len(cfg.Redis.Addrs) > 0 {
+		redisAddrsList = cfg.Redis.Addrs
+	} else if *redisAddrs != "" {
+		redisAddrsList = strings.Split(*redisAddrs, ",")
+	}
+	redisPassword := cfg.Redis.Password
+	if redisPassword == "" && *redisPass != "" {
+		redisPassword = *redisPass
+	}
+	if len(redisAddrsList) > 0 {
+		poolSize := cfg.Redis.PoolSize
+		if poolSize <= 0 { poolSize = 20 }
 		redisClient = redis.NewClient(redis.Config{
-			Addrs:    strings.Split(*redisAddrs, ","),
-			Password: *redisPass,
-			PoolSize: 20,
+			Addrs:    redisAddrsList,
+			Password: redisPassword,
+			PoolSize: poolSize,
 		})
 		if err := redisClient.Ping(context.Background()); err != nil {
 			log.Warnf("connect redis failed: %v, running without redis", err)

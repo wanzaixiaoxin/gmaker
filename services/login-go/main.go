@@ -181,20 +181,26 @@ func main() {
 		}
 	}
 
-	// 发现 Gateway 地址
-	gatewayAddr := discoverGatewayAddr(sd, cfg.Network.Host, cfg.Network.Port, log)
+	// 发现 Gateway 地址（返回多个供客户端负载均衡）
+	gatewayAddrs := discoverGatewayAddrs(sd, cfg.Network.Host, cfg.Network.Port, log)
+	var gatewayAddr string
+	if len(gatewayAddrs) > 0 {
+		gatewayAddr = gatewayAddrs[0]
+	}
 
 	// HTTP handler
 	h := &handler.LoginHandler{
-		PlayerSvc:   playerSvc,
-		GatewayAddr: gatewayAddr,
-		Log:         log,
+		PlayerSvc:    playerSvc,
+		GatewayAddr:  gatewayAddr,
+		GatewayAddrs: gatewayAddrs,
+		Log:          log,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/register", h.HandleRegister)
 	mux.HandleFunc("/api/v1/login", h.HandleLogin)
 	mux.HandleFunc("/api/v1/verify_token", h.HandleVerifyToken)
+	mux.HandleFunc("/api/v1/refresh_token", h.HandleRefreshToken)
 
 	listenAddr := fmt.Sprintf("%s:%d", cfg.Network.Host, cfg.Network.Port)
 	server := &http.Server{Addr: listenAddr, Handler: mux}
@@ -219,20 +225,23 @@ func main() {
 	}
 }
 
-func discoverGatewayAddr(sd discovery.ServiceDiscovery, fallbackHost string, fallbackPort int, log *logger.Logger) string {
+func discoverGatewayAddrs(sd discovery.ServiceDiscovery, fallbackHost string, fallbackPort int, log *logger.Logger) []string {
 	// 从 Registry 查找 gateway 节点（Web 客户端需要 WebSocket 地址）
 	nodes, err := sd.Discover(context.Background(), "gateway")
 	if err == nil && len(nodes) > 0 {
-		node := nodes[0]
-		host := node.Host
-		if host == "0.0.0.0" {
-			host = "127.0.0.1"
+		var addrs []string
+		for _, node := range nodes {
+			host := node.Host
+			if host == "0.0.0.0" {
+				host = "127.0.0.1"
+			}
+			// Gateway 注册的是 TCP 端口，WebSocket 端口固定 +2
+			wsPort := node.Port + 2
+			addr := fmt.Sprintf("%s:%d", host, wsPort)
+			addrs = append(addrs, addr)
 		}
-		// Gateway 注册的是 TCP 端口，WebSocket 端口固定 +2（8081->8083）
-		wsPort := node.Port + 2
-		addr := fmt.Sprintf("%s:%d", host, wsPort)
-		log.Infof("Discovered gateway ws: %s", addr)
-		return addr
+		log.Infof("Discovered gateway ws addrs: %v", addrs)
+		return addrs
 	}
 	// Fallback
 	log.Warnf("no gateway found in registry, using fallback")
@@ -240,5 +249,5 @@ func discoverGatewayAddr(sd discovery.ServiceDiscovery, fallbackHost string, fal
 	if host == "0.0.0.0" {
 		host = "127.0.0.1"
 	}
-	return fmt.Sprintf("%s:%d", host, 8083)
+	return []string{fmt.Sprintf("%s:%d", host, 8083)}
 }

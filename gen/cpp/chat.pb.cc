@@ -34,6 +34,9 @@ inline constexpr ChatSendMsgReq::Impl_::Impl_(
         content_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        sender_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         room_id_{::uint64_t{0u}},
         sender_id_{::uint64_t{0u}} {}
 
@@ -609,13 +612,15 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::chat::ChatSendMsgReq, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::chat::ChatSendMsgReq, _impl_.room_id_),
         PROTOBUF_FIELD_OFFSET(::chat::ChatSendMsgReq, _impl_.sender_id_),
         PROTOBUF_FIELD_OFFSET(::chat::ChatSendMsgReq, _impl_.content_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::chat::ChatSendMsgReq, _impl_.sender_name_),
         2,
+        3,
         0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::chat::ChatSendMsgRes, _impl_._has_bits_),
         5, // hasbit index offset
@@ -683,14 +688,14 @@ static const ::_pbi::MigrationSchema
         {60, sizeof(::chat::ChatLeaveRoomReq)},
         {67, sizeof(::chat::ChatLeaveRoomRes)},
         {72, sizeof(::chat::ChatSendMsgReq)},
-        {81, sizeof(::chat::ChatSendMsgRes)},
-        {88, sizeof(::chat::ChatMsgNotify)},
-        {93, sizeof(::chat::ChatGetHistoryReq)},
-        {100, sizeof(::chat::ChatGetHistoryRes)},
-        {107, sizeof(::chat::ChatListRoomReq)},
-        {114, sizeof(::chat::ChatListRoomRes)},
-        {123, sizeof(::chat::ChatCloseRoomReq)},
-        {130, sizeof(::chat::ChatCloseRoomRes)},
+        {83, sizeof(::chat::ChatSendMsgRes)},
+        {90, sizeof(::chat::ChatMsgNotify)},
+        {95, sizeof(::chat::ChatGetHistoryReq)},
+        {102, sizeof(::chat::ChatGetHistoryRes)},
+        {109, sizeof(::chat::ChatListRoomReq)},
+        {116, sizeof(::chat::ChatListRoomRes)},
+        {125, sizeof(::chat::ChatCloseRoomReq)},
+        {132, sizeof(::chat::ChatCloseRoomRes)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::chat::_ChatRoomInfo_default_instance_._instance,
@@ -730,23 +735,24 @@ const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIA
     "\n\013recent_msgs\030\003 \003(\0132\021.chat.ChatMessage\"6"
     "\n\020ChatLeaveRoomReq\022\017\n\007room_id\030\001 \001(\004\022\021\n\tp"
     "layer_id\030\002 \001(\004\"2\n\020ChatLeaveRoomRes\022\036\n\006re"
-    "sult\030\001 \001(\0132\016.common.Result\"E\n\016ChatSendMs"
+    "sult\030\001 \001(\0132\016.common.Result\"Z\n\016ChatSendMs"
     "gReq\022\017\n\007room_id\030\001 \001(\004\022\021\n\tsender_id\030\002 \001(\004"
-    "\022\017\n\007content\030\003 \001(\t\"P\n\016ChatSendMsgRes\022\036\n\006r"
-    "esult\030\001 \001(\0132\016.common.Result\022\036\n\003msg\030\002 \001(\013"
-    "2\021.chat.ChatMessage\"/\n\rChatMsgNotify\022\036\n\003"
-    "msg\030\001 \001(\0132\021.chat.ChatMessage\"3\n\021ChatGetH"
-    "istoryReq\022\017\n\007room_id\030\001 \001(\004\022\r\n\005limit\030\002 \001("
-    "\r\"T\n\021ChatGetHistoryRes\022\036\n\006result\030\001 \001(\0132\016"
-    ".common.Result\022\037\n\004msgs\030\002 \003(\0132\021.chat.Chat"
-    "Message\".\n\017ChatListRoomReq\022\014\n\004page\030\001 \001(\r"
-    "\022\r\n\005limit\030\002 \001(\r\"c\n\017ChatListRoomRes\022\036\n\006re"
-    "sult\030\001 \001(\0132\016.common.Result\022!\n\005rooms\030\002 \003("
-    "\0132\022.chat.ChatRoomInfo\022\r\n\005total\030\003 \001(\r\"8\n\020"
-    "ChatCloseRoomReq\022\017\n\007room_id\030\001 \001(\004\022\023\n\013ope"
-    "rator_id\030\002 \001(\004\"2\n\020ChatCloseRoomRes\022\036\n\006re"
-    "sult\030\001 \001(\0132\016.common.ResultB%Z#github.com"
-    "/gmaker/luffa/gen/go/chatb\006proto3"
+    "\022\017\n\007content\030\003 \001(\t\022\023\n\013sender_name\030\004 \001(\t\"P"
+    "\n\016ChatSendMsgRes\022\036\n\006result\030\001 \001(\0132\016.commo"
+    "n.Result\022\036\n\003msg\030\002 \001(\0132\021.chat.ChatMessage"
+    "\"/\n\rChatMsgNotify\022\036\n\003msg\030\001 \001(\0132\021.chat.Ch"
+    "atMessage\"3\n\021ChatGetHistoryReq\022\017\n\007room_i"
+    "d\030\001 \001(\004\022\r\n\005limit\030\002 \001(\r\"T\n\021ChatGetHistory"
+    "Res\022\036\n\006result\030\001 \001(\0132\016.common.Result\022\037\n\004m"
+    "sgs\030\002 \003(\0132\021.chat.ChatMessage\".\n\017ChatList"
+    "RoomReq\022\014\n\004page\030\001 \001(\r\022\r\n\005limit\030\002 \001(\r\"c\n\017"
+    "ChatListRoomRes\022\036\n\006result\030\001 \001(\0132\016.common"
+    ".Result\022!\n\005rooms\030\002 \003(\0132\022.chat.ChatRoomIn"
+    "fo\022\r\n\005total\030\003 \001(\r\"8\n\020ChatCloseRoomReq\022\017\n"
+    "\007room_id\030\001 \001(\004\022\023\n\013operator_id\030\002 \001(\004\"2\n\020C"
+    "hatCloseRoomRes\022\036\n\006result\030\001 \001(\0132\016.common"
+    ".ResultB%Z#github.com/gmaker/luffa/gen/g"
+    "o/chatb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_chat_2eproto_deps[1] = {
@@ -756,7 +762,7 @@ static ::absl::once_flag descriptor_table_chat_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_chat_2eproto = {
     false,
     false,
-    1353,
+    1374,
     descriptor_table_protodef_chat_2eproto,
     "chat.proto",
     &descriptor_table_chat_2eproto_once,
@@ -3580,7 +3586,8 @@ PROTOBUF_NDEBUG_INLINE ChatSendMsgReq::Impl_::Impl_(
     [[maybe_unused]] const ::chat::ChatSendMsgReq& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        content_(arena, from.content_) {}
+        content_(arena, from.content_),
+        sender_name_(arena, from.sender_name_) {}
 
 ChatSendMsgReq::ChatSendMsgReq(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -3609,7 +3616,8 @@ PROTOBUF_NDEBUG_INLINE ChatSendMsgReq::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        content_(arena) {}
+        content_(arena),
+        sender_name_(arena) {}
 
 inline void ChatSendMsgReq::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -3632,6 +3640,7 @@ inline void ChatSendMsgReq::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.content_.Destroy();
+  this_._impl_.sender_name_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -3677,16 +3686,16 @@ ChatSendMsgReq::GetClassData() const {
   return ChatSendMsgReq_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<2, 3, 0, 35, 2>
+const ::_pbi::TcParseTable<2, 4, 0, 46, 2>
 ChatSendMsgReq::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ChatSendMsgReq, _impl_._has_bits_),
     0, // no _extensions_
-    3, 24,  // max_field_number, fast_idx_mask
+    4, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967288,  // skipmap
+    4294967280,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    3,  // num_field_entries
+    4,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     ChatSendMsgReq_class_data_.base(),
@@ -3696,14 +3705,17 @@ ChatSendMsgReq::_table_ = {
     ::_pbi::TcParser::GetTable<::chat::ChatSendMsgReq>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    {::_pbi::TcParser::MiniParse, {}},
+    // string sender_name = 4;
+    {::_pbi::TcParser::FastUS1,
+     {34, 1, 0,
+      PROTOBUF_FIELD_OFFSET(ChatSendMsgReq, _impl_.sender_name_)}},
     // uint64 room_id = 1;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatSendMsgReq, _impl_.room_id_), 1>(),
-     {8, 1, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatSendMsgReq, _impl_.room_id_), 2>(),
+     {8, 2, 0,
       PROTOBUF_FIELD_OFFSET(ChatSendMsgReq, _impl_.room_id_)}},
     // uint64 sender_id = 2;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatSendMsgReq, _impl_.sender_id_), 2>(),
-     {16, 2, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatSendMsgReq, _impl_.sender_id_), 3>(),
+     {16, 3, 0,
       PROTOBUF_FIELD_OFFSET(ChatSendMsgReq, _impl_.sender_id_)}},
     // string content = 3;
     {::_pbi::TcParser::FastUS1,
@@ -3713,17 +3725,20 @@ ChatSendMsgReq::_table_ = {
     65535, 65535
   }}, {{
     // uint64 room_id = 1;
-    {PROTOBUF_FIELD_OFFSET(ChatSendMsgReq, _impl_.room_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    {PROTOBUF_FIELD_OFFSET(ChatSendMsgReq, _impl_.room_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     // uint64 sender_id = 2;
-    {PROTOBUF_FIELD_OFFSET(ChatSendMsgReq, _impl_.sender_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    {PROTOBUF_FIELD_OFFSET(ChatSendMsgReq, _impl_.sender_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     // string content = 3;
     {PROTOBUF_FIELD_OFFSET(ChatSendMsgReq, _impl_.content_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string sender_name = 4;
+    {PROTOBUF_FIELD_OFFSET(ChatSendMsgReq, _impl_.sender_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
   }},
   // no aux_entries
   {{
-    "\23\0\0\7\0\0\0\0"
+    "\23\0\0\7\13\0\0\0"
     "chat.ChatSendMsgReq"
     "content"
+    "sender_name"
   }},
 };
 PROTOBUF_NOINLINE void ChatSendMsgReq::Clear() {
@@ -3734,10 +3749,15 @@ PROTOBUF_NOINLINE void ChatSendMsgReq::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.content_.ClearNonDefaultToEmpty();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.content_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.sender_name_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
     ::memset(&_impl_.room_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.sender_id_) -
         reinterpret_cast<char*>(&_impl_.room_id_)) + sizeof(_impl_.sender_id_));
@@ -3766,7 +3786,7 @@ PROTOBUF_NOINLINE void ChatSendMsgReq::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 room_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_room_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3775,7 +3795,7 @@ PROTOBUF_NOINLINE void ChatSendMsgReq::Clear() {
   }
 
   // uint64 sender_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_sender_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3790,6 +3810,16 @@ PROTOBUF_NOINLINE void ChatSendMsgReq::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "chat.ChatSendMsgReq.content");
       target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // string sender_name = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_sender_name().empty()) {
+      const ::std::string& _s = this_._internal_sender_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "chat.ChatSendMsgReq.sender_name");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
     }
   }
 
@@ -3818,7 +3848,7 @@ PROTOBUF_NOINLINE void ChatSendMsgReq::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // string content = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_content().empty()) {
@@ -3826,15 +3856,22 @@ PROTOBUF_NOINLINE void ChatSendMsgReq::Clear() {
                                         this_._internal_content());
       }
     }
-    // uint64 room_id = 1;
+    // string sender_name = 4;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_sender_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_sender_name());
+      }
+    }
+    // uint64 room_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_room_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_room_id());
       }
     }
     // uint64 sender_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_sender_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_sender_id());
@@ -3859,7 +3896,7 @@ void ChatSendMsgReq::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_content().empty()) {
         _this->_internal_set_content(from._internal_content());
@@ -3870,11 +3907,20 @@ void ChatSendMsgReq::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_sender_name().empty()) {
+        _this->_internal_set_sender_name(from._internal_sender_name());
+      } else {
+        if (_this->_impl_.sender_name_.IsDefault()) {
+          _this->_internal_set_sender_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_room_id() != 0) {
         _this->_impl_.room_id_ = from._impl_.room_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_sender_id() != 0) {
         _this->_impl_.sender_id_ = from._impl_.sender_id_;
       }
@@ -3900,6 +3946,7 @@ void ChatSendMsgReq::InternalSwap(ChatSendMsgReq* PROTOBUF_RESTRICT PROTOBUF_NON
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.content_, &other->_impl_.content_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.sender_name_, &other->_impl_.sender_name_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(ChatSendMsgReq, _impl_.sender_id_)
       + sizeof(ChatSendMsgReq::_impl_.sender_id_)

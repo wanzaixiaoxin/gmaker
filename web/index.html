@@ -719,7 +719,26 @@ const PROTO_DESCRIPTOR = {
           "values": {
             "CMD_GW_UNKNOWN": 0,
             "CMD_GW_ROOM_JOIN": 4112,
-            "CMD_GW_ROOM_LEAVE": 4113
+            "CMD_GW_ROOM_LEAVE": 4113,
+            "CMD_GW_PLAYER_BIND": 4128,
+            "CMD_GW_PLAYER_KICK": 4129
+          }
+        },
+        "PlayerBindReq": {
+          "fields": {
+            "playerId": { "type": "uint64", "id": 1 },
+            "token": { "type": "string", "id": 2 }
+          }
+        },
+        "PlayerBindRes": {
+          "fields": {
+            "code": { "type": "uint32", "id": 1 },
+            "msg": { "type": "string", "id": 2 }
+          }
+        },
+        "PlayerKickNotify": {
+          "fields": {
+            "reason": { "type": "string", "id": 1 }
           }
         },
         "CmdRegistryInternal": {
@@ -1125,6 +1144,25 @@ async function doAuth() {
         setStatus('已连接 | 玩家ID: ' + playerID);
         showMsg('authMsg', '', false);
 
+        // 发送玩家绑定请求（单设备登录）
+        try {
+            const BindReq = root.lookupType('protocol.PlayerBindReq');
+            const bindPayload = BindReq.encode(BindReq.create({ playerId: playerID, token: token })).finish();
+            const bindRes = await wsClient.call(Cmd.GW_PLAYER_BIND, bindPayload, 5000);
+            const BindRes = root.lookupType('protocol.PlayerBindRes');
+            const bindResult = BindRes.decode(bindRes.payload);
+            if (bindResult.code !== 0) {
+                throw new Error('绑定失败: ' + bindResult.msg);
+            }
+            setStatus('已绑定 | 玩家ID: ' + playerID);
+        } catch (e) {
+            setStatus('绑定失败');
+            showMsg('authMsg', e.message || '绑定失败', true);
+            wsClient.close();
+            wsClient = null;
+            return;
+        }
+
         // 监听推送
         chatAPI.onNotify((msg) => {
             if (currentRoom && msg.msg && msg.msg.roomId === currentRoom.roomId) {
@@ -1134,6 +1172,18 @@ async function doAuth() {
                 }
             }
         });
+
+        // 监听被踢通知（账号在其他地方登录）
+        wsClient.onKick = (payload) => {
+            try {
+                const KickNotify = root.lookupType('protocol.PlayerKickNotify');
+                const notify = KickNotify.decode(payload);
+                alert('⚠️ ' + (notify.reason || '您的账号已在其他地方登录'));
+            } catch (e) {
+                alert('⚠️ 您的账号已在其他地方登录');
+            }
+            logout();
+        };
 
         showPanel('lobbyPanel');
         document.getElementById('userLabel').textContent = '用户: ' + account + ' (ID:' + playerID + ')';

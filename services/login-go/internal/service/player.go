@@ -2,13 +2,16 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"strconv"
 	"time"
+	"unicode"
 
 	"github.com/gmaker/luffa/common/go/cache"
+	"github.com/gmaker/luffa/common/go/crypto"
 	"github.com/gmaker/luffa/common/go/idgen"
 	"github.com/gmaker/luffa/common/go/logger"
 	"github.com/gmaker/luffa/common/go/redis"
@@ -214,14 +217,102 @@ func parsePlayerBase(row *dbproxypb.MySQLRow) *bizpb.PlayerBase {
 	}
 }
 
+// HashPassword 使用 Argon2id 哈希密码（新注册/密码修改时使用）
 func HashPassword(pwd string) string {
-	h := sha256.Sum256([]byte(pwd))
-	return hex.EncodeToString(h[:])
+	hash, err := crypto.HashPasswordArgon2id(pwd)
+	if err != nil {
+		// 降级到 SHA256（理论上不会发生，因为 argon2id 不依赖外部资源）
+		h := sha256.Sum256([]byte(pwd))
+		return hex.EncodeToString(h[:])
+	}
+	return hash
 }
 
-func GenerateToken(playerID uint64) string {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%d:%d", playerID, time.Now().UnixNano())))
-	return hex.EncodeToString(h[:16])
+// VerifyPassword 验证密码，支持 Argon2id 和旧 SHA256 兼容
+// 如果密码是旧 SHA256 格式且验证通过，返回 needUpgrade=true，调用方应触发密码升级
+func VerifyPassword(pwd, storedHash string) (ok bool, needUpgrade bool) {
+	if crypto.IsArgon2idHash(storedHash) {
+		ok, _ = crypto.VerifyPasswordArgon2id(pwd, storedHash)
+		return ok, false
+	}
+	// 兼容旧 SHA256（无盐）
+	h := sha256.Sum256([]byte(pwd))
+	if hex.EncodeToString(h[:]) == storedHash {
+		return true, true
+	}
+	return false, false
+}
+
+// GenerateToken 生成密码学安全的随机 token（32 字节 → 64 字符 hex）
+func GenerateToken() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// GenerateRefreshToken 生成 Refresh Token
+func GenerateRefreshToken() string {
+	return GenerateToken()
+}
+
+// UpdatePassword 更新玩家密码（用于旧密码自动升级）
+func (s *PlayerService) UpdatePassword(ctx context.Context, playerID uint64, newPassword string) error {
+	newHash := HashPassword(newPassword)
+	sqlStr := "UPDATE players SET password = ? WHERE player_id = ?"
+	req := &dbproxypb.MySQLExecReq{
+		Uid:  playerID,
+		Sql:  sqlStr,
+		Args: []string{newHash, strconv.FormatUint(playerID, 10)},
+	}
+	data, _ := proto.Marshal(req)
+	resPkt, err := s.DB.Call(ctx, cmdMySQLExec, data)
+	if err != nil {
+		return err
+	}
+	var res dbproxypb.MySQLExecRes
+	if err := proto.Unmarshal(resPkt.Payload, &res); err != nil {
+		return err
+	}
+	if !res.Ok {
+		return fmt.Errorf("update password failed: %s", res.Error)
+	}
+	return nil
+}
+
+// SetRefreshToken 设置 Refresh Token
+func (s *PlayerService) SetRefreshToken(ctx context.Context, playerID uint64, token string, ttlSec uint64) error {
+	if s.Redis == nil {
+		return fmt.Errorf("redis not available")
+	}
+	key := fmt.Sprintf("refresh:%d", playerID)
+	return s.Redis.Set(ctx, key, token, time.Duration(ttlSec)*time.Second)
+}
+
+// GetRefreshToken 获取 Refresh Token
+func (s *PlayerService) GetRefreshToken(ctx context.Context, playerID uint64) (string, error) {
+	if s.Redis == nil {
+		return "", fmt.Errorf("redis not available")
+	}
+	key := fmt.Sprintf("refresh:%d", playerID)
+	return s.Redis.Get(ctx, key)
+}
+
+// ValidateInput 校验账号密码输入合法性
+// 账号：3-32 字符，只允许字母数字下划线
+// 密码：6-64 字符
+func ValidateInput(account, password string) error {
+	if len(account) < 3 || len(account) > 32 {
+		return fmt.Errorf("account length must be 3-32")
+	}
+	if len(password) < 6 || len(password) > 64 {
+		return fmt.Errorf("password length must be 6-64")
+	}
+	for _, r := range account {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
+			return fmt.Errorf("account can only contain letters, digits and underscore")
+		}
+	}
+	return nil
 }
 
 // EnsurePlayerTable 确保 players 表存在

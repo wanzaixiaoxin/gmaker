@@ -62,8 +62,10 @@ chat:
   CHAT_LIST_ROOM_RES:   0x0003000E
 
 gateway_internal:
-  GW_ROOM_JOIN:  0x00001010
-  GW_ROOM_LEAVE: 0x00001011
+  GW_ROOM_JOIN:   0x00001010
+  GW_ROOM_LEAVE:  0x00001011
+  GW_PLAYER_BIND: 0x00001020
+  GW_PLAYER_KICK: 0x00001021
 
 registry_internal:
   # Registry 内部 RPC 命令号（通过 TCP 传输，非 Gateway 转发）

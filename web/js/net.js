@@ -114,6 +114,7 @@ class WSClient {
         this.crypto = new Crypto();
         this.onPacket = null;
         this.onClose = null;
+        this.onKick = null;
         this.connected = false;
     }
 
@@ -139,6 +140,11 @@ class WSClient {
                 try {
                     const payload = await this.crypto.decrypt(pkt.payload);
                     pkt.payload = payload;
+                    // 处理服务器主动推送的踢人通知
+                    if (pkt.cmdID === Cmd.GW_PLAYER_KICK) {
+                        if (this.onKick) this.onKick(pkt.payload);
+                        return;
+                    }
                     if (pkt.seqID !== 0 && this.pending.has(pkt.seqID)) {
                         this.pending.get(pkt.seqID)(pkt);
                         this.pending.delete(pkt.seqID);
@@ -256,6 +262,8 @@ const Cmd = {
     CMN_LOGIN_RES: 0x00001001,
     CMN_REGISTER_REQ: 0x00001002,
     CMN_REGISTER_RES: 0x00001003,
+    GW_PLAYER_BIND: 0x00001020,
+    GW_PLAYER_KICK: 0x00001021,
     BIZ_GET_PLAYER_REQ: 0x00010000,
     BIZ_GET_PLAYER_RES: 0x00010001,
     BIZ_PING: 0x00010004,

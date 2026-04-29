@@ -3,14 +3,14 @@
 package errors
 
 const (
+	INVALID_PARAM int32 = 2 // Common
+	TIMEOUT int32 = 3 // Common
 	RATE_LIMITED int32 = 4 // Common
 	NOT_FOUND int32 = 5 // Common
+	INTERNAL_ERROR int32 = 6 // Common
+	CIRCUIT_OPEN int32 = 8 // Common
 	OK int32 = 0 // Common
 	UNKNOWN_ERROR int32 = 1 // Common
-	INVALID_PARAM int32 = 2 // Common
-	CIRCUIT_OPEN int32 = 8 // Common
-	TIMEOUT int32 = 3 // Common
-	INTERNAL_ERROR int32 = 6 // Common
 	REPLAY_DETECTED int32 = 7 // Common
 	AUTH_FAILED int32 = 100 // Auth
 	TOKEN_EXPIRED int32 = 101 // Auth
@@ -18,21 +18,21 @@ const (
 	ACCOUNT_EXISTS int32 = 103 // Auth
 	ACCOUNT_NOT_FOUND int32 = 104 // Auth
 	PASSWORD_WRONG int32 = 105 // Auth
-	HEARTBEAT_TIMEOUT int32 = 203 // Registry
 	NODE_NOT_FOUND int32 = 200 // Registry
 	SERVICE_UNAVAILABLE int32 = 201 // Registry
 	REGISTER_FAILED int32 = 202 // Registry
+	HEARTBEAT_TIMEOUT int32 = 203 // Registry
 	DB_CONN_FAILED int32 = 300 // Dbproxy
 	MYSQL_ERROR int32 = 301 // Dbproxy
-	PLAYER_NOT_FOUND int32 = 400 // Biz
-	ITEM_NOT_FOUND int32 = 401 // Biz
 	NOT_ENOUGH_COIN int32 = 402 // Biz
 	NOT_ENOUGH_DIAMOND int32 = 403 // Biz
+	PLAYER_NOT_FOUND int32 = 400 // Biz
+	ITEM_NOT_FOUND int32 = 401 // Biz
+	SYNC_ERROR int32 = 504 // Realtime
+	ROOM_NOT_FOUND int32 = 500 // Realtime
 	ROOM_FULL int32 = 501 // Realtime
 	ALREADY_IN_ROOM int32 = 502 // Realtime
 	NOT_IN_ROOM int32 = 503 // Realtime
-	SYNC_ERROR int32 = 504 // Realtime
-	ROOM_NOT_FOUND int32 = 500 // Realtime
 	PACKET_TOO_LARGE int32 = 900 // Gateway
 	INVALID_MAGIC int32 = 901 // Gateway
 	UNKNOWN_CMD_ID int32 = 902 // Gateway
@@ -41,14 +41,14 @@ const (
 )
 
 var codeToName = map[int32]string{
+	2: "INVALID_PARAM",
+	3: "TIMEOUT",
 	4: "RATE_LIMITED",
 	5: "NOT_FOUND",
+	6: "INTERNAL_ERROR",
+	8: "CIRCUIT_OPEN",
 	0: "OK",
 	1: "UNKNOWN_ERROR",
-	2: "INVALID_PARAM",
-	8: "CIRCUIT_OPEN",
-	3: "TIMEOUT",
-	6: "INTERNAL_ERROR",
 	7: "REPLAY_DETECTED",
 	100: "AUTH_FAILED",
 	101: "TOKEN_EXPIRED",
@@ -56,21 +56,21 @@ var codeToName = map[int32]string{
 	103: "ACCOUNT_EXISTS",
 	104: "ACCOUNT_NOT_FOUND",
 	105: "PASSWORD_WRONG",
-	203: "HEARTBEAT_TIMEOUT",
 	200: "NODE_NOT_FOUND",
 	201: "SERVICE_UNAVAILABLE",
 	202: "REGISTER_FAILED",
+	203: "HEARTBEAT_TIMEOUT",
 	300: "DB_CONN_FAILED",
 	301: "MYSQL_ERROR",
-	400: "PLAYER_NOT_FOUND",
-	401: "ITEM_NOT_FOUND",
 	402: "NOT_ENOUGH_COIN",
 	403: "NOT_ENOUGH_DIAMOND",
+	400: "PLAYER_NOT_FOUND",
+	401: "ITEM_NOT_FOUND",
+	504: "SYNC_ERROR",
+	500: "ROOM_NOT_FOUND",
 	501: "ROOM_FULL",
 	502: "ALREADY_IN_ROOM",
 	503: "NOT_IN_ROOM",
-	504: "SYNC_ERROR",
-	500: "ROOM_NOT_FOUND",
 	900: "PACKET_TOO_LARGE",
 	901: "INVALID_MAGIC",
 	902: "UNKNOWN_CMD_ID",
