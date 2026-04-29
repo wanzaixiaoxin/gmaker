@@ -6,14 +6,14 @@
 #include <chrono>
 #include <csignal>
 #include <atomic>
-#include "gs/net/async/tcp_server.hpp"
-#include "gs/net/packet.hpp"
-#include "gs/net/address.hpp"
-#include "gs/discovery/factory.hpp"
-#include "gs/realtime/compute_thread.hpp"
-#include "gs/realtime/message.hpp"
-#include "gs/metrics/metrics.hpp"
-#include "gs/logger/logger.hpp"
+#include "net/async/tcp_server.hpp"
+#include "net/packet.hpp"
+#include "net/address.hpp"
+#include "discovery/factory.hpp"
+#include "realtime/compute_thread.hpp"
+#include "realtime/message.hpp"
+#include "metrics/metrics.hpp"
+#include "logger/logger.hpp"
 #include "protocol.pb.h"
 
 using namespace gs::net;

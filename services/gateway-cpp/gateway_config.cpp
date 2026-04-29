@@ -1,5 +1,5 @@
 #include "gateway_config.hpp"
-#include "gs/config/json_parser.hpp"
+#include "config/json_parser.hpp"
 #include <iostream>
 
 namespace gs {

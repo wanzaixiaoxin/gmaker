@@ -23,7 +23,7 @@
 
 ---
 
-## 一、网络层（common/go/net, common/cpp/gs/net）
+## 一、网络层（common/go/net, common/cpp/net）
 
 ### 1.1 Go TCPConn — 连接模型
 
@@ -59,7 +59,7 @@
 - ✅ 已增加 `SetHeartbeatTimeout` + `SO_RCVTIMEO`，防止恶意客户端挂起连接
 
 **补救计划**（✅ 基础架构已完成）：
-1. `common/cpp/gs/net/async_event_loop.hpp` 已创建，定义 `AsyncEventLoop` 纯虚接口
+1. `common/cpp/net/async_event_loop.hpp` 已创建，定义 `AsyncEventLoop` 纯虚接口
 2. 当前阻塞代码作为 "兼容性层" 保留，`TCPConn` 增加 heartbeat timeout
 3. Phase 5 实现 `AsyncEventLoop::Create()` 返回平台适配的 epoll/kqueue/IOCP 实现
 
@@ -329,7 +329,7 @@
 - ~~没有 `Middleware` 链式调用设计~~ → Go `net.Middleware` / C++ `gs::net::Middleware` 均已实现
 
 **补救计划**（✅ 已完成）：
-1. C++ `common/cpp/gs/net/middleware.hpp`：`class Middleware { virtual bool OnPacket(TCPConn*, Packet&) = 0; }`
+1. C++ `common/cpp/net/middleware.hpp`：`class Middleware { virtual bool OnPacket(TCPConn*, Packet&) = 0; }`
 2. C++ `TCPServer`：`Use(shared_ptr<Middleware>)`，按注册顺序执行，返回 false 拦截
 3. Go `common/go/net/server.go`：`Middleware` 接口 + `MiddlewareFunc` 适配器 + `Use(mw ...Middleware)`
 4. Gateway 重构：`HandshakeMiddleware`（握手+防重放+session 管理）+ `EncryptionMiddleware`（解密）注册到 `TCPServer` 中间件链
@@ -370,7 +370,7 @@
 - ~~Biz 节点断开时 Gateway 直接不可用~~ → Registry 节点下线后 `UpstreamPool` 自动移除不健康节点
 
 **补救计划（✅ 已完成）**：
-1. 新增 `common/cpp/gs/net/upstream.hpp/cpp` — `UpstreamPool` 通用上游连接池：
+1. 新增 `common/cpp/net/upstream.hpp/cpp` — `UpstreamPool` 通用上游连接池：
    - 维护多个 `TCPClient` 连接
    - 轮询（Round-Robin）负载均衡
    - 自动重连 + 指数退避（1s ~ 30s）

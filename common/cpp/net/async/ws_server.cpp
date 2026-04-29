@@ -1,5 +1,5 @@
 #include "ws_server.hpp"
-#include "gs/net/async/event_loop.hpp"
+#include "net/async/event_loop.hpp"
 #include "ws_frame.hpp"
 #include <uv.h>
 

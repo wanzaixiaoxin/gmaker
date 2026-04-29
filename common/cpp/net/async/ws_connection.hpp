@@ -1,8 +1,8 @@
 #pragma once
 
-#include "gs/net/async/event_loop.hpp"
-#include "gs/net/buffer.hpp"
-#include "gs/net/ring_buffer.hpp"
+#include "net/async/event_loop.hpp"
+#include "net/buffer.hpp"
+#include "net/ring_buffer.hpp"
 #include "ws_frame.hpp"
 #include <atomic>
 #include <cstdint>

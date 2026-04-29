@@ -34,7 +34,7 @@
 #include <errno.h>
 #endif
 
-#include "gs/net/packet.hpp"
+#include "net/packet.hpp"
 
 using namespace gs::net;
 

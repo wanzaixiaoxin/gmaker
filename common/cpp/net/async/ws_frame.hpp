@@ -1,6 +1,6 @@
 #pragma once
 
-#include "gs/net/buffer.hpp"
+#include "net/buffer.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <string>

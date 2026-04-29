@@ -28,8 +28,8 @@
 #include <fcntl.h>
 #endif
 
-#include "gs/net/packet.hpp"
-#include "gs/net/async/tcp_server.hpp"
+#include "net/packet.hpp"
+#include "net/async/tcp_server.hpp"
 
 using namespace gs::net;
 using namespace gs::net::async;

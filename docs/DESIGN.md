@@ -897,7 +897,7 @@ common/
 C++ 实时服内部定义统一接口，不同实时容器实现对应插件：
 
 ```cpp
-// common/cpp/gs/realtime/ 接口定义
+// common/cpp/realtime/ 接口定义
 class IRealtimeContext {
 public:
     virtual void OnPlayerJoin(uint64_t player_id) = 0;

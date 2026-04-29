@@ -89,11 +89,11 @@
 
 | # | 任务 | 负责语言 | 交付物 | 验收标准 | 依赖 |
 |---|------|---------|--------|---------|------|
-| 5.1 | ✅ Compute Thread 消息队列（mutex + cv，预留 lock-free 替换接口） | C++ | `common/cpp/gs/realtime/compute_thread.hpp/cpp` | 外部线程安全投递消息到 Compute Thread | 1.3 |
-| 5.2 | ✅ Compute Thread 与 Room/Scene 绑定 | C++ | `common/cpp/gs/realtime/` | 一个 Room 内所有消息路由到同一线程，无锁执行逻辑 | 5.1 |
-| 5.3 | ⏳ Async IO Thread Pool 骨架（预留 AsyncIOCompleteMsg 回调接口） | C++ | `common/cpp/gs/realtime/message.hpp` | Compute Thread 可接收异步 IO 完成事件 | 5.1, 2.1 |
-| 5.4 | ✅ Gateway 写聚合（Write Coalescing） | C++ | `common/cpp/gs/net/coalescer.hpp/cpp` | 同一帧内多个广播包按连接合并为 1 次 write | 1.3 |
-| 5.5 | ✅ AOI 广播过滤：均匀网格（九宫格） | C++ | `common/cpp/gs/realtime/aoi.hpp/cpp` | 按视野半径过滤，只推送视野内玩家 | 5.2 |
+| 5.1 | ✅ Compute Thread 消息队列（mutex + cv，预留 lock-free 替换接口） | C++ | `common/cpp/realtime/compute_thread.hpp/cpp` | 外部线程安全投递消息到 Compute Thread | 1.3 |
+| 5.2 | ✅ Compute Thread 与 Room/Scene 绑定 | C++ | `common/cpp/realtime/` | 一个 Room 内所有消息路由到同一线程，无锁执行逻辑 | 5.1 |
+| 5.3 | ⏳ Async IO Thread Pool 骨架（预留 AsyncIOCompleteMsg 回调接口） | C++ | `common/cpp/realtime/message.hpp` | Compute Thread 可接收异步 IO 完成事件 | 5.1, 2.1 |
+| 5.4 | ✅ Gateway 写聚合（Write Coalescing） | C++ | `common/cpp/net/coalescer.hpp/cpp` | 同一帧内多个广播包按连接合并为 1 次 write | 1.3 |
+| 5.5 | ✅ AOI 广播过滤：均匀网格（九宫格） | C++ | `common/cpp/realtime/aoi.hpp/cpp` | 按视野半径过滤，只推送视野内玩家 | 5.2 |
 
 **Phase 5 里程碑**：✅ 已完成（Realtime Server 具备 Room + Compute Thread 架构、九宫格 AOI 过滤、Gateway Write Coalescing；Async IO Thread Pool 预留接口待 Phase 6 完善）
 

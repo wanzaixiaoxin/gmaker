@@ -192,23 +192,23 @@ services/{name}-go/
 
 ### 5.3 C++ 服务内部结构
 
-C++ 服务以 `main.cpp` 为主入口，配合公共库实现。当前 `gateway-cpp` 已包含完整的 `Gateway` 类、中间件链（`HandshakeMiddleware` / `EncryptionMiddleware`）、上游连接池管理、Room 成员管理、信号处理等，不再是简单的"骨架阶段"单文件模式。公共库头文件统一放在 `common/cpp/gs/{module}/`。
+C++ 服务以 `main.cpp` 为主入口，配合公共库实现。当前 `gateway-cpp` 已包含完整的 `Gateway` 类、中间件链（`HandshakeMiddleware` / `EncryptionMiddleware`）、上游连接池管理、Room 成员管理、信号处理等，不再是简单的"骨架阶段"单文件模式。公共库头文件统一放在 `common/cpp/{module}/`。
 
 ### 5.4 公共库双语言对称约定
 
 | 功能 | Go 包路径 | C++ 路径/命名空间 |
 |------|-----------|-------------------|
-| 网络 | `common/go/net` | `common/cpp/gs/net` |
-| RPC | `common/go/rpc` | `common/cpp/gs/rpc` |
-| 服务发现 | `common/go/discovery` | `common/cpp/gs/discovery` |
-| Registry SDK | `common/go/registry` | `common/cpp/gs/registry` |
-| 日志 | `common/go/logger` | `common/cpp/gs/logger` |
-| 指标 | `common/go/metrics` | `common/cpp/gs/metrics` |
-| 配置 | `common/go/config` | `common/cpp/gs/config` |
-| 加密 | `common/go/crypto` | `common/cpp/gs/crypto` |
-| ID 生成 | `common/go/idgen` | `common/cpp/gs/idgen` |
-| 限流 | `common/go/limiter` | `common/cpp/gs/limiter` |
-| Redis | `common/go/redis` | `common/cpp/gs/redis` |
+| 网络 | `common/go/net` | `common/cpp/net` |
+| RPC | `common/go/rpc` | `common/cpp/rpc` |
+| 服务发现 | `common/go/discovery` | `common/cpp/discovery` |
+| Registry SDK | `common/go/registry` | `common/cpp/registry` |
+| 日志 | `common/go/logger` | `common/cpp/logger` |
+| 指标 | `common/go/metrics` | `common/cpp/metrics` |
+| 配置 | `common/go/config` | `common/cpp/config` |
+| 加密 | `common/go/crypto` | `common/cpp/crypto` |
+| ID 生成 | `common/go/idgen` | `common/cpp/idgen` |
+| 限流 | `common/go/limiter` | `common/cpp/limiter` |
+| Redis | `common/go/redis` | `common/cpp/redis` |
 
 **原则**：同一功能在两种语言中的模块名、接口语义、常量值应尽量保持一致，方便跨语言维护。
 
@@ -303,7 +303,7 @@ C++ 服务以 `main.cpp` 为主入口，配合公共库实现。当前 `gateway-
 - 各服务直接连接 Redis（不再经过 DBProxy 代理）。Redis 热点 Key 限流和危险命令拦截由各服务自行实现（当前预留接口）。
 
 ### 8.3 服务安全
-- Gateway 支持令牌桶限流（`common/cpp/gs/limiter/token_bucket.cpp`）。
+- Gateway 支持令牌桶限流（`common/cpp/limiter/token_bucket.cpp`）。
 - Biz 服集成熔断器（`common/go/limiter/circuit_breaker.go`），基于错误率计数（Close/Open/Half-Open）。
 
 ---
@@ -352,7 +352,7 @@ docker compose up -d
 若需新增一种服务类型（如 `match-go` 或 `chat-cpp`）：
 
 1. **协议层**：在 `spec/proto/` 添加 `.proto` 文件；在 `spec/cmd_ids.yaml` 分配命令号段。
-2. **公共库层**：若需新基础设施，在 `common/go/` 和 `common/cpp/gs/` 对称添加模块。
+2. **公共库层**：若需新基础设施，在 `common/go/` 和 `common/cpp/` 对称添加模块。
 3. **服务层**：在 `services/` 新建目录，实现 `main.go` / `main.cpp`，遵循现有服务的初始化模式（flag 解析 → 组件初始化 → Registry 注册 → TCP 服务启动 → 信号监听）。
 4. **部署层**：在 `tools/deploy/docker-compose.yml` 添加服务定义；在 `.github/workflows/ci.yml` 添加构建步骤。
 

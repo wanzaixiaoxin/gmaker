@@ -171,23 +171,23 @@ endif()
 # ==================== 源文件 ====================
 # libuv 异步网络封装层（已统一替代阻塞模型）
 set(CPP_ASYNC_NET_SOURCES
-    common/cpp/gs/net/buffer.cpp
-    common/cpp/gs/net/ring_buffer.cpp
-    common/cpp/gs/net/thread_pool.cpp
-    common/cpp/gs/net/async/io_thread.cpp
-    common/cpp/gs/net/async/event_loop.cpp
-    common/cpp/gs/net/async/tcp_connection.cpp
-    common/cpp/gs/net/async/tcp_listener.cpp
-    common/cpp/gs/net/async/tcp_server.cpp
-    common/cpp/gs/net/async/upstream.cpp
-    common/cpp/gs/net/async/coalescer.cpp
-    common/cpp/gs/net/async/ws_frame.cpp
-    common/cpp/gs/net/async/ws_connection.cpp
-    common/cpp/gs/net/async/ws_server.cpp
+    common/cpp/net/buffer.cpp
+    common/cpp/net/ring_buffer.cpp
+    common/cpp/net/thread_pool.cpp
+    common/cpp/net/async/io_thread.cpp
+    common/cpp/net/async/event_loop.cpp
+    common/cpp/net/async/tcp_connection.cpp
+    common/cpp/net/async/tcp_listener.cpp
+    common/cpp/net/async/tcp_server.cpp
+    common/cpp/net/async/upstream.cpp
+    common/cpp/net/async/coalescer.cpp
+    common/cpp/net/async/ws_frame.cpp
+    common/cpp/net/async/ws_connection.cpp
+    common/cpp/net/async/ws_server.cpp
 )
 
 set(CPP_RPC_SOURCES
-    common/cpp/gs/rpc/client.cpp
+    common/cpp/rpc/client.cpp
 )
 
 set(CPP_PROTO_SOURCES
@@ -196,46 +196,46 @@ set(CPP_PROTO_SOURCES
 )
 
 set(CPP_REGISTRY_SOURCES
-    common/cpp/gs/registry/client.cpp
-    common/cpp/gs/registry/upstream_manager.cpp
+    common/cpp/registry/client.cpp
+    common/cpp/registry/upstream_manager.cpp
 )
 
 set(CPP_DISCOVERY_SOURCES
-    common/cpp/gs/discovery/registry_impl.cpp
-    common/cpp/gs/discovery/upstream_manager.cpp
-    common/cpp/gs/discovery/factory.cpp
+    common/cpp/discovery/registry_impl.cpp
+    common/cpp/discovery/upstream_manager.cpp
+    common/cpp/discovery/factory.cpp
 )
 
 set(CPP_CONFIG_SOURCES
-    common/cpp/gs/config/config.cpp
+    common/cpp/config/config.cpp
 )
 
 set(CPP_CRYPTO_SOURCES
-    common/cpp/gs/crypto/aes_gcm.cpp
-    common/cpp/gs/crypto/hmac.cpp
-    common/cpp/gs/crypto/session.cpp
+    common/cpp/crypto/aes_gcm.cpp
+    common/cpp/crypto/hmac.cpp
+    common/cpp/crypto/session.cpp
 )
 
 set(CPP_LIMITER_SOURCES
-    common/cpp/gs/limiter/token_bucket.cpp
+    common/cpp/limiter/token_bucket.cpp
 )
 
 set(CPP_REPLAY_SOURCES
-    common/cpp/gs/replay/replay.cpp
+    common/cpp/replay/replay.cpp
 )
 
 set(CPP_METRICS_SOURCES
-    common/cpp/gs/metrics/metrics.cpp
+    common/cpp/metrics/metrics.cpp
 )
 
 set(CPP_REDIS_SOURCES
-    common/cpp/gs/redis/redis_client.cpp
+    common/cpp/redis/redis_client.cpp
 )
 
 set(CPP_REALTIME_SOURCES
-    common/cpp/gs/realtime/room.cpp
-    common/cpp/gs/realtime/compute_thread.cpp
-    common/cpp/gs/realtime/aoi.cpp
+    common/cpp/realtime/room.cpp
+    common/cpp/realtime/compute_thread.cpp
+    common/cpp/realtime/aoi.cpp
 )
 
 # ==================== 网关服务 ====================
@@ -314,9 +314,9 @@ endif()
 
 # ==================== 测试可执行文件 ====================
 add_executable(test-crypto
-    common/cpp/gs/crypto/test.cpp
-    common/cpp/gs/crypto/aes_gcm.cpp
-    common/cpp/gs/crypto/hmac.cpp
+    common/cpp/crypto/test.cpp
+    common/cpp/crypto/aes_gcm.cpp
+    common/cpp/crypto/hmac.cpp
 )
 target_include_directories(test-crypto PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -328,11 +328,11 @@ endif()
 
 # ==================== 异步网络封装层测试 ====================
 add_executable(test-async-net
-    common/cpp/gs/net/async/test.cpp
+    common/cpp/net/async/test.cpp
     ${CPP_ASYNC_NET_SOURCES}
-    common/cpp/gs/crypto/aes_gcm.cpp
-    common/cpp/gs/crypto/hmac.cpp
-    common/cpp/gs/crypto/session.cpp
+    common/cpp/crypto/aes_gcm.cpp
+    common/cpp/crypto/hmac.cpp
+    common/cpp/crypto/session.cpp
 )
 target_include_directories(test-async-net PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -350,8 +350,8 @@ endif()
 
 # ==================== Redis 客户端测试 ====================
 add_executable(test-redis
-    common/cpp/gs/redis/test.cpp
-    common/cpp/gs/redis/redis_client.cpp
+    common/cpp/redis/test.cpp
+    common/cpp/redis/redis_client.cpp
 )
 target_include_directories(test-redis PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -365,9 +365,9 @@ endif()
 # ==================== 网络层正确性与性能测试（服务端 + 客户端分离） ====================
 set(PERF_TEST_SOURCES
     ${CPP_ASYNC_NET_SOURCES}
-    common/cpp/gs/crypto/aes_gcm.cpp
-    common/cpp/gs/crypto/hmac.cpp
-    common/cpp/gs/crypto/session.cpp
+    common/cpp/crypto/aes_gcm.cpp
+    common/cpp/crypto/hmac.cpp
+    common/cpp/crypto/session.cpp
 )
 set(PERF_TEST_INCLUDES
     ${CMAKE_CURRENT_SOURCE_DIR}
