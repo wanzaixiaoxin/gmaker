@@ -7,8 +7,9 @@
 ## 架构原则
 
 1. **Gateway 维护连接绑定** — Gateway 是连接层，最适合做 `player_id → conn_id` 的映射和踢人操作
-2. **Biz 验证身份** — Token 验证仍由 Biz（业务层）完成，Gateway 不直接访问 Redis（避免在 libuv 事件循环中引入阻塞 I/O）
+2. **Biz 验证身份** — Token 验证由 Biz（业务层）完成，Gateway 不直接访问 Redis
 3. **两步绑定** — Gateway 先转发 BIND 请求给 Biz 验证，收到 Biz 确认成功响应后再执行绑定和顶号，防止伪造 player_id 导致合法玩家被误踢
+4. **单 Gateway 范围** — 当前方案仅在单个 Gateway 进程内有效。跨 Gateway 顶号需后续引入消息队列（Redis Pub/Sub / Kafka）实现
 
 ## 数据流
 
@@ -20,7 +21,7 @@
                       │
                       ▼
                ┌─────────────┐
-               │ pending_binds│  conn_id → player_id (等待 Biz 确认)
+               │ pending_binds│  conn_id → {player_id, created_at}
                │ player_conn  │  player_id → conn_id (已绑定)
                │ conn_player  │  conn_id → player_id (已绑定)
                └─────────────┘
@@ -34,7 +35,7 @@
 
 2. Gateway 收到 BIND
    - 解析 player_id
-   - 记录 pending_binds_[conn_id] = player_id
+   - 记录 pending_binds_[conn_id] = {player_id, timestamp}
    - 将请求转发给 Biz（payload 前附加 8 字节 conn_id）
 
 3. Biz 收到 BIND
@@ -57,10 +58,11 @@
 ```
 BindPlayer 发现 player_id 已有旧连接:
   1. 构造 PlayerKickNotify { reason = "account login elsewhere" }
-  2. 使用 SendToClientDirect 发送 CMD_GW_PLAYER_KICK 给旧 conn_id
+  2. 直接调用 conn->SendPacket() 发送 CMD_GW_PLAYER_KICK（不走 coalescer）
      - 自动加密（复用该连接的 session key）
-     - 通过 coalescer 异步发送
-  3. 关闭旧连接（conn->Close()）
+     - SendPacket 将数据加入 libuv 发送队列
+  3. 立即调用 conn->Close()
+     - libuv 会先发送队列中的 kick 通知，再发送 close frame
   4. OnClientClose / OnWebSocketClose 触发 CleanupPlayerState
      - 清理 player_conn_ / conn_player_ / pending_binds_
 ```
@@ -81,7 +83,7 @@ message PlayerBindReq {
 }
 
 message PlayerBindRes {
-    uint32 code = 1;  // 0 = 成功
+    uint32 code = 1;  // 0 = 成功，1 = 失败
     string msg  = 2;
 }
 
@@ -107,15 +109,14 @@ gateway_internal:
 std::mutex player_mtx_;
 std::unordered_map<uint64_t, uint64_t> player_conn_;   // player_id → conn_id
 std::unordered_map<uint64_t, uint64_t> conn_player_;   // conn_id → player_id
-std::unordered_map<uint64_t, uint64_t> pending_binds_; // conn_id → player_id
+std::unordered_map<uint64_t, std::pair<uint64_t, std::chrono::steady_clock::time_point>> pending_binds_; // conn_id → {player_id, created_at}
 ```
 
 新增方法:
 - `HandlePlayerBind()` — 解析 BIND 请求，记录 pending，转发给 Biz
 - `BindPlayer()` — 执行绑定，发现旧连接时调用 KickConnection
-- `KickConnection()` — 发送踢人通知并关闭连接
+- `KickConnection()` — 直接 SendPacket + 立即 Close（利用 libuv 发送队列顺序保证）
 - `CleanupPlayerState()` — 断线时清理所有 player 相关状态
-- `SendToClientDirect()` — 直接给指定 conn_id 发送加密包
 
 修改点:
 - `OnClientPacket()` — 拦截 `CMD_GW_PLAYER_BIND`
@@ -130,6 +131,18 @@ std::unordered_map<uint64_t, uint64_t> pending_binds_; // conn_id → player_id
 
 新增 service 方法 — services/biz-go/internal/service/player.go:
 - `VerifyToken()` — 从 Redis `token:{player_id}` 读取并比对 token
+
+Biz 配置修复 — services/biz-go/main.go:
+- 从配置文件 `conf/biz.json` 读取 Redis 地址（不再依赖 CLI `-redis` 参数）
+
+`conf/biz.json`:
+```json
+"redis": {
+  "addrs": ["127.0.0.1:6379"],
+  "password": "",
+  "pool_size": 20
+}
+```
 
 ## 客户端接入指南
 
@@ -162,7 +175,7 @@ std::unordered_map<uint64_t, uint64_t> pending_binds_; // conn_id → player_id
 
 ## 安全考量
 
-1. **Token 验证在 Biz 层完成** — Gateway 不直接验证 token，避免在 C++ 中引入 Redis 同步阻塞调用
+1. **Token 验证在 Biz 层完成** — Gateway 不直接验证 token，Biz 查 Redis 确认身份
 2. **两步绑定防止误踢** — Gateway 在 Biz 确认 token 有效后才执行绑定，防止攻击者伪造 player_id 顶掉合法玩家
 3. **Handshake 前置** — 只有完成加密握手的连接才能发送 BIND，增加了伪造成本
 4. **断线自动清理** — 任何连接断开都会自动清理 player_conn_ / conn_player_，避免脏数据
@@ -170,5 +183,5 @@ std::unordered_map<uint64_t, uint64_t> pending_binds_; // conn_id → player_id
 ## 已知限制
 
 1. **C++ 编译环境** — 当前 Windows Debug 构建存在 `libprotobuf.lib` Debug/Release 不匹配问题（`_ITERATOR_DEBUG_LEVEL` 0 vs 2）。Gateway C++ 代码已更新，但需切换到 Release 模式或重新编译 protobuf Debug 库后才能构建。
-2. **多 Gateway 节点** — 当前方案仅在单个 Gateway 进程内有效。如果部署多个 Gateway 节点，同一 player_id 可能同时连接到不同 Gateway 节点。后续可通过 Redis 全局在线状态 + Gateway 间通知来解决。
-3. **pending_bind 超时** — 当前未实现 pending_bind 的超时清理。如果 Biz 不响应，pending_bind 会一直保留。后续可添加定时器清理超时的 pending 记录。
+2. **多 Gateway 节点** — 当前方案仅在单个 Gateway 进程内有效。如果部署多个 Gateway 节点，同一 player_id 可能同时连接到不同 Gateway 节点。后续可通过 Redis Pub/Sub 或消息队列实现 Gateway 间通知来解决。
+3. **pending_bind 超时** — HeartbeatLoop 每 5 秒扫描 pending_binds_，删除超过 10 秒未确认的记录，避免内存泄漏。

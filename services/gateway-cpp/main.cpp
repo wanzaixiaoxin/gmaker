@@ -932,16 +932,36 @@ void Gateway::KickConnection(uint64_t conn_id, const std::string& reason) {
     kick_pkt.payload = Buffer::FromVector(std::vector<uint8_t>(notify_data.begin(), notify_data.end()));
     kick_pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(kick_pkt.payload.Size());
 
-    // 发送通知（会自动加密）
-    SendToClientDirect(conn_id, kick_pkt);
-
-    // 关闭连接
+    // 加密并直接发送（不走 coalescer），然后立即关闭
     {
         std::lock_guard<std::mutex> lk(sessions_mtx_);
         auto it = clients_.find(conn_id);
-        if (it != clients_.end()) {
-            it->second->Close();
+        if (it == clients_.end()) return;
+
+        Packet out = kick_pkt;
+        auto session_key = handshake_mw_->GetSessionKey(conn_id);
+        if (!session_key.empty() && out.payload.Size() > 0) {
+            try {
+                auto encrypted = EncryptPacketPayload(session_key,
+                    std::vector<uint8_t>(out.payload.Data(), out.payload.Data() + out.payload.Size()));
+                out.payload = Buffer::FromVector(std::move(encrypted));
+                out.header.length = HEADER_SIZE + static_cast<uint32_t>(out.payload.Size());
+                out.header.flags |= static_cast<uint32_t>(gs::net::Flag::ENCRYPT);
+            } catch (const std::exception& e) {
+                if (logger_) logger_->Error("Encryption failed for kick notify " + std::to_string(conn_id) + ": " + std::string(e.what()));
+                return;
+            }
         }
+
+        auto ws_it = ws_clients_.find(conn_id);
+        if (ws_it != ws_clients_.end()) {
+            ws_it->second->SendPacket(out);
+        } else {
+            it->second->SendPacket(out);
+        }
+
+        // 直接关闭（SendPacket 已把数据加入 libuv 发送队列，会先发出再关闭）
+        it->second->Close();
     }
 }
 
