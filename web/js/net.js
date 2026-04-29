@@ -145,8 +145,27 @@ class WSClient {
                         if (this.onKick) this.onKick(pkt.payload);
                         return;
                     }
+                    if (pkt.cmdID === Cmd.SYS_ERROR_PACKET) {
+                        let errMsg = 'server error';
+                        if (window.root) {
+                            try {
+                                const Result = window.root.lookupType('common.Result');
+                                const result = Result.decode(pkt.payload);
+                                errMsg = result.msg || ('server error: ' + result.code);
+                            } catch (e) {
+                                console.error('decode error packet failed', e);
+                            }
+                        }
+                        if (pkt.seqID !== 0 && this.pending.has(pkt.seqID)) {
+                            this.pending.get(pkt.seqID)(pkt, new Error(errMsg));
+                            this.pending.delete(pkt.seqID);
+                        } else if (this.onClose) {
+                            this.onClose(new Error(errMsg));
+                        }
+                        return;
+                    }
                     if (pkt.seqID !== 0 && this.pending.has(pkt.seqID)) {
-                        this.pending.get(pkt.seqID)(pkt);
+                        this.pending.get(pkt.seqID)(pkt, null);
                         this.pending.delete(pkt.seqID);
                     } else if (this.onPacket) {
                         this.onPacket(pkt);
@@ -231,8 +250,12 @@ class WSClient {
                 reject(new Error('request timeout'));
             }, timeout);
 
-            this.pending.set(seq, (res) => {
+            this.pending.set(seq, (res, err) => {
                 clearTimeout(timer);
+                if (err) {
+                    reject(err);
+                    return;
+                }
                 resolve(res);
             });
 
@@ -258,6 +281,7 @@ class WSClient {
 // ==================== CmdIDs ====================
 const Cmd = {
     SYS_HANDSHAKE: 0x00000002,
+    SYS_ERROR_PACKET: 0x00000003,
     CMN_LOGIN_REQ: 0x00001000,
     CMN_LOGIN_RES: 0x00001001,
     CMN_REGISTER_REQ: 0x00001002,

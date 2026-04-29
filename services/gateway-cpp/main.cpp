@@ -33,6 +33,7 @@ using namespace gs::crypto;
 std::string ToHex(uint32_t v);
 
 bool DecodeClientPacket(const Buffer& data, Packet& pkt);
+std::vector<uint8_t> EncodeCommonResultPayload(uint32_t code, const std::string& msg);
 
 // HandshakeMiddleware 处理 Gateway-Client 握手
 class HandshakeMiddleware : public Middleware {
@@ -103,6 +104,11 @@ public:
     void Close() override {
         auto* ws = ws_.load();
         if (ws) ws->Close();
+    }
+
+    void CloseAfterWrite() override {
+        auto* ws = ws_.load();
+        if (ws) ws->CloseAfterWrite();
     }
 
     bool SendPacket(const Packet& pkt) override {
@@ -183,13 +189,21 @@ private:
     std::mutex player_mtx_;
     std::unordered_map<uint64_t, uint64_t> player_conn_;   // player_id → conn_id
     std::unordered_map<uint64_t, uint64_t> conn_player_;   // conn_id → player_id
-    std::unordered_map<uint64_t, std::pair<uint64_t, std::chrono::steady_clock::time_point>> pending_binds_; // conn_id → {player_id, created_at}
+    struct PendingBind {
+        uint64_t player_id = 0;
+        uint32_t seq_id = 0;
+        std::chrono::steady_clock::time_point created_at;
+    };
+    std::unordered_map<uint64_t, PendingBind> pending_binds_; // conn_id → latest bind request
     
     void HandlePlayerBind(IConnection* conn, Packet& pkt);
     void BindPlayer(uint64_t player_id, uint64_t conn_id);
     void KickConnection(uint64_t conn_id, const std::string& reason);
     void CleanupPlayerState(uint64_t conn_id);
     void SendToClientDirect(uint64_t conn_id, const Packet& pkt);
+    void SendToClientDirect(uint64_t conn_id, const Packet& pkt, bool close_after_write);
+    void SendErrorAndClose(uint64_t conn_id, uint32_t seq_id, uint32_t code, const std::string& msg);
+    bool IsPlayerBound(uint64_t conn_id);
     
     // 配置
     gs::gateway::Config cfg_;
@@ -321,6 +335,31 @@ bool DecodeClientPacket(const Buffer& data, Packet& pkt) {
     return true;
 }
 
+namespace {
+
+void AppendVarint(std::vector<uint8_t>& out, uint64_t value) {
+    while (value >= 0x80) {
+        out.push_back(static_cast<uint8_t>(value) | 0x80);
+        value >>= 7;
+    }
+    out.push_back(static_cast<uint8_t>(value));
+}
+
+} // namespace
+
+std::vector<uint8_t> EncodeCommonResultPayload(uint32_t code, const std::string& msg) {
+    std::vector<uint8_t> out;
+    out.reserve(8 + msg.size());
+    AppendVarint(out, (2u << 3) | 0u); // common.Result.code
+    AppendVarint(out, code);
+    if (!msg.empty()) {
+        AppendVarint(out, (3u << 3) | 2u); // common.Result.msg
+        AppendVarint(out, msg.size());
+        out.insert(out.end(), msg.begin(), msg.end());
+    }
+    return out;
+}
+
 bool Gateway::Start(const gs::gateway::Config& cfg) {
     cfg_ = cfg;
     master_key_ = gs::gateway::ParseMasterKey(cfg);
@@ -422,6 +461,9 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
         }
     }
 
+    heartbeat_stop_.store(false);
+    heartbeat_thread_ = std::thread([this]() { HeartbeatLoop(); });
+
     return true;
 }
 
@@ -453,7 +495,7 @@ void Gateway::HeartbeatLoop() {
         {
             std::lock_guard<std::mutex> lk(player_mtx_);
             for (const auto& [conn_id, info] : pending_binds_) {
-                if (now - info.second > kPendingBindTimeout) {
+                if (now - info.created_at > kPendingBindTimeout) {
                     expired_conns.push_back(conn_id);
                 }
             }
@@ -585,6 +627,16 @@ void Gateway::OnClientPacket(IConnection* conn, Packet& pkt) {
         return;
     }
 
+    bool is_system_cmd = pkt.header.cmd_id <= 0x000000FF;
+    if (!is_system_cmd && !IsPlayerBound(conn->ID())) {
+        if (logger_) logger_->Warn("Reject unbound client packet: cmd=0x" + ToHex(pkt.header.cmd_id) +
+                                   " conn=" + std::to_string(conn->ID()));
+        SendErrorAndClose(conn->ID(), pkt.header.seq_id, gs::errors::AUTH_FAILED, "player not bound");
+        auto elapsed = std::chrono::steady_clock::now() - start;
+        req_latency_->Observe(static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
+        return;
+    }
+
     // 根据命令 ID 路由到对应的上游池
     auto pool = RouteToPool(pkt.header.cmd_id);
     if (!pool) {
@@ -676,35 +728,62 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
 
     // 处理玩家绑定响应（Biz 验证 Token 后返回）
     if (pkt.header.cmd_id == protocol::CMD_GW_PLAYER_BIND) {
+        bool should_close_bind_conn = false;
+        bool should_forward_bind_response = false;
+        uint64_t bind_conn_id = 0;
         if (pkt.payload.Size() >= 8) {
             uint64_t conn_id = ReadU64BE(pkt.payload.Data());
+            bind_conn_id = conn_id;
             protocol::PlayerBindRes res;
             if (res.ParseFromArray(pkt.payload.Data() + 8, pkt.payload.Size() - 8)) {
-                if (res.code() == 0) {
-                    uint64_t player_id = 0;
-                    {
-                        std::lock_guard<std::mutex> lk(player_mtx_);
-                        auto it = pending_binds_.find(conn_id);
-                        if (it != pending_binds_.end()) {
-                            player_id = it->second.first;
-                            pending_binds_.erase(it);
-                        }
-                    }
-                    if (player_id > 0) {
-                        BindPlayer(player_id, conn_id);
-                    }
-                } else {
+                uint64_t player_id = 0;
+                {
                     std::lock_guard<std::mutex> lk(player_mtx_);
-                    pending_binds_.erase(conn_id);
+                    auto it = pending_binds_.find(conn_id);
+                    if (it != pending_binds_.end() && it->second.seq_id == pkt.header.seq_id) {
+                        player_id = it->second.player_id;
+                        pending_binds_.erase(it);
+                        should_forward_bind_response = true;
+                    }
+                }
+
+                if (!should_forward_bind_response) {
+                    if (logger_) logger_->Warn("Drop stale PlayerBind response: conn=" + std::to_string(conn_id) +
+                                                " seq=" + std::to_string(pkt.header.seq_id));
+                    return;
+                }
+
+                if (res.code() == 0 && player_id > 0) {
+                    BindPlayer(player_id, conn_id);
+                } else if (res.code() != 0) {
+                    should_close_bind_conn = true;
                     if (logger_) logger_->Info("PlayerBind failed: conn=" + std::to_string(conn_id) + " msg=" + res.msg());
                 }
             } else {
                 std::lock_guard<std::mutex> lk(player_mtx_);
-                pending_binds_.erase(conn_id);
+                auto it = pending_binds_.find(conn_id);
+                if (it != pending_binds_.end() && it->second.seq_id == pkt.header.seq_id) {
+                    pending_binds_.erase(it);
+                }
                 if (logger_) logger_->Warn("PlayerBind response parse failed: conn=" + std::to_string(conn_id));
+                return;
             }
         }
         // 继续转发响应给客户端（使用下面的通用响应转发逻辑）
+        if (should_close_bind_conn) {
+            if (bind_conn_id != 0) {
+                Packet response;
+                response.header = pkt.header;
+                response.header.flags &= ~static_cast<uint32_t>(gs::net::Flag::ENCRYPT);
+                response.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.Size() - 8);
+                if (pkt.payload.Size() > 8) {
+                    response.payload = Buffer(std::vector<uint8_t>(pkt.payload.Data() + 8,
+                                                                   pkt.payload.Data() + pkt.payload.Size()));
+                }
+                SendToClientDirect(bind_conn_id, response, true);
+            }
+            return;
+        }
     }
 
     // 普通响应：广播或单播
@@ -856,22 +935,38 @@ void Gateway::HandlePlayerBind(IConnection* conn, Packet& pkt) {
     protocol::PlayerBindReq req;
     if (!req.ParseFromArray(pkt.payload.Data(), static_cast<int>(pkt.payload.Size()))) {
         if (logger_) logger_->Warn("Invalid PlayerBindReq from client " + std::to_string(conn->ID()));
+        SendErrorAndClose(conn->ID(), pkt.header.seq_id, gs::errors::INVALID_PARAM, "invalid bind request");
         return;
     }
 
     uint64_t player_id = req.player_id();
+    if (player_id == 0 || req.token().empty()) {
+        if (logger_) logger_->Warn("Invalid PlayerBindReq fields from client " + std::to_string(conn->ID()));
+        SendErrorAndClose(conn->ID(), pkt.header.seq_id, gs::errors::INVALID_PARAM, "invalid bind request");
+        return;
+    }
+
     {
         std::lock_guard<std::mutex> lk(player_mtx_);
-        pending_binds_[conn->ID()] = {player_id, std::chrono::steady_clock::now()};
+        pending_binds_[conn->ID()] = PendingBind{player_id, pkt.header.seq_id, std::chrono::steady_clock::now()};
     }
 
     if (logger_) logger_->Info("PlayerBind pending: player=" + std::to_string(player_id) +
-                               " conn=" + std::to_string(conn->ID()));
+                               " conn=" + std::to_string(conn->ID()) +
+                               " seq=" + std::to_string(pkt.header.seq_id));
 
     // 转发给 Biz（附加 conn_id 用于响应路由）
     auto pool = RouteToPool(pkt.header.cmd_id);
     if (!pool) {
         if (logger_) logger_->Warn("No upstream pool for PlayerBind");
+        {
+            std::lock_guard<std::mutex> lk(player_mtx_);
+            auto it = pending_binds_.find(conn->ID());
+            if (it != pending_binds_.end() && it->second.seq_id == pkt.header.seq_id) {
+                pending_binds_.erase(it);
+            }
+        }
+        SendErrorAndClose(conn->ID(), pkt.header.seq_id, gs::errors::SERVICE_UNAVAILABLE, "bind service unavailable");
         return;
     }
 
@@ -898,9 +993,20 @@ void Gateway::BindPlayer(uint64_t player_id, uint64_t conn_id) {
     uint64_t old_conn_id = 0;
     {
         std::lock_guard<std::mutex> lk(player_mtx_);
+        auto current_bind = conn_player_.find(conn_id);
+        if (current_bind != conn_player_.end() && current_bind->second != player_id) {
+            uint64_t old_player_id = current_bind->second;
+            auto old_player_it = player_conn_.find(old_player_id);
+            if (old_player_it != player_conn_.end() && old_player_it->second == conn_id) {
+                player_conn_.erase(old_player_it);
+            }
+            conn_player_.erase(current_bind);
+        }
+
         auto old_it = player_conn_.find(player_id);
         if (old_it != player_conn_.end() && old_it->second != conn_id) {
             old_conn_id = old_it->second;
+            conn_player_.erase(old_conn_id);
         }
         player_conn_[player_id] = conn_id;
         conn_player_[conn_id] = player_id;
@@ -922,7 +1028,10 @@ void Gateway::KickConnection(uint64_t conn_id, const std::string& reason) {
     protocol::PlayerKickNotify notify;
     notify.set_reason(reason);
     std::string notify_data;
-    notify.SerializeToString(&notify_data);
+    if (!notify.SerializeToString(&notify_data)) {
+        if (logger_) logger_->Error("Failed to serialize kick notify for " + std::to_string(conn_id));
+        return;
+    }
 
     Packet kick_pkt;
     kick_pkt.header.magic = MAGIC_VALUE;
@@ -932,7 +1041,7 @@ void Gateway::KickConnection(uint64_t conn_id, const std::string& reason) {
     kick_pkt.payload = Buffer::FromVector(std::vector<uint8_t>(notify_data.begin(), notify_data.end()));
     kick_pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(kick_pkt.payload.Size());
 
-    // 加密并直接发送（不走 coalescer），然后立即关闭
+    // 加密并直接发送（不走 coalescer），写队列 drain 后再关闭
     {
         std::lock_guard<std::mutex> lk(sessions_mtx_);
         auto it = clients_.find(conn_id);
@@ -954,14 +1063,14 @@ void Gateway::KickConnection(uint64_t conn_id, const std::string& reason) {
         }
 
         auto ws_it = ws_clients_.find(conn_id);
+        auto encoded = EncodePacket(out);
         if (ws_it != ws_clients_.end()) {
-            ws_it->second->SendPacket(out);
+            ws_it->second->Send(encoded);
         } else {
-            it->second->SendPacket(out);
+            it->second->Send(encoded);
         }
 
-        // 直接关闭（SendPacket 已把数据加入 libuv 发送队列，会先发出再关闭）
-        it->second->Close();
+        it->second->CloseAfterWrite();
     }
 }
 
@@ -982,7 +1091,16 @@ void Gateway::CleanupPlayerState(uint64_t conn_id) {
     }
 }
 
+bool Gateway::IsPlayerBound(uint64_t conn_id) {
+    std::lock_guard<std::mutex> lk(player_mtx_);
+    return conn_player_.find(conn_id) != conn_player_.end();
+}
+
 void Gateway::SendToClientDirect(uint64_t conn_id, const Packet& pkt) {
+    SendToClientDirect(conn_id, pkt, false);
+}
+
+void Gateway::SendToClientDirect(uint64_t conn_id, const Packet& pkt, bool close_after_write) {
     std::lock_guard<std::mutex> lk(sessions_mtx_);
     auto it = clients_.find(conn_id);
     if (it == clients_.end()) return;
@@ -1004,10 +1122,61 @@ void Gateway::SendToClientDirect(uint64_t conn_id, const Packet& pkt) {
 
     auto ws_it = ws_clients_.find(conn_id);
     if (ws_it != ws_clients_.end()) {
-        coalescer_->Enqueue(std::static_pointer_cast<IConnection>(ws_it->second), out);
+        if (close_after_write) {
+            ws_it->second->Send(EncodePacket(out));
+        } else {
+            coalescer_->Enqueue(std::static_pointer_cast<IConnection>(ws_it->second), out);
+        }
     } else {
-        coalescer_->Enqueue(it->second, out);
+        if (close_after_write) {
+            it->second->Send(EncodePacket(out));
+        } else {
+            coalescer_->Enqueue(it->second, out);
+        }
     }
+
+    if (close_after_write) {
+        it->second->CloseAfterWrite();
+    }
+}
+
+void Gateway::SendErrorAndClose(uint64_t conn_id, uint32_t seq_id, uint32_t code, const std::string& msg) {
+    Packet pkt;
+    pkt.header.magic = MAGIC_VALUE;
+    pkt.header.cmd_id = protocol::CMD_SYS_ERROR_PACKET;
+    pkt.header.seq_id = seq_id;
+    pkt.header.flags = static_cast<uint32_t>(gs::net::Flag::RPC_RES);
+    pkt.payload = Buffer::FromVector(EncodeCommonResultPayload(code, msg));
+    pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.Size());
+
+    std::lock_guard<std::mutex> lk(sessions_mtx_);
+    auto it = clients_.find(conn_id);
+    if (it == clients_.end()) return;
+
+    Packet out = pkt;
+    auto session_key = handshake_mw_->GetSessionKey(conn_id);
+    if (!session_key.empty() && out.payload.Size() > 0) {
+        try {
+            auto encrypted = EncryptPacketPayload(session_key,
+                std::vector<uint8_t>(out.payload.Data(), out.payload.Data() + out.payload.Size()));
+            out.payload = Buffer::FromVector(std::move(encrypted));
+            out.header.length = HEADER_SIZE + static_cast<uint32_t>(out.payload.Size());
+            out.header.flags |= static_cast<uint32_t>(gs::net::Flag::ENCRYPT);
+        } catch (const std::exception& e) {
+            if (logger_) logger_->Error("Encryption failed for error response " + std::to_string(conn_id) + ": " + e.what());
+            it->second->Close();
+            return;
+        }
+    }
+
+    auto ws_it = ws_clients_.find(conn_id);
+    auto encoded = EncodePacket(out);
+    if (ws_it != ws_clients_.end()) {
+        ws_it->second->Send(encoded);
+    } else {
+        it->second->Send(encoded);
+    }
+    it->second->CloseAfterWrite();
 }
 
 // ==================== main ====================

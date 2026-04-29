@@ -36,6 +36,7 @@ public:
     void SetCallbacks(MessageCallback on_message, CloseCallback on_close);
 
     void Close();
+    void CloseAfterWrite();
     bool Send(std::vector<uint8_t> data);
     bool Send(const gs::net::Buffer& data);
     bool SendBatch(const std::vector<gs::net::Buffer>& buffers);

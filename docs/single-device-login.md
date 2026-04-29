@@ -35,7 +35,7 @@
 
 2. Gateway 收到 BIND
    - 解析 player_id
-   - 记录 pending_binds_[conn_id] = {player_id, timestamp}
+   - 记录 pending_binds_[conn_id] = {player_id, seq_id, timestamp}
    - 将请求转发给 Biz（payload 前附加 8 字节 conn_id）
 
 3. Biz 收到 BIND
@@ -43,6 +43,7 @@
    - 返回 PlayerBindRes { code, msg }
 
 4. Gateway 收到 BIND 响应（OnUpstreamPacket 拦截 CMD_GW_PLAYER_BIND）
+   - 先用 conn_id + seq_id 校验是否仍匹配当前 pending 记录；不匹配说明是过期响应，直接丢弃
    - code == 0（成功）:
      * 从 pending_binds_ 取出 player_id
      * 调用 BindPlayer(player_id, conn_id)
@@ -61,8 +62,9 @@ BindPlayer 发现 player_id 已有旧连接:
   2. 直接调用 conn->SendPacket() 发送 CMD_GW_PLAYER_KICK（不走 coalescer）
      - 自动加密（复用该连接的 session key）
      - SendPacket 将数据加入 libuv 发送队列
-  3. 立即调用 conn->Close()
-     - libuv 会先发送队列中的 kick 通知，再发送 close frame
+  3. 调用 conn->CloseAfterWrite()
+     - 连接进入 drain-close 状态，拒绝后续新写入
+     - 已进入发送队列的 kick 通知写出后再关闭连接
   4. OnClientClose / OnWebSocketClose 触发 CleanupPlayerState
      - 清理 player_conn_ / conn_player_ / pending_binds_
 ```
@@ -109,19 +111,36 @@ gateway_internal:
 std::mutex player_mtx_;
 std::unordered_map<uint64_t, uint64_t> player_conn_;   // player_id → conn_id
 std::unordered_map<uint64_t, uint64_t> conn_player_;   // conn_id → player_id
-std::unordered_map<uint64_t, std::pair<uint64_t, std::chrono::steady_clock::time_point>> pending_binds_; // conn_id → {player_id, created_at}
+struct PendingBind {
+    uint64_t player_id;
+    uint32_t seq_id;
+    std::chrono::steady_clock::time_point created_at;
+};
+std::unordered_map<uint64_t, PendingBind> pending_binds_; // conn_id → latest bind request
 ```
 
 新增方法:
 - `HandlePlayerBind()` — 解析 BIND 请求，记录 pending，转发给 Biz
 - `BindPlayer()` — 执行绑定，发现旧连接时调用 KickConnection
-- `KickConnection()` — 直接 SendPacket + 立即 Close（利用 libuv 发送队列顺序保证）
+- `KickConnection()` — 直接发送 kick + `CloseAfterWrite()`（等待已入队数据写出后关闭）
 - `CleanupPlayerState()` — 断线时清理所有 player 相关状态
+- `IsPlayerBound()` — 非 BIND 业务请求进入上游前必须已绑定
+- `SendErrorAndClose()` — 未绑定或非法绑定请求返回错误包并 drain-close
 
 修改点:
 - `OnClientPacket()` — 拦截 `CMD_GW_PLAYER_BIND`
 - `OnUpstreamPacket()` — 拦截 `CMD_GW_PLAYER_BIND` 响应，确认后执行绑定
 - `OnClientClose()` / `OnWebSocketClose()` — 调用 `CleanupPlayerState()`
+- `HeartbeatLoop()` — 启动后每 5 秒清理超时 pending bind
+
+### 连接关闭语义
+
+普通 `Close()` 是立即关闭底层连接，不保证已排队数据全部写出。顶号通知、绑定非法错误这类需要尽量送达最后一帧的场景必须使用 `CloseAfterWrite()`。
+
+`CloseAfterWrite()` 的行为:
+- 设置 drain-close 标记，阻止后续新写入
+- 如果当前没有写任务，主动触发一次发送队列处理
+- 队列清空后关闭连接
 
 ### Biz (Go) — services/biz-go/internal/handler/handler.go
 
@@ -179,6 +198,8 @@ Biz 配置修复 — services/biz-go/main.go:
 2. **两步绑定防止误踢** — Gateway 在 Biz 确认 token 有效后才执行绑定，防止攻击者伪造 player_id 顶掉合法玩家
 3. **Handshake 前置** — 只有完成加密握手的连接才能发送 BIND，增加了伪造成本
 4. **断线自动清理** — 任何连接断开都会自动清理 player_conn_ / conn_player_，避免脏数据
+5. **业务请求绑定前置** — 除握手和 BIND 外，客户端业务请求必须先完成绑定，否则 Gateway 返回错误并断开连接
+6. **重复 BIND 防串包** — pending bind 绑定 `seq_id`，Biz 的旧响应不会套用到新的绑定请求上
 
 ## 已知限制
 

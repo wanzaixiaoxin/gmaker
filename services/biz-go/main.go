@@ -185,7 +185,7 @@ func main() {
 		Addr: listen,
 		OnConnect: func(conn *net.TCPConn) {
 			connGauge.Inc()
-			log.Infof("Biz connection opened: %s", conn.ID())
+			log.Infof("Biz connection opened: %d", conn.ID())
 		},
 		OnData: func(conn *net.TCPConn, pkt *net.Packet) {
 			start := time.Now()
@@ -205,7 +205,7 @@ func main() {
 		},
 		OnClose: func(conn *net.TCPConn) {
 			connGauge.Dec()
-			log.Infof("Biz connection closed: %s", conn.ID())
+			log.Infof("Biz connection closed: %d", conn.ID())
 		},
 	}
 	srv := net.NewTCPServer(srvCfg)

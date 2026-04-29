@@ -1175,14 +1175,16 @@ async function doAuth() {
 
         // 监听被踢通知（账号在其他地方登录）
         wsClient.onKick = (payload) => {
+            let reason = '您的账号已在其他地方登录';
             try {
                 const KickNotify = root.lookupType('protocol.PlayerKickNotify');
                 const notify = KickNotify.decode(payload);
-                alert('⚠️ ' + (notify.reason || '您的账号已在其他地方登录'));
+                reason = notify.reason || reason;
             } catch (e) {
-                alert('⚠️ 您的账号已在其他地方登录');
+                // 使用默认提示
             }
-            logout();
+            alert('⚠️ ' + reason);
+            returnToLogin(reason);
         };
 
         showPanel('lobbyPanel');
@@ -1196,11 +1198,20 @@ async function doAuth() {
 }
 
 function logout() {
+    returnToLogin('');
+}
+
+function returnToLogin(message) {
     if (wsClient) wsClient.close();
+    wsClient = null;
+    chatAPI = null;
     playerID = 0;
+    playerName = '';
     token = '';
     currentRoom = null;
+    switchTab('login');
     showPanel('authPanel');
+    showMsg('authMsg', message || '', !!message);
     setStatus('未连接');
 }
 

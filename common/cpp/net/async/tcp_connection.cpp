@@ -100,7 +100,7 @@ bool AsyncTCPConnection::Send(std::vector<uint8_t> data) {
 }
 
 bool AsyncTCPConnection::Send(const Buffer& data) {
-    if (closed_.load() || closing_.load() || !handle_) return false;
+    if (closed_.load() || closing_.load() || close_after_write_.load() || !handle_) return false;
 
     bool should_pause_read = false;
     {
@@ -130,7 +130,7 @@ bool AsyncTCPConnection::Send(const Buffer& data) {
 }
 
 bool AsyncTCPConnection::SendBatch(const std::vector<Buffer>& buffers) {
-    if (closed_.load() || closing_.load() || !handle_ || buffers.empty()) return false;
+    if (closed_.load() || closing_.load() || close_after_write_.load() || !handle_ || buffers.empty()) return false;
 
     bool should_pause_read = false;
     {
@@ -183,6 +183,19 @@ void AsyncTCPConnection::Close() {
     loop_->Post([self = shared_from_this()]() {
         self->DoClose();
     });
+}
+
+void AsyncTCPConnection::CloseAfterWrite() {
+    if (closed_.load() || closing_.load() || !handle_) return;
+
+    keep_alive_ = shared_from_this();
+    close_after_write_.store(true);
+    bool expected = false;
+    if (writing_.compare_exchange_strong(expected, true)) {
+        loop_->Post([self = shared_from_this()]() {
+            self->ProcessWriteQueue();
+        });
+    }
 }
 
 void AsyncTCPConnection::DoClose() {
@@ -396,6 +409,9 @@ void AsyncTCPConnection::ProcessWriteQueue() {
         }
         if (batch.empty()) {
             writing_.store(false);
+            if (close_after_write_.exchange(false)) {
+                Close();
+            }
             return;
         }
 

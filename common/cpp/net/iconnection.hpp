@@ -21,6 +21,10 @@ public:
     // 关闭连接
     virtual void Close() = 0;
 
+    // 等待已进入发送队列的数据写出后再关闭连接。
+    // 适用于踢号通知等需要尽量送达最后一帧的场景。
+    virtual void CloseAfterWrite() { Close(); }
+
     // 发送一个 Packet（若启用加密则自动处理）
     virtual bool SendPacket(const Packet& pkt) = 0;
 

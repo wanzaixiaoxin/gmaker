@@ -119,6 +119,20 @@ void WebSocketConnection::Close() {
     });
 }
 
+void WebSocketConnection::CloseAfterWrite() {
+    if (closed_.load() || closing_.load() || close_after_write_.load() || !handle_) return;
+
+    keep_alive_ = shared_from_this();
+    closed_.store(true);
+    close_after_write_.store(true);
+    bool expected = false;
+    if (writing_.compare_exchange_strong(expected, true)) {
+        loop_->Post([self = shared_from_this()]() {
+            self->ProcessWriteQueue();
+        });
+    }
+}
+
 void WebSocketConnection::DoClose() {
     closing_.store(true);
     state_.store(State::kClosing);

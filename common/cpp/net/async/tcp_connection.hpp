@@ -62,6 +62,9 @@ public:
     // 关闭连接（线程安全）
     void Close() override;
 
+    // 已排队的写请求 drain 后关闭（线程安全）
+    void CloseAfterWrite() override;
+
     bool IsClosed() const { return closed_.load(); }
 
     // 获取底层 uv_tcp_t（仅用于高级操作）
@@ -91,6 +94,7 @@ private:
 
     std::atomic<bool> closed_{false};
     std::atomic<bool> closing_{false};
+    std::atomic<bool> close_after_write_{false};
     std::atomic<bool> connected_{false};
 
     DataCallback on_data_;
