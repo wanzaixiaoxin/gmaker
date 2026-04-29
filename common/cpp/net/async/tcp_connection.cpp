@@ -186,9 +186,10 @@ void AsyncTCPConnection::Close() {
 }
 
 void AsyncTCPConnection::CloseAfterWrite() {
-    if (closed_.load() || closing_.load() || !handle_) return;
+    if (closed_.load() || closing_.load() || close_after_write_.load() || !handle_) return;
 
     keep_alive_ = shared_from_this();
+    closed_.store(true);
     close_after_write_.store(true);
     bool expected = false;
     if (writing_.compare_exchange_strong(expected, true)) {

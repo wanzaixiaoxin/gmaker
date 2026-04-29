@@ -143,6 +143,7 @@ class WSClient {
                     // 处理服务器主动推送的踢人通知
                     if (pkt.cmdID === Cmd.GW_PLAYER_KICK) {
                         if (this.onKick) this.onKick(pkt.payload);
+                        this.close();
                         return;
                     }
                     if (pkt.cmdID === Cmd.SYS_ERROR_PACKET) {

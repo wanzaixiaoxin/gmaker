@@ -768,6 +768,18 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
                 if (logger_) logger_->Warn("PlayerBind response parse failed: conn=" + std::to_string(conn_id));
                 return;
             }
+        } else {
+            std::lock_guard<std::mutex> lk(player_mtx_);
+            for (auto it = pending_binds_.begin(); it != pending_binds_.end(); ) {
+                if (it->second.seq_id == pkt.header.seq_id) {
+                    if (logger_) logger_->Warn("PlayerBind response too short, cleaned pending bind: conn=" +
+                                                std::to_string(it->first) + " seq=" + std::to_string(pkt.header.seq_id));
+                    it = pending_binds_.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+            return;
         }
         // 继续转发响应给客户端（使用下面的通用响应转发逻辑）
         if (should_close_bind_conn) {
@@ -932,6 +944,12 @@ std::string ToHex(uint32_t v) {
 // ==================== Player 绑定管理 ====================
 
 void Gateway::HandlePlayerBind(IConnection* conn, Packet& pkt) {
+    if (IsPlayerBound(conn->ID())) {
+        if (logger_) logger_->Warn("PlayerBind rejected: conn already bound, conn=" + std::to_string(conn->ID()));
+        SendErrorAndClose(conn->ID(), pkt.header.seq_id, gs::errors::INVALID_PARAM, "already bound");
+        return;
+    }
+
     protocol::PlayerBindReq req;
     if (!req.ParseFromArray(pkt.payload.Data(), static_cast<int>(pkt.payload.Size()))) {
         if (logger_) logger_->Warn("Invalid PlayerBindReq from client " + std::to_string(conn->ID()));
