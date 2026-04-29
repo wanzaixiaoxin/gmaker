@@ -8,7 +8,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gmaker/luffa/common/go/cache"
 	"github.com/gmaker/luffa/common/go/idgen"
+	"github.com/gmaker/luffa/common/go/logger"
 	"github.com/gmaker/luffa/common/go/redis"
 	"github.com/gmaker/luffa/services/login-go/internal/dbproxy"
 
@@ -27,14 +29,19 @@ const (
 
 // PlayerService 玩家服务
 type PlayerService struct {
-	DB    dbproxy.Client
-	Redis *redis.Client
-	IDGen *idgen.Snowflake
+	DB           dbproxy.Client
+	Redis        *redis.Client
+	IDGen        *idgen.Snowflake
+	AccountCache *cache.Cache[*PlayerInfo] // account -> PlayerInfo
+	Log          *logger.Logger
 }
 
 // NewPlayerService 创建玩家服务
-func NewPlayerService(db dbproxy.Client, r *redis.Client, idGen *idgen.Snowflake) *PlayerService {
-	return &PlayerService{DB: db, Redis: r, IDGen: idGen}
+func NewPlayerService(db dbproxy.Client, r *redis.Client, idGen *idgen.Snowflake, accountCache *cache.Cache[*PlayerInfo], log *logger.Logger) *PlayerService {
+	if log == nil {
+		log = logger.NewWithService("login", "unknown")
+	}
+	return &PlayerService{DB: db, Redis: r, IDGen: idGen, AccountCache: accountCache, Log: log}
 }
 
 // PlayerInfo 包含密码的完整玩家信息
@@ -43,22 +50,44 @@ type PlayerInfo struct {
 	Password string
 }
 
-// QueryPlayerByAccount 根据账号查询玩家
+// QueryPlayerByAccount 根据账号查询玩家（带缓存）
 func (s *PlayerService) QueryPlayerByAccount(ctx context.Context, account string) (*PlayerInfo, error) {
+	if s.AccountCache != nil {
+		info, err := s.AccountCache.GetOrLoad(ctx, account, func(ctx context.Context, key string) (*PlayerInfo, error) {
+			s.Log.Infow("cache miss, loading from DB", map[string]interface{}{"account": key})
+			return s.queryPlayerFromDB(ctx, key)
+		})
+		if err == nil {
+			s.Log.Infow("cache hit", map[string]interface{}{"account": account, "player_id": info.PlayerId})
+		} else {
+			s.Log.Infow("cache miss after load", map[string]interface{}{"account": account, "error": err.Error()})
+		}
+		return info, err
+	}
+	s.Log.Infow("cache disabled, query DB directly", map[string]interface{}{"account": account})
+	return s.queryPlayerFromDB(ctx, account)
+}
+
+func (s *PlayerService) queryPlayerFromDB(ctx context.Context, account string) (*PlayerInfo, error) {
+	start := time.Now()
 	sqlStr := "SELECT player_id, account, password, nickname, level, exp, coin, diamond, create_at, login_at FROM players WHERE account = ?"
 	req := &dbproxypb.MySQLQueryReq{Uid: 1, Sql: sqlStr, Args: []string{account}}
 	data, _ := proto.Marshal(req)
 	resPkt, err := s.DB.Call(ctx, cmdMySQLQuery, data)
 	if err != nil {
+		s.Log.Errorw("query player from DB failed", map[string]interface{}{"account": account, "error": err.Error(), "duration_ms": time.Since(start).Milliseconds()})
 		return nil, err
 	}
 	var res dbproxypb.MySQLQueryRes
 	if err := proto.Unmarshal(resPkt.Payload, &res); err != nil {
+		s.Log.Errorw("unmarshal query result failed", map[string]interface{}{"account": account, "error": err.Error()})
 		return nil, err
 	}
 	if !res.Ok || len(res.Rows) == 0 {
+		s.Log.Infow("player not found in DB", map[string]interface{}{"account": account, "duration_ms": time.Since(start).Milliseconds()})
 		return nil, fmt.Errorf("player not found")
 	}
+	s.Log.Infow("query player from DB success", map[string]interface{}{"account": account, "player_id": res.Rows[0].Columns[0].Value, "duration_ms": time.Since(start).Milliseconds()})
 	return parsePlayerRow(res.Rows[0]), nil
 }
 
@@ -88,7 +117,7 @@ func (s *PlayerService) CreatePlayer(ctx context.Context, account, password stri
 	if !res.Ok {
 		return nil, fmt.Errorf("exec failed: %s", res.Error)
 	}
-	return &bizpb.PlayerBase{
+	base := &bizpb.PlayerBase{
 		PlayerId: playerID,
 		Nickname: account,
 		Level:    1,
@@ -97,25 +126,44 @@ func (s *PlayerService) CreatePlayer(ctx context.Context, account, password stri
 		Diamond:  0,
 		CreateAt: now,
 		LoginAt:  now,
-	}, nil
+	}
+	// 写库成功后清除该账号的缓存（如果之前有旧缓存或空值占位）
+	if s.AccountCache != nil {
+		_ = s.AccountCache.Delete(ctx, account)
+	}
+	return base, nil
 }
 
 // SetToken 设置玩家 Token 到 Redis
 func (s *PlayerService) SetToken(ctx context.Context, playerID uint64, token string, ttlSec uint64) error {
 	if s.Redis == nil {
+		s.Log.Warn("redis not available, skip set token")
 		return fmt.Errorf("redis not available")
 	}
 	key := fmt.Sprintf("token:%d", playerID)
-	return s.Redis.Set(ctx, key, token, time.Duration(ttlSec)*time.Second)
+	err := s.Redis.Set(ctx, key, token, time.Duration(ttlSec)*time.Second)
+	if err != nil {
+		s.Log.Errorw("set token failed", map[string]interface{}{"player_id": playerID, "error": err.Error()})
+	} else {
+		s.Log.Infow("set token success", map[string]interface{}{"player_id": playerID, "ttl_sec": ttlSec})
+	}
+	return err
 }
 
 // GetToken 从 Redis 获取玩家 Token
 func (s *PlayerService) GetToken(ctx context.Context, playerID uint64) (string, error) {
 	if s.Redis == nil {
+		s.Log.Warn("redis not available, skip get token")
 		return "", fmt.Errorf("redis not available")
 	}
 	key := fmt.Sprintf("token:%d", playerID)
-	return s.Redis.Get(ctx, key)
+	val, err := s.Redis.Get(ctx, key)
+	if err != nil {
+		s.Log.Infow("get token miss", map[string]interface{}{"player_id": playerID, "error": err.Error()})
+		return "", err
+	}
+	s.Log.Infow("get token hit", map[string]interface{}{"player_id": playerID})
+	return val, nil
 }
 
 // VerifyToken 验证 Token 是否有效

@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gmaker/luffa/common/go/cache"
 	"github.com/gmaker/luffa/common/go/config"
 	"github.com/gmaker/luffa/common/go/discovery"
 	"github.com/gmaker/luffa/common/go/idgen"
@@ -160,7 +161,18 @@ func main() {
 		log.Info("Login connected to dbproxy")
 	}
 
-	playerSvc := service.NewPlayerService(dbClient, redisClient, idGen)
+	// 初始化账号查询缓存（Cache-Aside，TTL 5分钟）
+	var accountCache *cache.Cache[*service.PlayerInfo]
+	if redisClient != nil {
+		store := cache.NewRedisStore(redisClient)
+		accountCache = cache.NewCache[*service.PlayerInfo](store, cache.JSONCodec[*service.PlayerInfo]{}, 5*time.Minute,
+			cache.WithPrefix[*service.PlayerInfo]("login:account"),
+			cache.WithNilTTL[*service.PlayerInfo](60*time.Second),
+		)
+		log.Info("Login account cache initialized")
+	}
+
+	playerSvc := service.NewPlayerService(dbClient, redisClient, idGen, accountCache, log)
 	if dbClient != nil {
 		if err := service.EnsurePlayerTable(playerSvc); err != nil {
 			log.Warnf("ensure player table failed: %v", err)

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -62,31 +63,38 @@ func (h *LoginHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 	var req RegisterReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.Log.Warnw("register decode failed", map[string]interface{}{"client_ip": r.RemoteAddr, "error": err.Error()})
 		writeJSON(w, http.StatusBadRequest, LoginRes{Code: 400, Msg: "bad request"})
 		return
 	}
 	if req.Account == "" || req.Password == "" {
+		h.Log.Warnw("register param invalid", map[string]interface{}{"client_ip": r.RemoteAddr, "account_empty": req.Account == "", "password_empty": req.Password == ""})
 		writeJSON(w, http.StatusBadRequest, LoginRes{Code: 400, Msg: "account and password required"})
 		return
 	}
 
+	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	// 检查账号是否已存在
+	h.Log.Infow("register request", map[string]interface{}{"account": req.Account, "client_ip": r.RemoteAddr})
+
 	existing, _ := h.PlayerSvc.QueryPlayerByAccount(ctx, req.Account)
 	if existing != nil {
+		h.Log.Infow("register account exists", map[string]interface{}{"account": req.Account, "duration_ms": time.Since(start).Milliseconds()})
 		writeJSON(w, http.StatusOK, LoginRes{Code: 1001, Msg: "account already exists"})
 		return
 	}
 
 	player, err := h.PlayerSvc.CreatePlayer(ctx, req.Account, req.Password)
 	if err != nil {
-		h.Log.Errorf("create player failed: %v", err)
+		h.Log.Errorw("create player failed", map[string]interface{}{"account": req.Account, "error": err.Error()})
 		writeJSON(w, http.StatusOK, LoginRes{Code: 500, Msg: "internal error"})
 		return
 	}
 
+	h.Log.Infow("register success", map[string]interface{}{"account": req.Account, "player_id": player.PlayerId, "duration_ms": time.Since(start).Milliseconds()})
 	writeJSON(w, http.StatusOK, LoginRes{Code: 0, Msg: "ok", PlayerID: player.PlayerId})
 }
 
@@ -103,25 +111,32 @@ func (h *LoginHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	var req LoginReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.Log.Warnw("login decode failed", map[string]interface{}{"client_ip": r.RemoteAddr, "error": err.Error()})
 		writeJSON(w, http.StatusBadRequest, LoginRes{Code: 400, Msg: "bad request"})
 		return
 	}
 	if req.Account == "" || req.Password == "" {
+		h.Log.Warnw("login param invalid", map[string]interface{}{"client_ip": r.RemoteAddr})
 		writeJSON(w, http.StatusBadRequest, LoginRes{Code: 400, Msg: "account and password required"})
 		return
 	}
 
+	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	h.Log.Infow("login request", map[string]interface{}{"account": req.Account, "client_ip": r.RemoteAddr})
+
 	player, err := h.PlayerSvc.QueryPlayerByAccount(ctx, req.Account)
 	if err != nil {
+		h.Log.Infow("login player not found", map[string]interface{}{"account": req.Account, "duration_ms": time.Since(start).Milliseconds()})
 		writeJSON(w, http.StatusOK, LoginRes{Code: 1002, Msg: "account or password incorrect"})
 		return
 	}
 
 	// 验证密码
 	if service.HashPassword(req.Password) != player.Password {
+		h.Log.Infow("login password wrong", map[string]interface{}{"account": req.Account, "player_id": player.PlayerId, "duration_ms": time.Since(start).Milliseconds()})
 		writeJSON(w, http.StatusOK, LoginRes{Code: 1002, Msg: "account or password incorrect"})
 		return
 	}
@@ -129,9 +144,10 @@ func (h *LoginHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	token := service.GenerateToken(player.PlayerId)
 	expireAt := uint64(time.Now().Add(24 * time.Hour).Unix())
 	if err := h.PlayerSvc.SetToken(ctx, player.PlayerId, token, 24*3600); err != nil {
-		h.Log.Errorf("set token failed: %v", err)
+		h.Log.Errorw("set token failed", map[string]interface{}{"player_id": player.PlayerId, "error": err.Error()})
 	}
 
+	h.Log.Infow("login success", map[string]interface{}{"account": req.Account, "player_id": player.PlayerId, "duration_ms": time.Since(start).Milliseconds()})
 	writeJSON(w, http.StatusOK, LoginRes{
 		Code:        0,
 		Msg:         "ok",
@@ -163,14 +179,17 @@ func (h *LoginHandler) HandleVerifyToken(w http.ResponseWriter, r *http.Request)
 	playerIDStr := body["player_id"]
 	playerID, _ := strconv.ParseUint(playerIDStr, 10, 64)
 
+	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	storedToken, err := h.PlayerSvc.GetToken(ctx, playerID)
 	if err != nil || storedToken != token {
+		h.Log.Infow("verify token failed", map[string]interface{}{"player_id": playerID, "error": fmt.Sprintf("%v", err), "duration_ms": time.Since(start).Milliseconds()})
 		writeJSON(w, http.StatusOK, LoginRes{Code: 1003, Msg: "invalid token"})
 		return
 	}
 
+	h.Log.Infow("verify token success", map[string]interface{}{"player_id": playerID, "duration_ms": time.Since(start).Milliseconds()})
 	writeJSON(w, http.StatusOK, LoginRes{Code: 0, Msg: "ok", PlayerID: playerID})
 }

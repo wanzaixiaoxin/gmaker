@@ -32,7 +32,10 @@ type DBProxyConfig struct {
 		Addrs []string `json:"addrs"`
 	} `json:"discovery"`
 	MySQL struct {
-		DSN string `json:"dsn"`
+		DSN             string `json:"dsn"`
+		MaxOpenConn     int    `json:"max_open_conn"`
+		MaxIdleConn     int    `json:"max_idle_conn"`
+		ConnMaxLifetime int    `json:"conn_max_lifetime_sec"`
 	} `json:"mysql"`
 }
 
@@ -64,11 +67,17 @@ func main() {
 	if dsnList != "" {
 		var cfgs []mysql.Config
 		for _, dsn := range strings.Split(dsnList, ",") {
-			cfgs = append(cfgs, mysql.Config{
-				DSN:         dsn,
-				MaxOpenConn: 20,
-				MaxIdleConn: 5,
-			})
+			mCfg := mysql.Config{DSN: dsn}
+			if cfg.MySQL.MaxOpenConn > 0 {
+				mCfg.MaxOpenConn = cfg.MySQL.MaxOpenConn
+			}
+			if cfg.MySQL.MaxIdleConn > 0 {
+				mCfg.MaxIdleConn = cfg.MySQL.MaxIdleConn
+			}
+			if cfg.MySQL.ConnMaxLifetime > 0 {
+				mCfg.ConnMaxLifetime = time.Duration(cfg.MySQL.ConnMaxLifetime) * time.Second
+			}
+			cfgs = append(cfgs, mCfg)
 		}
 		var err error
 		mproxy, err = mysql.NewProxy(cfgs)

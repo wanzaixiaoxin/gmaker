@@ -207,6 +207,12 @@ func (l *Logger) Warnf(format string, v ...interface{})  { l.Warn(fmt.Sprintf(fo
 func (l *Logger) Errorf(format string, v ...interface{}) { l.Error(fmt.Sprintf(format, v...)) }
 func (l *Logger) Fatalf(format string, v ...interface{}) { l.Fatal(fmt.Sprintf(format, v...)) }
 
+// Infow / Debugw / Warnw / Errorw 支持结构化字段的日志方法
+func (l *Logger) Infow(msg string, extra map[string]interface{})  { l.log(InfoLevel, msg, extra) }
+func (l *Logger) Debugw(msg string, extra map[string]interface{}) { l.log(DebugLevel, msg, extra) }
+func (l *Logger) Warnw(msg string, extra map[string]interface{})  { l.log(WarnLevel, msg, extra) }
+func (l *Logger) Errorw(msg string, extra map[string]interface{}) { l.log(ErrorLevel, msg, extra) }
+
 func parseLevel(s string) Level {
 	switch s {
 	case "debug":

@@ -17,9 +17,10 @@ type Proxy struct {
 
 // Config 单分片配置
 type Config struct {
-	DSN         string
-	MaxOpenConn int
-	MaxIdleConn int
+	DSN             string
+	MaxOpenConn     int
+	MaxIdleConn     int
+	ConnMaxLifetime time.Duration // 0 表示不限制
 }
 
 // NewProxy 创建 MySQL 代理
@@ -32,9 +33,16 @@ func NewProxy(cfgs []Config) (*Proxy, error) {
 		}
 		if cfg.MaxOpenConn > 0 {
 			db.SetMaxOpenConns(cfg.MaxOpenConn)
+		} else {
+			db.SetMaxOpenConns(20) // 默认兜底
 		}
 		if cfg.MaxIdleConn > 0 {
 			db.SetMaxIdleConns(cfg.MaxIdleConn)
+		} else {
+			db.SetMaxIdleConns(5)
+		}
+		if cfg.ConnMaxLifetime > 0 {
+			db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 		}
 		// Warmup: ensure first physical connection is established
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

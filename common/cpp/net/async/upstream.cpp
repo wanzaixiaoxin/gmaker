@@ -147,11 +147,14 @@ size_t AsyncUpstreamPool::TotalCount() const {
 }
 
 void AsyncUpstreamPool::OnReconnectTimer() {
-    std::cout << "[AsyncUpstreamPool] Reconnect timer fired" << std::endl;
     std::lock_guard<std::mutex> lk(nodes_mtx_);
+    bool has_work = false;
     for (auto& node : nodes_) {
         if (!node->healthy.load() && !node->connecting.load()) {
-            std::cout << "[AsyncUpstreamPool] TryConnect: " << node->host << ":" << node->port << std::endl;
+            if (!has_work) {
+                std::cout << "[AsyncUpstreamPool] Reconnect timer fired" << std::endl;
+                has_work = true;
+            }
             TryConnect(node.get());
         }
     }

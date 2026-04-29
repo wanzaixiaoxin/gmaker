@@ -15,6 +15,12 @@ import (
 	"github.com/gmaker/luffa/services/dbproxy-go/internal/mysql"
 )
 
+// task 表示一个待处理的 RPC 请求
+type task struct {
+	conn *net.TCPConn
+	pkt  *net.Packet
+}
+
 // DBProxy 内部命令号
 const (
 	CmdMySQLQuery    = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_QUERY)
@@ -24,24 +30,49 @@ const (
 )
 
 type Server struct {
-	addr   string
-	mysql  *mysql.Proxy
-	server *net.TCPServer
+	addr     string
+	mysql    *mysql.Proxy
+	server   *net.TCPServer
+	workerCh chan task
+	workers  int
 }
 
+// New 创建 DBProxy 服务器，默认 worker 数为 64
 func New(addr string, m *mysql.Proxy) *Server {
-	return &Server{addr: addr, mysql: m}
+	return &Server{addr: addr, mysql: m, workers: 64}
+}
+
+// SetWorkers 设置处理 worker 数量（必须在 Start 前调用）
+func (s *Server) SetWorkers(n int) {
+	if n > 0 {
+		s.workers = n
+	}
 }
 
 func (s *Server) Start() error {
+	s.workerCh = make(chan task, s.workers*4)
+	for i := 0; i < s.workers; i++ {
+		go s.workerLoop()
+	}
 	cfg := net.ServerConfig{
 		Addr: s.addr,
 		OnData: func(conn *net.TCPConn, pkt *net.Packet) {
-			s.handlePacket(conn, pkt)
+			select {
+			case s.workerCh <- task{conn: conn, pkt: pkt}:
+			default:
+				log.Printf("[DBProxy] worker queue full, drop packet seq=%d", pkt.SeqID)
+				s.sendError(conn, pkt.SeqID, fmt.Errorf("server busy"))
+			}
 		},
 	}
 	s.server = net.NewTCPServer(cfg)
 	return s.server.Start()
+}
+
+func (s *Server) workerLoop() {
+	for t := range s.workerCh {
+		s.handlePacket(t.conn, t.pkt)
+	}
 }
 
 func (s *Server) Stop() {
@@ -98,6 +129,16 @@ func (s *Server) handleMySQLQuery(conn *net.TCPConn, pkt *net.Packet) {
 					valStr = string(v)
 				case string:
 					valStr = v
+				case int64:
+					valStr = strconv.FormatInt(v, 10)
+				case float64:
+					valStr = strconv.FormatFloat(v, 'f', -1, 64)
+				case bool:
+					valStr = strconv.FormatBool(v)
+				case time.Time:
+					valStr = v.Format(time.RFC3339)
+				case nil:
+					valStr = ""
 				default:
 					valStr = fmt.Sprintf("%v", v)
 				}

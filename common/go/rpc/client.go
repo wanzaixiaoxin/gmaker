@@ -4,17 +4,36 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gmaker/luffa/common/go/net"
 )
 
+// callChanPool 复用 RPC 等待通道，减少高并发下的 GC 压力
+var callChanPool = sync.Pool{
+	New: func() interface{} {
+		return make(chan *net.Packet, 1)
+	},
+}
+
+func acquireCallChan() chan *net.Packet {
+	return callChanPool.Get().(chan *net.Packet)
+}
+
+func releaseCallChan(ch chan *net.Packet) {
+	select {
+	case <-ch: // drain orphaned packet if any
+	default:
+	}
+	callChanPool.Put(ch)
+}
+
 // Client RPC 客户端，支持单连接和连接池两种模式
 type Client struct {
 	sender  net.PacketSender
 	pending sync.Map // seq_id -> chan *net.Packet
-	seqMu   sync.Mutex
-	seqID   uint32
+	seqID   atomic.Uint32
 }
 
 // NewClient 创建单连接 RPC 客户端（向后兼容）
@@ -50,9 +69,12 @@ func (c *Client) Call(ctx context.Context, cmdID uint32, payload []byte) (*net.P
 	}
 
 	seq := c.nextSeqID()
-	ch := make(chan *net.Packet, 1)
+	ch := acquireCallChan()
 	c.pending.Store(seq, ch)
-	defer c.pending.Delete(seq)
+	defer func() {
+		c.pending.Delete(seq)
+		releaseCallChan(ch)
+	}()
 
 	pkt := &net.Packet{
 		Header: net.Header{
@@ -106,8 +128,5 @@ func (c *Client) FireForget(cmdID uint32, payload []byte) error {
 }
 
 func (c *Client) nextSeqID() uint32 {
-	c.seqMu.Lock()
-	defer c.seqMu.Unlock()
-	c.seqID++
-	return c.seqID
+	return c.seqID.Add(1)
 }
