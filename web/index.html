@@ -993,7 +993,15 @@ const PROTO_DESCRIPTOR = {
   }
 };
 </script>
+<script src="https://cdn.jsdelivr.net/npm/long@5.2.3/umd/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/protobufjs@7.3.2/dist/protobuf.min.js"></script>
+<script>
+    if (window.Long && window.protobuf) {
+        protobuf.util.Long = window.Long;
+        protobuf.configure();
+    }
+</script>
+    <script src="https://cdn.jsdelivr.net/npm/lossless-json@2.0.11/lib/umd/lossless-json.js"></script>
     <script src="js/net.js"></script>
     <script src="js/chat.js"></script>
 </head>
@@ -1077,6 +1085,20 @@ try {
 function setStatus(text) {
     document.getElementById('statusBar').textContent = text;
 }
+
+// 全局覆盖 Response.json()：所有 fetch 响应自动使用 lossless-json 解析，
+// 超过 15 位的数字转为字符串，避免 JS Number 精度丢失
+const _origResponseJson = Response.prototype.json;
+Response.prototype.json = function() {
+    return this.text().then(function(text) {
+        return LosslessJSON.parse(text, null, function(numStr) {
+            if (numStr.length > 15) {
+                return numStr;
+            }
+            return parseFloat(numStr);
+        });
+    });
+};
 
 function showMsg(id, text, isError) {
     const el = document.getElementById(id);
@@ -1165,9 +1187,9 @@ async function doAuth() {
 
         // 监听推送
         chatAPI.onNotify((msg) => {
-            if (currentRoom && msg.msg && msg.msg.roomId === currentRoom.roomId) {
+            if (currentRoom && msg.msg && String(msg.msg.roomId) === String(currentRoom.roomId)) {
                 // 过滤掉自己发送的消息（已经在sendMsg中显示过了）
-                if (msg.msg.senderId !== playerID) {
+                if (String(msg.msg.senderId) !== String(playerID)) {
                     appendMsg(msg.msg, false);
                 }
             }
@@ -1321,7 +1343,7 @@ function appendMsg(msg, isMine) {
 }
 
 async function closeRoom() {
-    if (!currentRoom || currentRoom.creatorId !== playerID) return;
+    if (!currentRoom || String(currentRoom.creatorId) !== String(playerID)) return;
     if (!confirm('确定要关闭此聊天室吗？')) return;
     try {
         const res = await chatAPI.closeRoom(currentRoom.roomId, playerID);

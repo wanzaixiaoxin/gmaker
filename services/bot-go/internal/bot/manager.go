@@ -257,23 +257,35 @@ func (m *Manager) connectAndBind(c *Client) error {
 }
 
 func (m *Manager) messageLoop(c *Client) {
-	ticker := time.NewTicker(time.Duration(m.config.MessageIntervalSec) * time.Second)
-	defer ticker.Stop()
+	interval := time.Duration(m.config.MessageIntervalSec) * time.Second
+	if interval <= 0 {
+		interval = 5 * time.Second
+	}
+
+	// 首次发送前随机延迟 0~interval，避免所有 bot 同时开口
+	if interval > 0 {
+		jitter := time.Duration(rand.Int63n(int64(interval)))
+		time.Sleep(jitter)
+	}
 
 	for {
 		if !c.IsConnected() {
 			return
 		}
-		select {
-		case <-ticker.C:
-			content := m.randomMessage()
-			if err := c.SendMsg(m.config.RoomID, content); err != nil {
-				m.failCount.Add(1)
-				m.log.Warnf("Bot-%d send msg failed: %v", c.ID, err)
-				return
-			}
-			m.msgCount.Add(1)
+
+		content := m.randomMessage()
+		if err := c.SendMsg(m.config.RoomID, content); err != nil {
+			m.failCount.Add(1)
+			m.log.Warnf("Bot-%d send msg failed: %v", c.ID, err)
+			return
 		}
+		m.msgCount.Add(1)
+
+		// 每次发送后随机睡眠：基础间隔的 50%~150%，让节奏更自然
+		minSleep := interval / 2
+		maxSleep := interval * 3 / 2
+		sleepTime := minSleep + time.Duration(rand.Int63n(int64(maxSleep-minSleep)))
+		time.Sleep(sleepTime)
 	}
 }
 
