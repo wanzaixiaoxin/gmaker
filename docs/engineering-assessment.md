@@ -36,7 +36,7 @@
 | **严重** | Redis 客户端非线程安全，无锁保护，多线程直接使用会数据竞争 | `common/cpp/redis/redis_client.hpp` | **✅ 已修复** — 添加 `std::recursive_mutex` 保护所有公共方法 |
 | ~~严重~~ | ~~`WriteReq` 单连接复用~~ **❌ 不属实** — `writing_` 原子标志 + 事件循环单线程执行 + `OnWriteDone` 链式调度确保同一时刻只有一个 `uv_write` 在进行。`WriteReq` 复用是有意的性能优化，不存在竞争条件。 | `common/cpp/net/async/tcp_connection.cpp:431` | 已验证，非 Bug |
 | **高** | `RegistryClient::Call()` 在事件循环线程内阻塞等待 `future`（最长 3s），会卡住整个 loop | `common/cpp/registry/client.cpp:207` | **✅ 已修复** — 检测 `IsInLoopThread()`，若在 loop 线程内则用 `PumpOnce()` 非阻塞轮询，不再阻塞 loop |
-| **高** | 事件循环析构时若线程仍在运行，触发 use-after-free 或死锁 | `common/cpp/net/async/event_loop.cpp:22` | **✅ 已修复** — 添加 `running` 原子标志，析构时若线程仍在跑则 `Stop()` + 最多等待 10s |
+| **高** | 事件循环析构时若线程仍在运行，触发 use-after-free 或死锁 | `common/cpp/net/async/event_loop.cpp:22` | **⚠️ 已缓解** — 添加 `running` 原子标志，析构时若线程仍在跑则 `Stop()` + 最多等待 10s。**残余风险**：若 loop 线程被长耗时回调阻塞超过 10s，析构线程会在 loop 未退出时直接调用 `uv_run`，仍可能触发未定义行为 |
 | **中** | `reinterpret_cast<uint64_t>(node)` 作 conn_id，重启后可能碰撞 | `common/cpp/net/async/upstream.cpp:180` | 待修复 |
 | **中** | Histogram 每次 Observe 全局加锁，高并发瓶颈 | `common/cpp/metrics/metrics.hpp:45` | 待修复 |
 | **中** | Logger::Fatal 调用 `std::exit(1)` 不触发栈析构 | `common/cpp/logger/logger.hpp:80` | 待修复 |
@@ -46,7 +46,7 @@
 1. ~~用 `uv_tcp_init_ex` 替代 `dup()`~~ **无需修改** — 经验证 `dup()` 方案在 POSIX 和 Windows 上均正确工作
 2. **✅ 已完成**：Redis 客户端已加 `std::recursive_mutex`，所有公共方法受锁保护
 3. **✅ 已完成**：`RegistryClient::Call()` 检测 `IsInLoopThread()` → 用 `PumpOnce()` 非阻塞轮询；非 loop 线程仍用原有 `future::wait_for`
-4. **✅ 已完成**：`AsyncEventLoop` 析构检查 `running` 标志，线程仍在跑时先 `Stop()` 并等待退出
+4. **⚠️ 已缓解**：`AsyncEventLoop` 析构检查 `running` 标志，线程仍在跑时先 `Stop()` 并等待退出（最多 10s）。**建议**：改为析构前强制 `join` loop 线程，彻底消除超时 fallback 导致的并发 `uv_run` 风险
 
 ---
 
@@ -194,7 +194,7 @@
 
 | 问题 | 影响 |
 |------|------|
-| `dup()` socket 共享 | 高并发下 fd 复用/损坏，连接异常断开，性能骤降 |
+| ~~`dup()` socket 共享~~ **❌ 不属实** — `dup()`/`WSADuplicateSocketW` 正确创建了独立的 fd/socket handle，不存在 fd 复用/损坏风险，但多 worker 模型下每次 accept 都有一次系统调用开销 |
 | Histogram 全局互斥锁 | 高频指标采集成为瓶颈 |
 | dbproxy-go worker 池固定 64 | 无动态扩缩容，突发流量下队列满直接丢请求 |
 | realtime-cpp 广播 O(n x m) | 对每个目标 conn 单独发一次 Gateway，无批量优化 |
@@ -202,7 +202,7 @@
 | Redis 客户端阻塞同步 | 所有 Redis 操作同步阻塞 goroutine，未使用连接池 pipeline |
 
 ### 改进建议
-1. 用 io_uring（Linux）或 IOCP（Windows）替代 libuv 的 `dup()` 方案
+1. ~~用 io_uring 替代 libuv 的 `dup()` 方案~~ **无需修改** — `dup()` 方案正确，若追求极致性能可考虑 `SO_REUSEPORT` + 多进程监听替代多 worker 模型
 2. Metrics Histogram 改用原子计数器数组 + 定期合并
 3. dbproxy-go 用有界队列 + 背压，而非直接丢包
 4. realtime-cpp 批量序列化 Room Snapshot，一次发送
@@ -250,7 +250,7 @@
 | 中小规模游戏服务器（<1万在线） | 4/5 | 架构清晰，功能完整，部署简单 |
 | 快速原型/MVP 开发 | 5/5 | 代码量适中，自研组件可控，易二次开发 |
 | 实时竞技/帧同步游戏 | 3/5 | realtime-cpp 有 ComputeThread 和 AOI，但广播性能不足 |
-| 大型 MMO（>10万在线） | 2/5 | dup()、单点 Registry、无水平扩展的 Room 广播是大瓶颈 |
+| 大型 MMO（>10万在线） | 2/5 | 多 worker `dup()` 有 syscall 开销、单点 Registry、无水平扩展的 Room 广播是大瓶颈 |
 | 云原生/K8s 部署 | 2/5 | 无 K8s manifest，无服务网格，无 Sidecar |
 | 金融级高可用 | 2/5 | 无事务、无强一致、无多活 |
 
@@ -263,7 +263,7 @@
 
 ### 核心短板
 
-1. **未经过大规模验证**：`dup()`、Registry 单点、Redis 非线程安全等问题在生产高并发下会暴露
+1. **未经过大规模验证**：Registry 单点、Redis 客户端历史非线程安全、Room 广播无法跨 Gateway 等问题在生产高并发下会暴露
 2. **缺少云原生能力**：无 K8s、无服务网格、无自动扩缩容
 3. **运维工具薄弱**：无动态配置热更新、无流量灰度、无 A/B Test 支持
 
@@ -282,7 +282,7 @@
 **已完成的修复（本批）：**
 
 6. **✅ RegistryClient::Call() 事件循环阻塞** — [client.cpp](file:///d:/Documents/learn/opensource/gmaker/common/cpp/registry/client.cpp) 检测 `IsInLoopThread()`，loop 线程内改用 `PumpOnce()` 非阻塞轮询驱动响应到达
-7. **✅ AsyncEventLoop 析构安全性** — [event_loop.cpp](file:///d:/Documents/learn/opensource/gmaker/common/cpp/net/async/event_loop.cpp) 添加 `running` 原子标志，析构先 `Stop()` 再等待线程退出（最多 10s）
+7. **⚠️ AsyncEventLoop 析构安全性（已缓解）** — [event_loop.cpp](file:///d:/Documents/learn/opensource/gmaker/common/cpp/net/async/event_loop.cpp) 添加 `running` 原子标志，析构先 `Stop()` 再等待线程退出（最多 10s）。**残余风险**：loop 线程阻塞超时时，析构线程与 loop 线程并发调用 `uv_run` 属未定义行为；建议改为析构前强制 `join`
 
 ### 短期（1-2 月）
 
