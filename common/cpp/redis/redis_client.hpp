@@ -6,6 +6,7 @@
 #include <optional>
 #include <memory>
 #include <utility>
+#include <mutex>
 
 #include <hiredis.h>
 
@@ -110,13 +111,13 @@ struct Reply {
 // 通过 Client::Pipeline() 创建，追加命令后调用 Exec() 一次性获取结果
 class Pipeline {
 public:
-    explicit Pipeline(redisContext* ctx);
+    Pipeline(redisContext* ctx, std::recursive_mutex* mtx);
     ~Pipeline() = default;
 
     Pipeline(const Pipeline&) = delete;
     Pipeline& operator=(const Pipeline&) = delete;
-    Pipeline(Pipeline&&) noexcept = default;
-    Pipeline& operator=(Pipeline&&) noexcept = default;
+    Pipeline(Pipeline&&) noexcept;
+    Pipeline& operator=(Pipeline&&) noexcept;
 
     // ==================== String ====================
     Pipeline& Set(const std::string& key, const std::string& value, int ttl_sec = 0);
@@ -200,6 +201,7 @@ public:
 
 private:
     redisContext* ctx_ = nullptr;
+    std::recursive_mutex* mtx_ = nullptr;
     std::string last_error_;
     size_t count_ = 0;
 
@@ -314,7 +316,10 @@ private:
     void Swap(Client& other) noexcept;
     void Clear();
 
-    struct Impl;
+    struct Impl {
+        redisContext* ctx = nullptr;
+        std::recursive_mutex mtx;
+    };
     std::unique_ptr<Impl> impl_;
     std::string last_error_;
 };

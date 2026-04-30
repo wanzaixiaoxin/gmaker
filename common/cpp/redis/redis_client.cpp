@@ -72,12 +72,6 @@ static void BuildArgv(const std::vector<std::string>& src,
     }
 }
 
-// ==================== Impl 定义 ====================
-
-struct Client::Impl {
-    redisContext* ctx = nullptr;
-};
-
 // ==================== 构造 / 析构 / 移动 ====================
 
 Client::Client(const Config& cfg) : impl_(std::make_unique<Impl>()) {
@@ -115,6 +109,7 @@ void Client::Clear() {
 // ==================== 连接管理 ====================
 
 bool Client::Connect(const Config& cfg) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     Disconnect();
     if (!impl_) impl_ = std::make_unique<Impl>();
 
@@ -172,6 +167,7 @@ bool Client::Connect(const Config& cfg) {
 }
 
 void Client::Disconnect() {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     Clear();
 }
 
@@ -182,6 +178,7 @@ bool Client::IsConnected() const {
 // ==================== 基础命令 ====================
 
 bool Client::Ping() {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return false; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "PING");
     if (!reply) { last_error_ = "ping failed"; return false; }
@@ -192,6 +189,7 @@ bool Client::Ping() {
 }
 
 bool Client::Set(const std::string& key, const std::string& value, int ttl_sec) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return false; }
     redisReply* reply = nullptr;
     if (ttl_sec > 0) {
@@ -207,6 +205,7 @@ bool Client::Set(const std::string& key, const std::string& value, int ttl_sec) 
 }
 
 bool Client::SetEX(const std::string& key, const std::string& value, int ttl_sec) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return false; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "SETEX %s %d %s", key.c_str(), ttl_sec, value.c_str());
     if (!reply) { last_error_ = "setex failed"; return false; }
@@ -217,6 +216,7 @@ bool Client::SetEX(const std::string& key, const std::string& value, int ttl_sec
 }
 
 bool Client::SetNX(const std::string& key, const std::string& value, int ttl_sec) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return false; }
     redisReply* reply = nullptr;
     if (ttl_sec > 0) {
@@ -237,6 +237,7 @@ bool Client::SetNX(const std::string& key, const std::string& value, int ttl_sec
 }
 
 std::optional<std::string> Client::Get(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "GET %s", key.c_str());
     if (!reply) { last_error_ = "get failed"; return std::nullopt; }
@@ -253,6 +254,7 @@ std::optional<std::string> Client::Get(const std::string& key) {
 }
 
 bool Client::Del(const std::vector<std::string>& keys) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || keys.empty()) { last_error_ = "not connected or empty keys"; return false; }
     std::vector<std::string> args = {"DEL"};
     args.insert(args.end(), keys.begin(), keys.end());
@@ -268,10 +270,12 @@ bool Client::Del(const std::vector<std::string>& keys) {
 }
 
 bool Client::Del(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     return Del(std::vector<std::string>{key});
 }
 
 bool Client::MSet(const std::vector<std::pair<std::string, std::string>>& kvs) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || kvs.empty()) { last_error_ = "not connected or empty kvs"; return false; }
     std::vector<std::string> args = {"MSET"};
     for (const auto& kv : kvs) {
@@ -290,6 +294,7 @@ bool Client::MSet(const std::vector<std::pair<std::string, std::string>>& kvs) {
 }
 
 std::vector<std::optional<std::string>> Client::MGet(const std::vector<std::string>& keys) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || keys.empty()) { last_error_ = "not connected or empty keys"; return {}; }
     std::vector<std::string> args = {"MGET"};
     args.insert(args.end(), keys.begin(), keys.end());
@@ -317,6 +322,7 @@ std::vector<std::optional<std::string>> Client::MGet(const std::vector<std::stri
 }
 
 std::optional<long long> Client::Incr(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "INCR %s", key.c_str());
     if (!reply) { last_error_ = "incr failed"; return std::nullopt; }
@@ -331,6 +337,7 @@ std::optional<long long> Client::Incr(const std::string& key) {
 }
 
 std::optional<long long> Client::Decr(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "DECR %s", key.c_str());
     if (!reply) { last_error_ = "decr failed"; return std::nullopt; }
@@ -345,6 +352,7 @@ std::optional<long long> Client::Decr(const std::string& key) {
 }
 
 std::optional<long long> Client::IncrBy(const std::string& key, long long delta) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "INCRBY %s %lld", key.c_str(), delta);
     if (!reply) { last_error_ = "incrby failed"; return std::nullopt; }
@@ -359,6 +367,7 @@ std::optional<long long> Client::IncrBy(const std::string& key, long long delta)
 }
 
 std::optional<long long> Client::DecrBy(const std::string& key, long long delta) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "DECRBY %s %lld", key.c_str(), delta);
     if (!reply) { last_error_ = "decrby failed"; return std::nullopt; }
@@ -373,6 +382,7 @@ std::optional<long long> Client::DecrBy(const std::string& key, long long delta)
 }
 
 std::optional<long long> Client::StrLen(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "STRLEN %s", key.c_str());
     if (!reply) { last_error_ = "strlen failed"; return std::nullopt; }
@@ -389,6 +399,7 @@ std::optional<long long> Client::StrLen(const std::string& key) {
 // ==================== Hash ====================
 
 bool Client::HSet(const std::string& key, const std::string& field, const std::string& value) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return false; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "HSET %s %s %s", key.c_str(), field.c_str(), value.c_str());
     if (!reply) { last_error_ = "hset failed"; return false; }
@@ -399,6 +410,7 @@ bool Client::HSet(const std::string& key, const std::string& field, const std::s
 }
 
 std::optional<std::string> Client::HGet(const std::string& key, const std::string& field) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "HGET %s %s", key.c_str(), field.c_str());
     if (!reply) { last_error_ = "hget failed"; return std::nullopt; }
@@ -415,6 +427,7 @@ std::optional<std::string> Client::HGet(const std::string& key, const std::strin
 }
 
 bool Client::HMSet(const std::string& key, const std::vector<std::pair<std::string, std::string>>& fvs) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || fvs.empty()) { last_error_ = "not connected or empty fields"; return false; }
     std::vector<std::string> args = {"HMSET", key};
     for (const auto& fv : fvs) {
@@ -433,6 +446,7 @@ bool Client::HMSet(const std::string& key, const std::vector<std::pair<std::stri
 }
 
 std::vector<std::optional<std::string>> Client::HMGet(const std::string& key, const std::vector<std::string>& fields) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || fields.empty()) { last_error_ = "not connected or empty fields"; return {}; }
     std::vector<std::string> args = {"HMGET", key};
     args.insert(args.end(), fields.begin(), fields.end());
@@ -460,6 +474,7 @@ std::vector<std::optional<std::string>> Client::HMGet(const std::string& key, co
 }
 
 std::vector<std::pair<std::string, std::string>> Client::HGetAll(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return {}; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "HGETALL %s", key.c_str());
     if (!reply) { last_error_ = "hgetall failed"; return {}; }
@@ -480,6 +495,7 @@ std::vector<std::pair<std::string, std::string>> Client::HGetAll(const std::stri
 }
 
 bool Client::HDel(const std::string& key, const std::vector<std::string>& fields) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || fields.empty()) { last_error_ = "not connected or empty fields"; return false; }
     std::vector<std::string> args = {"HDEL", key};
     args.insert(args.end(), fields.begin(), fields.end());
@@ -495,6 +511,7 @@ bool Client::HDel(const std::string& key, const std::vector<std::string>& fields
 }
 
 bool Client::HExists(const std::string& key, const std::string& field) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return false; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "HEXISTS %s %s", key.c_str(), field.c_str());
     if (!reply) { last_error_ = "hexists failed"; return false; }
@@ -509,6 +526,7 @@ bool Client::HExists(const std::string& key, const std::string& field) {
 }
 
 std::optional<long long> Client::HLen(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "HLEN %s", key.c_str());
     if (!reply) { last_error_ = "hlen failed"; return std::nullopt; }
@@ -523,6 +541,7 @@ std::optional<long long> Client::HLen(const std::string& key) {
 }
 
 std::vector<std::string> Client::HKeys(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return {}; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "HKEYS %s", key.c_str());
     if (!reply) { last_error_ = "hkeys failed"; return {}; }
@@ -541,6 +560,7 @@ std::vector<std::string> Client::HKeys(const std::string& key) {
 }
 
 std::vector<std::string> Client::HVals(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return {}; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "HVALS %s", key.c_str());
     if (!reply) { last_error_ = "hvals failed"; return {}; }
@@ -559,6 +579,7 @@ std::vector<std::string> Client::HVals(const std::string& key) {
 }
 
 std::optional<long long> Client::HIncrBy(const std::string& key, const std::string& field, long long delta) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "HINCRBY %s %s %lld", key.c_str(), field.c_str(), delta);
     if (!reply) { last_error_ = "hincrby failed"; return std::nullopt; }
@@ -575,6 +596,7 @@ std::optional<long long> Client::HIncrBy(const std::string& key, const std::stri
 // ==================== List ====================
 
 std::optional<long long> Client::LPush(const std::string& key, const std::vector<std::string>& values) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || values.empty()) { last_error_ = "not connected or empty values"; return std::nullopt; }
     std::vector<std::string> args = {"LPUSH", key};
     args.insert(args.end(), values.begin(), values.end());
@@ -594,6 +616,7 @@ std::optional<long long> Client::LPush(const std::string& key, const std::vector
 }
 
 std::optional<long long> Client::RPush(const std::string& key, const std::vector<std::string>& values) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || values.empty()) { last_error_ = "not connected or empty values"; return std::nullopt; }
     std::vector<std::string> args = {"RPUSH", key};
     args.insert(args.end(), values.begin(), values.end());
@@ -613,6 +636,7 @@ std::optional<long long> Client::RPush(const std::string& key, const std::vector
 }
 
 std::optional<std::string> Client::LPop(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "LPOP %s", key.c_str());
     if (!reply) { last_error_ = "lpop failed"; return std::nullopt; }
@@ -629,6 +653,7 @@ std::optional<std::string> Client::LPop(const std::string& key) {
 }
 
 std::optional<std::string> Client::RPop(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "RPOP %s", key.c_str());
     if (!reply) { last_error_ = "rpop failed"; return std::nullopt; }
@@ -645,6 +670,7 @@ std::optional<std::string> Client::RPop(const std::string& key) {
 }
 
 std::optional<long long> Client::LLen(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "LLEN %s", key.c_str());
     if (!reply) { last_error_ = "llen failed"; return std::nullopt; }
@@ -659,6 +685,7 @@ std::optional<long long> Client::LLen(const std::string& key) {
 }
 
 std::vector<std::string> Client::LRange(const std::string& key, long long start, long long stop) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return {}; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "LRANGE %s %lld %lld", key.c_str(), start, stop);
     if (!reply) { last_error_ = "lrange failed"; return {}; }
@@ -677,6 +704,7 @@ std::vector<std::string> Client::LRange(const std::string& key, long long start,
 }
 
 std::optional<std::string> Client::LIndex(const std::string& key, long long index) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "LINDEX %s %lld", key.c_str(), index);
     if (!reply) { last_error_ = "lindex failed"; return std::nullopt; }
@@ -693,6 +721,7 @@ std::optional<std::string> Client::LIndex(const std::string& key, long long inde
 }
 
 bool Client::LTrim(const std::string& key, long long start, long long stop) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return false; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "LTRIM %s %lld %lld", key.c_str(), start, stop);
     if (!reply) { last_error_ = "ltrim failed"; return false; }
@@ -703,6 +732,7 @@ bool Client::LTrim(const std::string& key, long long start, long long stop) {
 }
 
 std::optional<long long> Client::LRem(const std::string& key, long long count, const std::string& value) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "LREM %s %lld %s", key.c_str(), count, value.c_str());
     if (!reply) { last_error_ = "lrem failed"; return std::nullopt; }
@@ -719,6 +749,7 @@ std::optional<long long> Client::LRem(const std::string& key, long long count, c
 // ==================== Set ====================
 
 std::optional<long long> Client::SAdd(const std::string& key, const std::vector<std::string>& members) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || members.empty()) { last_error_ = "not connected or empty members"; return std::nullopt; }
     std::vector<std::string> args = {"SADD", key};
     args.insert(args.end(), members.begin(), members.end());
@@ -738,6 +769,7 @@ std::optional<long long> Client::SAdd(const std::string& key, const std::vector<
 }
 
 std::optional<long long> Client::SRem(const std::string& key, const std::vector<std::string>& members) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || members.empty()) { last_error_ = "not connected or empty members"; return std::nullopt; }
     std::vector<std::string> args = {"SREM", key};
     args.insert(args.end(), members.begin(), members.end());
@@ -757,6 +789,7 @@ std::optional<long long> Client::SRem(const std::string& key, const std::vector<
 }
 
 std::vector<std::string> Client::SMembers(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return {}; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "SMEMBERS %s", key.c_str());
     if (!reply) { last_error_ = "smembers failed"; return {}; }
@@ -775,6 +808,7 @@ std::vector<std::string> Client::SMembers(const std::string& key) {
 }
 
 bool Client::SIsMember(const std::string& key, const std::string& member) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return false; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "SISMEMBER %s %s", key.c_str(), member.c_str());
     if (!reply) { last_error_ = "sismember failed"; return false; }
@@ -789,6 +823,7 @@ bool Client::SIsMember(const std::string& key, const std::string& member) {
 }
 
 std::optional<long long> Client::SCard(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "SCARD %s", key.c_str());
     if (!reply) { last_error_ = "scard failed"; return std::nullopt; }
@@ -803,6 +838,7 @@ std::optional<long long> Client::SCard(const std::string& key) {
 }
 
 std::optional<std::string> Client::SPop(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "SPOP %s", key.c_str());
     if (!reply) { last_error_ = "spop failed"; return std::nullopt; }
@@ -821,6 +857,7 @@ std::optional<std::string> Client::SPop(const std::string& key) {
 // ==================== Sorted Set ====================
 
 std::optional<long long> Client::ZAdd(const std::string& key, const std::vector<std::pair<double, std::string>>& score_members) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || score_members.empty()) { last_error_ = "not connected or empty members"; return std::nullopt; }
     std::vector<std::string> args = {"ZADD", key};
     for (const auto& sm : score_members) {
@@ -843,6 +880,7 @@ std::optional<long long> Client::ZAdd(const std::string& key, const std::vector<
 }
 
 std::optional<long long> Client::ZRem(const std::string& key, const std::vector<std::string>& members) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || members.empty()) { last_error_ = "not connected or empty members"; return std::nullopt; }
     std::vector<std::string> args = {"ZREM", key};
     args.insert(args.end(), members.begin(), members.end());
@@ -862,6 +900,7 @@ std::optional<long long> Client::ZRem(const std::string& key, const std::vector<
 }
 
 std::vector<std::string> Client::ZRange(const std::string& key, long long start, long long stop) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return {}; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZRANGE %s %lld %lld", key.c_str(), start, stop);
     if (!reply) { last_error_ = "zrange failed"; return {}; }
@@ -880,6 +919,7 @@ std::vector<std::string> Client::ZRange(const std::string& key, long long start,
 }
 
 std::vector<std::string> Client::ZRevRange(const std::string& key, long long start, long long stop) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return {}; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZREVRANGE %s %lld %lld", key.c_str(), start, stop);
     if (!reply) { last_error_ = "zrevrange failed"; return {}; }
@@ -898,6 +938,7 @@ std::vector<std::string> Client::ZRevRange(const std::string& key, long long sta
 }
 
 std::vector<std::pair<std::string, double>> Client::ZRangeWithScores(const std::string& key, long long start, long long stop) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return {}; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZRANGE %s %lld %lld WITHSCORES", key.c_str(), start, stop);
     if (!reply) { last_error_ = "zrange withscores failed"; return {}; }
@@ -918,6 +959,7 @@ std::vector<std::pair<std::string, double>> Client::ZRangeWithScores(const std::
 }
 
 std::vector<std::pair<std::string, double>> Client::ZRevRangeWithScores(const std::string& key, long long start, long long stop) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return {}; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZREVRANGE %s %lld %lld WITHSCORES", key.c_str(), start, stop);
     if (!reply) { last_error_ = "zrevrange withscores failed"; return {}; }
@@ -938,6 +980,7 @@ std::vector<std::pair<std::string, double>> Client::ZRevRangeWithScores(const st
 }
 
 std::vector<std::string> Client::ZRangeByScore(const std::string& key, double min, double max) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return {}; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZRANGEBYSCORE %s %f %f", key.c_str(), min, max);
     if (!reply) { last_error_ = "zrangebyscore failed"; return {}; }
@@ -956,6 +999,7 @@ std::vector<std::string> Client::ZRangeByScore(const std::string& key, double mi
 }
 
 std::optional<long long> Client::ZRemRangeByRank(const std::string& key, long long start, long long stop) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZREMRANGEBYRANK %s %lld %lld", key.c_str(), start, stop);
     if (!reply) { last_error_ = "zremrangebyrank failed"; return std::nullopt; }
@@ -970,6 +1014,7 @@ std::optional<long long> Client::ZRemRangeByRank(const std::string& key, long lo
 }
 
 std::optional<long long> Client::ZRemRangeByScore(const std::string& key, double min, double max) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZREMRANGEBYSCORE %s %f %f", key.c_str(), min, max);
     if (!reply) { last_error_ = "zremrangebyscore failed"; return std::nullopt; }
@@ -984,6 +1029,7 @@ std::optional<long long> Client::ZRemRangeByScore(const std::string& key, double
 }
 
 std::optional<long long> Client::ZCard(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZCARD %s", key.c_str());
     if (!reply) { last_error_ = "zcard failed"; return std::nullopt; }
@@ -998,6 +1044,7 @@ std::optional<long long> Client::ZCard(const std::string& key) {
 }
 
 std::optional<double> Client::ZScore(const std::string& key, const std::string& member) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZSCORE %s %s", key.c_str(), member.c_str());
     if (!reply) { last_error_ = "zscore failed"; return std::nullopt; }
@@ -1014,6 +1061,7 @@ std::optional<double> Client::ZScore(const std::string& key, const std::string& 
 }
 
 std::optional<long long> Client::ZRank(const std::string& key, const std::string& member) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZRANK %s %s", key.c_str(), member.c_str());
     if (!reply) { last_error_ = "zrank failed"; return std::nullopt; }
@@ -1030,6 +1078,7 @@ std::optional<long long> Client::ZRank(const std::string& key, const std::string
 }
 
 std::optional<long long> Client::ZRevRank(const std::string& key, const std::string& member) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZREVRANK %s %s", key.c_str(), member.c_str());
     if (!reply) { last_error_ = "zrevrank failed"; return std::nullopt; }
@@ -1046,6 +1095,7 @@ std::optional<long long> Client::ZRevRank(const std::string& key, const std::str
 }
 
 std::optional<double> Client::ZIncrBy(const std::string& key, double increment, const std::string& member) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "ZINCRBY %s %f %s", key.c_str(), increment, member.c_str());
     if (!reply) { last_error_ = "zincrby failed"; return std::nullopt; }
@@ -1062,6 +1112,7 @@ std::optional<double> Client::ZIncrBy(const std::string& key, double increment, 
 // ==================== Key ====================
 
 bool Client::Exists(const std::vector<std::string>& keys) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected() || keys.empty()) { last_error_ = "not connected or empty keys"; return false; }
     std::vector<std::string> args = {"EXISTS"};
     args.insert(args.end(), keys.begin(), keys.end());
@@ -1077,6 +1128,7 @@ bool Client::Exists(const std::vector<std::string>& keys) {
 }
 
 bool Client::Expire(const std::string& key, int ttl_sec) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return false; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "EXPIRE %s %d", key.c_str(), ttl_sec);
     if (!reply) { last_error_ = "expire failed"; return false; }
@@ -1091,6 +1143,7 @@ bool Client::Expire(const std::string& key, int ttl_sec) {
 }
 
 std::optional<long long> Client::TTL(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "TTL %s", key.c_str());
     if (!reply) { last_error_ = "ttl failed"; return std::nullopt; }
@@ -1105,6 +1158,7 @@ std::optional<long long> Client::TTL(const std::string& key) {
 }
 
 bool Client::Persist(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return false; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "PERSIST %s", key.c_str());
     if (!reply) { last_error_ = "persist failed"; return false; }
@@ -1119,6 +1173,7 @@ bool Client::Persist(const std::string& key) {
 }
 
 bool Client::Rename(const std::string& key, const std::string& new_key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return false; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "RENAME %s %s", key.c_str(), new_key.c_str());
     if (!reply) { last_error_ = "rename failed"; return false; }
@@ -1129,6 +1184,7 @@ bool Client::Rename(const std::string& key, const std::string& new_key) {
 }
 
 std::optional<std::string> Client::Type(const std::string& key) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return std::nullopt; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "TYPE %s", key.c_str());
     if (!reply) { last_error_ = "type failed"; return std::nullopt; }
@@ -1143,6 +1199,7 @@ std::optional<std::string> Client::Type(const std::string& key) {
 }
 
 std::vector<std::string> Client::Keys(const std::string& pattern) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     if (!IsConnected()) { last_error_ = "not connected"; return {}; }
     redisReply* reply = (redisReply*)redisCommand(impl_->ctx, "KEYS %s", pattern.c_str());
     if (!reply) { last_error_ = "keys failed"; return {}; }
@@ -1163,12 +1220,14 @@ std::vector<std::string> Client::Keys(const std::string& pattern) {
 // ==================== Pipeline ====================
 
 Pipeline Client::NewPipeline() {
-    return Pipeline(impl_ ? impl_->ctx : nullptr);
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
+    return Pipeline(impl_ ? impl_->ctx : nullptr, &impl_->mtx);
 }
 
 // ==================== 通用命令执行 ====================
 
 Reply Client::Command(const char* fmt, ...) {
+    std::lock_guard<std::recursive_mutex> lk(impl_->mtx);
     Reply r;
     if (!IsConnected()) { last_error_ = "not connected"; r.Type = ReplyType::Error; return r; }
     va_list ap;
@@ -1184,10 +1243,31 @@ Reply Client::Command(const char* fmt, ...) {
 
 // ==================== Pipeline 实现 ====================
 
-Pipeline::Pipeline(redisContext* ctx) : ctx_(ctx) {}
+Pipeline::Pipeline(redisContext* ctx, std::recursive_mutex* mtx) : ctx_(ctx), mtx_(mtx) {}
+
+Pipeline::Pipeline(Pipeline&& other) noexcept
+    : ctx_(other.ctx_), mtx_(other.mtx_), last_error_(std::move(other.last_error_)), count_(other.count_) {
+    other.ctx_ = nullptr;
+    other.mtx_ = nullptr;
+    other.count_ = 0;
+}
+
+Pipeline& Pipeline::operator=(Pipeline&& other) noexcept {
+    if (this != &other) {
+        ctx_ = other.ctx_;
+        mtx_ = other.mtx_;
+        last_error_ = std::move(other.last_error_);
+        count_ = other.count_;
+        other.ctx_ = nullptr;
+        other.mtx_ = nullptr;
+        other.count_ = 0;
+    }
+    return *this;
+}
 
 bool Pipeline::AppendCommand(const char* fmt, ...) {
     if (!ctx_) { last_error_ = "null context"; return false; }
+    std::lock_guard<std::recursive_mutex> lk(*mtx_);
     va_list ap;
     va_start(ap, fmt);
     int ret = redisvAppendCommand(ctx_, fmt, ap);
@@ -1202,6 +1282,7 @@ bool Pipeline::AppendCommand(const char* fmt, ...) {
 
 bool Pipeline::AppendCommandArgv(int argc, const char** argv, const size_t* argvlen) {
     if (!ctx_) { last_error_ = "null context"; return false; }
+    std::lock_guard<std::recursive_mutex> lk(*mtx_);
     int ret = redisAppendCommandArgv(ctx_, argc, argv, argvlen);
     if (ret != REDIS_OK) {
         last_error_ = ctx_->errstr ? ctx_->errstr : "append command argv failed";
@@ -1214,6 +1295,7 @@ bool Pipeline::AppendCommandArgv(int argc, const char** argv, const size_t* argv
 std::vector<Reply> Pipeline::Exec() {
     std::vector<Reply> results;
     if (!ctx_ || count_ == 0) { last_error_ = "empty pipeline"; return results; }
+    std::lock_guard<std::recursive_mutex> lk(*mtx_);
     results.reserve(count_);
     for (size_t i = 0; i < count_; ++i) {
         redisReply* reply = nullptr;
@@ -1231,7 +1313,7 @@ std::vector<Reply> Pipeline::Exec() {
 
 void Pipeline::Clear() {
     if (!ctx_ || count_ == 0) return;
-    // 消费掉所有已追加但尚未读取的回复
+    std::lock_guard<std::recursive_mutex> lk(*mtx_);
     for (size_t i = 0; i < count_; ++i) {
         redisReply* reply = nullptr;
         redisGetReply(ctx_, (void**)&reply);
