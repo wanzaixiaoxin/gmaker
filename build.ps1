@@ -7,6 +7,7 @@ $services = @(
     "login-go",
     "biz-go",
     "chat-go",
+    "bot-go",
     "logstats-go"
 )
 

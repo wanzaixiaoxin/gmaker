@@ -15,7 +15,7 @@ import (
 
 // LoginHandler HTTP 登录/注册处理器
 type LoginHandler struct {
-	PlayerSvc    *service.PlayerService
+	AccountSvc   *service.AccountService
 	GatewayAddr  string
 	GatewayAddrs []string
 	Log          *logger.Logger
@@ -99,22 +99,22 @@ func (h *LoginHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	// 检查账号是否已存在
 	h.Log.Infow("register request", map[string]interface{}{"account": req.Account, "client_ip": r.RemoteAddr})
 
-	existing, _ := h.PlayerSvc.QueryPlayerByAccount(ctx, req.Account)
+	existing, _ := h.AccountSvc.QueryAccountByAccount(ctx, req.Account)
 	if existing != nil {
 		h.Log.Infow("register account exists", map[string]interface{}{"account": req.Account, "duration_ms": time.Since(start).Milliseconds()})
 		writeJSON(w, http.StatusOK, LoginRes{Code: int(errors.ACCOUNT_EXISTS), Msg: "account already exists"})
 		return
 	}
 
-	player, err := h.PlayerSvc.CreatePlayer(ctx, req.Account, req.Password)
+	base, err := h.AccountSvc.CreateAccount(ctx, req.Account, req.Password)
 	if err != nil {
-		h.Log.Errorw("create player failed", map[string]interface{}{"account": req.Account, "error": err.Error()})
+		h.Log.Errorw("create account failed", map[string]interface{}{"account": req.Account, "error": err.Error()})
 		writeJSON(w, http.StatusOK, LoginRes{Code: int(errors.INTERNAL_ERROR), Msg: "internal error"})
 		return
 	}
 
-	h.Log.Infow("register success", map[string]interface{}{"account": req.Account, "player_id": player.PlayerId, "duration_ms": time.Since(start).Milliseconds()})
-	writeJSON(w, http.StatusOK, LoginRes{Code: 0, Msg: "ok", PlayerID: player.PlayerId})
+	h.Log.Infow("register success", map[string]interface{}{"account": req.Account, "player_id": base.PlayerId, "duration_ms": time.Since(start).Milliseconds()})
+	writeJSON(w, http.StatusOK, LoginRes{Code: 0, Msg: "ok", PlayerID: base.PlayerId})
 }
 
 // HandleLogin 处理登录
@@ -146,43 +146,43 @@ func (h *LoginHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	h.Log.Infow("login request", map[string]interface{}{"account": req.Account, "client_ip": r.RemoteAddr})
 
-	player, err := h.PlayerSvc.QueryPlayerByAccount(ctx, req.Account)
+	acct, err := h.AccountSvc.QueryAccountByAccount(ctx, req.Account)
 	if err != nil {
-		h.Log.Infow("login player not found", map[string]interface{}{"account": req.Account, "duration_ms": time.Since(start).Milliseconds()})
+		h.Log.Infow("login account not found", map[string]interface{}{"account": req.Account, "duration_ms": time.Since(start).Milliseconds()})
 		writeJSON(w, http.StatusOK, LoginRes{Code: int(errors.AUTH_FAILED), Msg: "account or password incorrect"})
 		return
 	}
 
 	// 验证密码（支持 Argon2id + 旧 SHA256 自动升级）
-	ok, needUpgrade := service.VerifyPassword(req.Password, player.Password)
+	ok, needUpgrade := service.VerifyPassword(req.Password, acct.Password)
 	if !ok {
-		h.Log.Infow("login password wrong", map[string]interface{}{"account": req.Account, "player_id": player.PlayerId, "duration_ms": time.Since(start).Milliseconds()})
+		h.Log.Infow("login password wrong", map[string]interface{}{"account": req.Account, "player_id": acct.PlayerId, "duration_ms": time.Since(start).Milliseconds()})
 		writeJSON(w, http.StatusOK, LoginRes{Code: int(errors.AUTH_FAILED), Msg: "account or password incorrect"})
 		return
 	}
 	// 如果是旧 SHA256 密码，自动升级为 Argon2id
 	if needUpgrade {
-		h.Log.Infow("auto upgrading password hash", map[string]interface{}{"account": req.Account, "player_id": player.PlayerId})
-		_ = h.PlayerSvc.UpdatePassword(ctx, player.PlayerId, req.Password)
+		h.Log.Infow("auto upgrading password hash", map[string]interface{}{"account": req.Account, "player_id": acct.PlayerId})
+		_ = h.AccountSvc.UpdatePassword(ctx, acct.PlayerId, req.Password)
 	}
 
 	accessToken := service.GenerateToken()
 	refreshToken := service.GenerateRefreshToken()
 	expireAt := uint64(time.Now().Add(15 * time.Minute).Unix())
-	if err := h.PlayerSvc.SetToken(ctx, player.PlayerId, accessToken, 15*60); err != nil {
-		h.Log.Errorw("set access token failed", map[string]interface{}{"player_id": player.PlayerId, "error": err.Error()})
+	if err := h.AccountSvc.SetToken(ctx, acct.PlayerId, accessToken, 15*60); err != nil {
+		h.Log.Errorw("set access token failed", map[string]interface{}{"player_id": acct.PlayerId, "error": err.Error()})
 	}
-	if err := h.PlayerSvc.SetRefreshToken(ctx, player.PlayerId, refreshToken, 7*24*3600); err != nil {
-		h.Log.Errorw("set refresh token failed", map[string]interface{}{"player_id": player.PlayerId, "error": err.Error()})
+	if err := h.AccountSvc.SetRefreshToken(ctx, acct.PlayerId, refreshToken, 7*24*3600); err != nil {
+		h.Log.Errorw("set refresh token failed", map[string]interface{}{"player_id": acct.PlayerId, "error": err.Error()})
 	}
 
-	h.Log.Infow("login success", map[string]interface{}{"account": req.Account, "player_id": player.PlayerId, "duration_ms": time.Since(start).Milliseconds()})
+	h.Log.Infow("login success", map[string]interface{}{"account": req.Account, "player_id": acct.PlayerId, "duration_ms": time.Since(start).Milliseconds()})
 	writeJSON(w, http.StatusOK, LoginRes{
 		Code:         int(errors.OK),
 		Msg:          "ok",
 		Token:        accessToken,
 		RefreshToken: refreshToken,
-		PlayerID:     player.PlayerId,
+		PlayerID:     acct.PlayerId,
 		ExpireAt:     expireAt,
 		GatewayAddr:  h.GatewayAddr,
 		GatewayAddrs: h.GatewayAddrs,
@@ -214,7 +214,7 @@ func (h *LoginHandler) HandleVerifyToken(w http.ResponseWriter, r *http.Request)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	storedToken, err := h.PlayerSvc.GetToken(ctx, playerID)
+	storedToken, err := h.AccountSvc.GetToken(ctx, playerID)
 	if err != nil || storedToken != token {
 		h.Log.Infow("verify token failed", map[string]interface{}{"player_id": playerID, "error": fmt.Sprintf("%v", err), "duration_ms": time.Since(start).Milliseconds()})
 		writeJSON(w, http.StatusOK, LoginRes{Code: int(errors.TOKEN_INVALID), Msg: "invalid token"})
@@ -246,7 +246,7 @@ func (h *LoginHandler) HandleRefreshToken(w http.ResponseWriter, r *http.Request
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	storedToken, err := h.PlayerSvc.GetRefreshToken(ctx, req.PlayerID)
+	storedToken, err := h.AccountSvc.GetRefreshToken(ctx, req.PlayerID)
 	if err != nil || storedToken != req.RefreshToken {
 		h.Log.Infow("refresh token failed", map[string]interface{}{"player_id": req.PlayerID, "error": fmt.Sprintf("%v", err), "duration_ms": time.Since(start).Milliseconds()})
 		writeJSON(w, http.StatusOK, RefreshRes{Code: int(errors.TOKEN_INVALID), Msg: "invalid refresh token"})
@@ -256,8 +256,8 @@ func (h *LoginHandler) HandleRefreshToken(w http.ResponseWriter, r *http.Request
 	newAccessToken := service.GenerateToken()
 	newRefreshToken := service.GenerateRefreshToken()
 	expireAt := uint64(time.Now().Add(15 * time.Minute).Unix())
-	_ = h.PlayerSvc.SetToken(ctx, req.PlayerID, newAccessToken, 15*60)
-	_ = h.PlayerSvc.SetRefreshToken(ctx, req.PlayerID, newRefreshToken, 7*24*3600)
+	_ = h.AccountSvc.SetToken(ctx, req.PlayerID, newAccessToken, 15*60)
+	_ = h.AccountSvc.SetRefreshToken(ctx, req.PlayerID, newRefreshToken, 7*24*3600)
 
 	h.Log.Infow("refresh token success", map[string]interface{}{"player_id": req.PlayerID, "duration_ms": time.Since(start).Milliseconds()})
 	writeJSON(w, http.StatusOK, RefreshRes{

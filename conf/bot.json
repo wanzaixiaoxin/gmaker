@@ -1,0 +1,31 @@
+{
+  "service": {
+    "service_type": "bot",
+    "node_id": "bot-1",
+    "log_level": "info",
+    "log_file": "",
+    "admin_port": 8085
+  },
+  "gateway": {
+    "addr": "127.0.0.1:9003",
+    "master_key": "bot-internal-master-key-change-in-production"
+  },
+  "dbproxy": {
+    "nodes": [
+      {"host": "127.0.0.1", "port": 5001}
+    ]
+  },
+  "bots": {
+    "room_id": 307841900977594368,
+    "message_interval_sec": 2,
+    "messages": [
+      "hello world",
+      "hi everyone",
+      "bot is online",
+      "testing chat room",
+      "anyone here?"
+    ],
+    "auto_start": true,
+    "use_ws": true
+  }
+}

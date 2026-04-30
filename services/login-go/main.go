@@ -162,22 +162,22 @@ func main() {
 	}
 
 	// 初始化账号查询缓存（Cache-Aside，TTL 5分钟）
-	var accountCache *cache.Cache[*service.PlayerInfo]
+	var accountCache *cache.Cache[*service.AccountInfo]
 	if redisClient != nil {
 		store := cache.NewRedisStore(redisClient)
-		accountCache = cache.NewCache[*service.PlayerInfo](store, cache.JSONCodec[*service.PlayerInfo]{}, 5*time.Minute,
-			cache.WithPrefix[*service.PlayerInfo]("login:account"),
-			cache.WithNilTTL[*service.PlayerInfo](60*time.Second),
+		accountCache = cache.NewCache[*service.AccountInfo](store, cache.JSONCodec[*service.AccountInfo]{}, 5*time.Minute,
+			cache.WithPrefix[*service.AccountInfo]("login:account"),
+			cache.WithNilTTL[*service.AccountInfo](60*time.Second),
 		)
 		log.Info("Login account cache initialized")
 	}
 
-	playerSvc := service.NewPlayerService(dbClient, redisClient, idGen, accountCache, log)
+	accountSvc := service.NewAccountService(dbClient, redisClient, idGen, accountCache, log)
 	if dbClient != nil {
-		if err := service.EnsurePlayerTable(playerSvc); err != nil {
-			log.Warnf("ensure player table failed: %v", err)
+		if err := service.EnsureAccountTable(accountSvc); err != nil {
+			log.Warnf("ensure account table failed: %v", err)
 		} else {
-			log.Info("Login ensured players table")
+			log.Info("Login ensured accounts table")
 		}
 	}
 
@@ -190,7 +190,7 @@ func main() {
 
 	// HTTP handler
 	h := &handler.LoginHandler{
-		PlayerSvc:    playerSvc,
+		AccountSvc:   accountSvc,
 		GatewayAddr:  gatewayAddr,
 		GatewayAddrs: gatewayAddrs,
 		Log:          log,

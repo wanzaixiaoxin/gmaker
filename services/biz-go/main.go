@@ -47,6 +47,9 @@ type BizConfig struct {
 		Password string   `json:"password"`
 		PoolSize int      `json:"pool_size"`
 	} `json:"redis"`
+	Bot struct {
+		MasterKey string `json:"master_key"`
+	} `json:"bot"`
 }
 
 func main() {
@@ -174,9 +177,9 @@ func main() {
 		log.Warnf("connect dbproxy failed: %v, running without dbproxy", err)
 	} else {
 		log.Info("Biz connected to dbproxy")
-		playerSvc = service.NewPlayerService(dbClient, redisClient, idGen, log)
-		if err := service.EnsurePlayerTable(playerSvc); err != nil {
-			log.Warnf("ensure player table failed: %v, player service disabled", err)
+		playerSvc = service.NewPlayerService(dbClient, redisClient, idGen, log, cfg.Bot.MasterKey)
+		if err := service.EnsurePlayerProfileTable(playerSvc); err != nil {
+			log.Warnf("ensure player profile table failed: %v, player service disabled", err)
 		}
 	}
 

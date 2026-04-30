@@ -146,22 +146,26 @@ func handlePlayerBind(conn *net.TCPConn, pkt *net.Packet, svc *service.PlayerSer
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	// 验证 Token（查 Redis）
-	ok, err := svc.VerifyToken(ctx, req.GetPlayerId(), req.GetToken())
-	if err != nil {
-		svc.Log.WithTrace(traceID).Warnf("player_bind token verify error: player_id=%d, err=%v", req.GetPlayerId(), err)
-		// Redis 不可用返回明确错误，避免客户端误以为是 token 错误
-		if err.Error() == "redis not available" {
-			sendPlayerBindRes(conn, pkt.SeqID, 2, "redis not available", gatewayConnID)
-		} else {
-			sendPlayerBindRes(conn, pkt.SeqID, 1, "invalid token", gatewayConnID)
+	// 验证 Token（查 Redis），若匹配 bot_master_key 则跳过校验直接放行
+	if svc.BotMasterKey != "" && req.GetToken() == svc.BotMasterKey {
+		svc.Log.WithTrace(traceID).Infof("player_bind bot_master_key matched: player_id=%d", req.GetPlayerId())
+	} else {
+		ok, err := svc.VerifyToken(ctx, req.GetPlayerId(), req.GetToken())
+		if err != nil {
+			svc.Log.WithTrace(traceID).Warnf("player_bind token verify error: player_id=%d, err=%v", req.GetPlayerId(), err)
+			// Redis 不可用返回明确错误，避免客户端误以为是 token 错误
+			if err.Error() == "redis not available" {
+				sendPlayerBindRes(conn, pkt.SeqID, 2, "redis not available", gatewayConnID)
+			} else {
+				sendPlayerBindRes(conn, pkt.SeqID, 1, "invalid token", gatewayConnID)
+			}
+			return
 		}
-		return
-	}
-	if !ok {
-		svc.Log.WithTrace(traceID).Warnf("player_bind token mismatch: player_id=%d", req.GetPlayerId())
-		sendPlayerBindRes(conn, pkt.SeqID, 1, "invalid token", gatewayConnID)
-		return
+		if !ok {
+			svc.Log.WithTrace(traceID).Warnf("player_bind token mismatch: player_id=%d", req.GetPlayerId())
+			sendPlayerBindRes(conn, pkt.SeqID, 1, "invalid token", gatewayConnID)
+			return
+		}
 	}
 
 	svc.Log.WithTrace(traceID).Infof("player_bind success: player_id=%d", req.GetPlayerId())

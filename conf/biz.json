@@ -18,5 +18,8 @@
     "addrs": ["127.0.0.1:6379"],
     "password": "",
     "pool_size": 20
+  },
+  "bot": {
+    "master_key": "bot-internal-master-key-change-in-production"
   }
 }

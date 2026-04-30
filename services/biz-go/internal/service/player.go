@@ -26,41 +26,23 @@ const (
 	cmdMySQLExecRes  = uint32(protocol.CmdDBProxyInternal_CMD_DB_INT_MYSQL_EXEC_RES)
 )
 
-// PlayerService 玩家业务层（与 DBProxy 解耦）
+// PlayerService 玩家业务层（只操作 player_profiles 表）
 type PlayerService struct {
-	DB    *dbproxy.Client
-	Redis *redis.Client
-	IDGen *idgen.Snowflake
-	Log   *logger.Logger
+	DB           *dbproxy.Client
+	Redis        *redis.Client
+	IDGen        *idgen.Snowflake
+	Log          *logger.Logger
+	BotMasterKey string // 机器人内部绑定密钥，若 token 等于此值则跳过 Redis 校验
 }
 
 // NewPlayerService 创建玩家服务
-func NewPlayerService(db *dbproxy.Client, r *redis.Client, idGen *idgen.Snowflake, log *logger.Logger) *PlayerService {
-	return &PlayerService{DB: db, Redis: r, IDGen: idGen, Log: log}
+func NewPlayerService(db *dbproxy.Client, r *redis.Client, idGen *idgen.Snowflake, log *logger.Logger, botMasterKey string) *PlayerService {
+	return &PlayerService{DB: db, Redis: r, IDGen: idGen, Log: log, BotMasterKey: botMasterKey}
 }
 
-// QueryPlayerByAccount 根据账号查询玩家
-func (s *PlayerService) QueryPlayerByAccount(ctx context.Context, account string) (*bizpb.PlayerBase, error) {
-	sqlStr := "SELECT player_id, nickname, level, exp, coin, diamond, create_at, login_at FROM players WHERE account = ?"
-	req := &dbproxypb.MySQLQueryReq{Uid: 1, Sql: sqlStr, Args: []string{account}}
-	data, _ := proto.Marshal(req)
-	resPkt, err := s.DB.Call(ctx, cmdMySQLQuery, data)
-	if err != nil {
-		return nil, err
-	}
-	var res dbproxypb.MySQLQueryRes
-	if err := proto.Unmarshal(resPkt.Payload, &res); err != nil {
-		return nil, err
-	}
-	if !res.Ok || len(res.Rows) == 0 {
-		return nil, fmt.Errorf("player not found")
-	}
-	return parsePlayerRow(res.Rows[0])
-}
-
-// QueryPlayerByID 根据 ID 查询玩家
+// QueryPlayerByID 根据 ID 查询玩家资料（自动延迟初始化）
 func (s *PlayerService) QueryPlayerByID(ctx context.Context, playerID uint64) (*bizpb.PlayerBase, error) {
-	sqlStr := "SELECT player_id, nickname, level, exp, coin, diamond, create_at, login_at FROM players WHERE player_id = ?"
+	sqlStr := "SELECT player_id, nickname, level, exp, coin, diamond, create_at, login_at FROM player_profiles WHERE player_id = ?"
 	req := &dbproxypb.MySQLQueryReq{Uid: playerID, Sql: sqlStr, Args: []string{strconv.FormatUint(playerID, 10)}}
 	data, _ := proto.Marshal(req)
 	resPkt, err := s.DB.Call(ctx, cmdMySQLQuery, data)
@@ -72,24 +54,54 @@ func (s *PlayerService) QueryPlayerByID(ctx context.Context, playerID uint64) (*
 		return nil, err
 	}
 	if !res.Ok || len(res.Rows) == 0 {
-		return nil, fmt.Errorf("player not found")
+		// 延迟初始化：profile 不存在时自动创建默认值
+		return s.initDefaultProfile(ctx, playerID)
 	}
-	return parsePlayerRow(res.Rows[0])
+	return parsePlayerRow(res.Rows[0]), nil
 }
 
-// CreatePlayer 创建玩家
-func (s *PlayerService) CreatePlayer(ctx context.Context, account, password string) (*bizpb.PlayerBase, error) {
+// initDefaultProfile 为尚未建立 profile 的玩家插入默认资料
+func (s *PlayerService) initDefaultProfile(ctx context.Context, playerID uint64) (*bizpb.PlayerBase, error) {
 	now := uint64(time.Now().Unix())
-	playerIDRaw, err := s.IDGen.NextID()
-	if err != nil {
-		return nil, fmt.Errorf("generate player id failed: %w", err)
-	}
-	playerID := uint64(playerIDRaw)
-	sqlStr := "INSERT INTO players (player_id, account, password, nickname, level, exp, coin, diamond, create_at, login_at) VALUES (?, ?, ?, ?, 1, 0, 0, 0, ?, ?)"
+	sqlStr := "INSERT IGNORE INTO player_profiles (player_id, nickname, level, exp, coin, diamond, create_at, login_at) VALUES (?, ?, 1, 0, 0, 0, ?, ?)"
 	req := &dbproxypb.MySQLExecReq{
 		Uid:  playerID,
 		Sql:  sqlStr,
-		Args: []string{strconv.FormatUint(playerID, 10), account, password, account, strconv.FormatUint(now, 10), strconv.FormatUint(now, 10)},
+		Args: []string{strconv.FormatUint(playerID, 10), fmt.Sprintf("Player%d", playerID), strconv.FormatUint(now, 10), strconv.FormatUint(now, 10)},
+	}
+	data, _ := proto.Marshal(req)
+	resPkt, err := s.DB.Call(ctx, cmdMySQLExec, data)
+	if err != nil {
+		return nil, err
+	}
+	var res dbproxypb.MySQLExecRes
+	if err := proto.Unmarshal(resPkt.Payload, &res); err != nil {
+		return nil, err
+	}
+	// 无论 INSERT IGNORE 是否实际插入，都返回默认值
+	return &bizpb.PlayerBase{
+		PlayerId: playerID,
+		Nickname: fmt.Sprintf("Player%d", playerID),
+		Level:    1,
+		Exp:      0,
+		Coin:     0,
+		Diamond:  0,
+		CreateAt: now,
+		LoginAt:  now,
+	}, nil
+}
+
+// CreatePlayer 创建玩家资料（用于内部/NPC 创建或延迟初始化兜底）
+func (s *PlayerService) CreatePlayer(ctx context.Context, playerID uint64, nickname string) (*bizpb.PlayerBase, error) {
+	now := uint64(time.Now().Unix())
+	if nickname == "" {
+		nickname = fmt.Sprintf("Player%d", playerID)
+	}
+	sqlStr := "INSERT INTO player_profiles (player_id, nickname, level, exp, coin, diamond, create_at, login_at) VALUES (?, ?, 1, 0, 0, 0, ?, ?)"
+	req := &dbproxypb.MySQLExecReq{
+		Uid:  playerID,
+		Sql:  sqlStr,
+		Args: []string{strconv.FormatUint(playerID, 10), nickname, strconv.FormatUint(now, 10), strconv.FormatUint(now, 10)},
 	}
 	data, _ := proto.Marshal(req)
 	resPkt, err := s.DB.Call(ctx, cmdMySQLExec, data)
@@ -105,7 +117,7 @@ func (s *PlayerService) CreatePlayer(ctx context.Context, account, password stri
 	}
 	return &bizpb.PlayerBase{
 		PlayerId: playerID,
-		Nickname: account,
+		Nickname: nickname,
 		Level:    1,
 		Exp:      0,
 		Coin:     0,
@@ -115,7 +127,7 @@ func (s *PlayerService) CreatePlayer(ctx context.Context, account, password stri
 	}, nil
 }
 
-// UpdatePlayer 更新玩家数据
+// UpdatePlayer 更新玩家资料
 func (s *PlayerService) UpdatePlayer(ctx context.Context, playerID uint64, nickname string, coin uint64, diamond uint64) error {
 	parts := []string{}
 	args := []string{}
@@ -130,7 +142,7 @@ func (s *PlayerService) UpdatePlayer(ctx context.Context, playerID uint64, nickn
 	parts = append(parts, "login_at = ?")
 	args = append(args, strconv.FormatUint(uint64(time.Now().Unix()), 10))
 
-	sqlStr := fmt.Sprintf("UPDATE players SET %s WHERE player_id = ?", strings.Join(parts, ", "))
+	sqlStr := fmt.Sprintf("UPDATE player_profiles SET %s WHERE player_id = ?", strings.Join(parts, ", "))
 	args = append(args, strconv.FormatUint(playerID, 10))
 
 	req := &dbproxypb.MySQLExecReq{Uid: playerID, Sql: sqlStr, Args: args}
@@ -187,11 +199,9 @@ func (s *PlayerService) GetPlayerRooms(ctx context.Context, playerID uint64) ([]
 		if rid == 0 {
 			continue
 		}
-		// 查询房间基本信息（从 Redis room info）
 		infoKey := fmt.Sprintf("chat:room:%d:info", rid)
 		infoStr, err := s.Redis.Get(ctx, infoKey)
 		if err != nil || infoStr == "" {
-			// Redis 中没有，跳过（或可从 MySQL 查，简化处理）
 			continue
 		}
 		var info chatpb.ChatRoomInfo
@@ -202,20 +212,19 @@ func (s *PlayerService) GetPlayerRooms(ctx context.Context, playerID uint64) ([]
 	return rooms, nil
 }
 
-// EnsurePlayerTable 确保 players 表存在
-func EnsurePlayerTable(svc *PlayerService) error {
+// EnsurePlayerProfileTable 确保 player_profiles 表存在
+func EnsurePlayerProfileTable(svc *PlayerService) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	sqlStr := `CREATE TABLE IF NOT EXISTS players (
+	sqlStr := `CREATE TABLE IF NOT EXISTS player_profiles (
 		player_id BIGINT PRIMARY KEY,
-		account VARCHAR(64) UNIQUE NOT NULL,
-		password VARCHAR(128) NOT NULL,
 		nickname VARCHAR(64) NOT NULL,
 		level INT DEFAULT 1,
 		exp BIGINT DEFAULT 0,
 		coin BIGINT DEFAULT 0,
 		diamond BIGINT DEFAULT 0,
+		is_bot TINYINT DEFAULT 0,
 		create_at BIGINT DEFAULT 0,
 		login_at BIGINT DEFAULT 0
 	)`
@@ -235,7 +244,7 @@ func EnsurePlayerTable(svc *PlayerService) error {
 	return nil
 }
 
-func parsePlayerRow(row *dbproxypb.MySQLRow) (*bizpb.PlayerBase, error) {
+func parsePlayerRow(row *dbproxypb.MySQLRow) *bizpb.PlayerBase {
 	m := make(map[string]string)
 	for _, col := range row.Columns {
 		m[col.Name] = col.Value
@@ -256,5 +265,5 @@ func parsePlayerRow(row *dbproxypb.MySQLRow) (*bizpb.PlayerBase, error) {
 		Diamond:  dia,
 		CreateAt: cat,
 		LoginAt:  lat,
-	}, nil
+	}
 }
