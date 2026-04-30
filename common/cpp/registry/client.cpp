@@ -2,6 +2,7 @@
 #include "registry.pb.h"
 #include <iostream>
 #include <thread>
+#include <chrono>
 
 namespace gs {
 namespace registry {
@@ -222,7 +223,6 @@ bool RegistryClient::Call(uint32_t cmd_id, const std::vector<uint8_t>& payload,
     pkt.header.flags  = static_cast<uint32_t>(net::Flag::RPC_REQ);
     pkt.payload = net::Buffer::FromVector(payload);
 
-    // 发送重试：异步连接可能尚未就绪，最多重试 5 次
     bool sent = false;
     for (int retry = 0; retry < 5; ++retry) {
         if (pool_->SendPacket(pkt)) {
@@ -238,11 +238,30 @@ bool RegistryClient::Call(uint32_t cmd_id, const std::vector<uint8_t>& payload,
         return false;
     }
 
-    if (fut.wait_for(timeout) != std::future_status::ready) {
-        std::lock_guard<std::mutex> lk(pending_mtx_);
-        pending_.erase(seq);
-        std::cerr << "RegistryClient::Call: timeout" << std::endl;
-        return false;
+    if (loop_ && loop_->IsInLoopThread()) {
+        auto deadline = std::chrono::steady_clock::now() + timeout;
+        bool got_response = false;
+        while (std::chrono::steady_clock::now() < deadline) {
+            loop_->PumpOnce();
+            if (fut.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+                got_response = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if (!got_response) {
+            std::lock_guard<std::mutex> lk(pending_mtx_);
+            pending_.erase(seq);
+            std::cerr << "RegistryClient::Call: timeout" << std::endl;
+            return false;
+        }
+    } else {
+        if (fut.wait_for(timeout) != std::future_status::ready) {
+            std::lock_guard<std::mutex> lk(pending_mtx_);
+            pending_.erase(seq);
+            std::cerr << "RegistryClient::Call: timeout" << std::endl;
+            return false;
+        }
     }
 
     try {

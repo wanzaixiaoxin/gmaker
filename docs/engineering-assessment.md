@@ -35,18 +35,18 @@
 | ~~严重~~ | ~~TCP Server 使用 `dup()` 传递 socket~~ **❌ 不属实** — `dup()` 创建独立文件描述符，关闭原 fd 不影响副本；Windows 侧 `WSADuplicateSocketW` 同理。代码逻辑正确，不存在"数据损坏或崩溃"风险。 | `common/cpp/net/async/tcp_server.cpp:149` | 已验证，非 Bug |
 | **严重** | Redis 客户端非线程安全，无锁保护，多线程直接使用会数据竞争 | `common/cpp/redis/redis_client.hpp` | **✅ 已修复** — 添加 `std::recursive_mutex` 保护所有公共方法 |
 | ~~严重~~ | ~~`WriteReq` 单连接复用~~ **❌ 不属实** — `writing_` 原子标志 + 事件循环单线程执行 + `OnWriteDone` 链式调度确保同一时刻只有一个 `uv_write` 在进行。`WriteReq` 复用是有意的性能优化，不存在竞争条件。 | `common/cpp/net/async/tcp_connection.cpp:431` | 已验证，非 Bug |
-| **高** | `RegistryClient::Call()` 在事件循环线程内阻塞等待 `future`（最长 3s），会卡住整个 loop | `common/cpp/registry/client.cpp:241` | 待修复 |
-| **高** | 事件循环析构时若线程仍在运行，触发 use-after-free 或死锁 | `common/cpp/net/async/event_loop.cpp:22` | 待修复 |
+| **高** | `RegistryClient::Call()` 在事件循环线程内阻塞等待 `future`（最长 3s），会卡住整个 loop | `common/cpp/registry/client.cpp:207` | **✅ 已修复** — 检测 `IsInLoopThread()`，若在 loop 线程内则用 `PumpOnce()` 非阻塞轮询，不再阻塞 loop |
+| **高** | 事件循环析构时若线程仍在运行，触发 use-after-free 或死锁 | `common/cpp/net/async/event_loop.cpp:22` | **✅ 已修复** — 添加 `running` 原子标志，析构时若线程仍在跑则 `Stop()` + 最多等待 10s |
 | **中** | `reinterpret_cast<uint64_t>(node)` 作 conn_id，重启后可能碰撞 | `common/cpp/net/async/upstream.cpp:180` | 待修复 |
 | **中** | Histogram 每次 Observe 全局加锁，高并发瓶颈 | `common/cpp/metrics/metrics.hpp:45` | 待修复 |
 | **中** | Logger::Fatal 调用 `std::exit(1)` 不触发栈析构 | `common/cpp/logger/logger.hpp:80` | 待修复 |
 | **低** | TOML 解析只读顶层键，嵌套表被静默丢弃 | `common/cpp/config/config.cpp:117` | 待修复 |
 
 ### 改进建议
-1. ~~用 `uv_tcp_init_ex` 替代 `dup()`~~ **无需修改** — 经验证 `dup()` 方案在 POSIX 和 Windows 上均正确工作，dup fd 与原 fd 互不影响
+1. ~~用 `uv_tcp_init_ex` 替代 `dup()`~~ **无需修改** — 经验证 `dup()` 方案在 POSIX 和 Windows 上均正确工作
 2. **✅ 已完成**：Redis 客户端已加 `std::recursive_mutex`，所有公共方法受锁保护
-3. **高优**：`RegistryClient::Call()` 改为纯异步回调接口，或明确标注"禁止在事件循环线程调用"
-4. **高优**：`AsyncEventLoop` 析构添加 `assert(!running_)` 或从 loop 线程内部安全关闭
+3. **✅ 已完成**：`RegistryClient::Call()` 检测 `IsInLoopThread()` → 用 `PumpOnce()` 非阻塞轮询；非 loop 线程仍用原有 `future::wait_for`
+4. **✅ 已完成**：`AsyncEventLoop` 析构检查 `running` 标志，线程仍在跑时先 `Stop()` 并等待退出
 
 ---
 
@@ -278,6 +278,11 @@
 3. ~~修复 `WriteReq` 复用竞争~~ **经代码审查确认无需修复** — 原子标志 + 事件循环串行调度确保安全
 4. **统一错误处理** — Go 侧禁用 `_ =` 忽略错误，C++ 侧统一错误码
 5. **增加 payload 长度校验** — 所有 slice 前检查长度
+
+**已完成的修复（本批）：**
+
+6. **✅ RegistryClient::Call() 事件循环阻塞** — [client.cpp](file:///d:/Documents/learn/opensource/gmaker/common/cpp/registry/client.cpp) 检测 `IsInLoopThread()`，loop 线程内改用 `PumpOnce()` 非阻塞轮询驱动响应到达
+7. **✅ AsyncEventLoop 析构安全性** — [event_loop.cpp](file:///d:/Documents/learn/opensource/gmaker/common/cpp/net/async/event_loop.cpp) 添加 `running` 原子标志，析构先 `Stop()` 再等待线程退出（最多 10s）
 
 ### 短期（1-2 月）
 

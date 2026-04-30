@@ -46,6 +46,9 @@ public:
     // 判断当前是否在事件循环线程
     bool IsInLoopThread() const;
 
+    // 非阻塞地运行一轮事件循环（仅在 loop 线程调用），返回已处理的事件数
+    int PumpOnce();
+
 private:
     static void OnAsyncWake(uv_async_t* handle);
     static void OnWalkClose(uv_handle_t* handle, void* arg);

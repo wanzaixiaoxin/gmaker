@@ -15,13 +15,20 @@ struct AsyncEventLoop::Impl {
     std::deque<Task> tasks;
     std::thread::id loop_tid;
     std::atomic<bool> stopping{false};
+    std::atomic<bool> running{false};
 };
 
 AsyncEventLoop::AsyncEventLoop() : impl_(std::make_unique<Impl>()) {}
 
 AsyncEventLoop::~AsyncEventLoop() {
+    if (loop_ && impl_->running.load()) {
+        Stop();
+        int tries = 200;
+        while (impl_->running.load() && tries-- > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    }
     if (loop_) {
-        // 关闭所有剩余 handle
         uv_walk(loop_, OnWalkClose, nullptr);
         uv_run(loop_, UV_RUN_DEFAULT);
         uv_loop_close(loop_);
@@ -56,7 +63,9 @@ void AsyncEventLoop::Run() {
     if (!loop_) return;
     impl_->loop_tid = std::this_thread::get_id();
     impl_->stopping.store(false);
+    impl_->running.store(true);
     uv_run(loop_, UV_RUN_DEFAULT);
+    impl_->running.store(false);
 }
 
 void AsyncEventLoop::Stop() {
@@ -85,6 +94,11 @@ void AsyncEventLoop::Post(Task task) {
 
 bool AsyncEventLoop::IsInLoopThread() const {
     return std::this_thread::get_id() == impl_->loop_tid;
+}
+
+int AsyncEventLoop::PumpOnce() {
+    if (!loop_) return 0;
+    return uv_run(loop_, UV_RUN_NOWAIT);
 }
 
 void AsyncEventLoop::OnAsyncWake(uv_async_t* handle) {
