@@ -25,9 +25,12 @@ type tokenBucketShard struct {
 // capacity: 桶容量（突发上限）；fillRate: 每秒填充令牌数
 func NewTokenBucket(capacity int, fillRate int) *TokenBucket {
 	tb := &TokenBucket{}
-	perShardCap := float64(capacity) / shardCount
-	perShardRate := float64(fillRate) / shardCount
 	for i := 0; i < shardCount; i++ {
+		perShardCap := float64(capacity) / shardCount
+		if perShardCap < 1 {
+			perShardCap = 1
+		}
+		perShardRate := float64(fillRate) / shardCount
 		tb.shards[i] = &tokenBucketShard{
 			capacity:   perShardCap,
 			tokens:     perShardCap,

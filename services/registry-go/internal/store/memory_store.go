@@ -12,21 +12,67 @@ import (
 
 // MemoryStore 内存版 Registry Store（用于 Phase 1 无 Etcd 环境联调）
 type MemoryStore struct {
-	mu      sync.RWMutex
-	nodes   map[string]*pb.NodeInfo       // node_id -> NodeInfo
-	leases  map[string]int64              // node_id -> leaseID 计数器
-	watches map[string][]chan *pb.NodeEvent // service_type -> event channels
-	seqID   int64
-	closed  bool
+	mu            sync.RWMutex
+	nodes         map[string]*pb.NodeInfo
+	leases        map[string]int64
+	lastHeartbeat map[string]time.Time
+	watches       map[string][]chan *pb.NodeEvent
+	seqID         int64
+	closed        bool
+	stopCh        chan struct{}
+	wg            sync.WaitGroup
 }
 
+const defaultTTL = 30 * time.Second
+
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{
-		nodes:   make(map[string]*pb.NodeInfo),
-		leases:  make(map[string]int64),
-		watches: make(map[string][]chan *pb.NodeEvent),
-		seqID:   1,
+	m := &MemoryStore{
+		nodes:         make(map[string]*pb.NodeInfo),
+		leases:        make(map[string]int64),
+		lastHeartbeat: make(map[string]time.Time),
+		watches:       make(map[string][]chan *pb.NodeEvent),
+		seqID:         1,
+		stopCh:        make(chan struct{}),
 	}
+	m.wg.Add(1)
+	go m.ttlSweepLoop()
+	return m
+}
+
+func (m *MemoryStore) ttlSweepLoop() {
+	defer m.wg.Done()
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			m.sweepExpired()
+		case <-m.stopCh:
+			return
+		}
+	}
+}
+
+func (m *MemoryStore) sweepExpired() {
+	now := time.Now()
+	var expired []string
+	m.mu.Lock()
+	for nodeID, last := range m.lastHeartbeat {
+		if now.Sub(last) > defaultTTL {
+			expired = append(expired, nodeID)
+		}
+	}
+	for _, nodeID := range expired {
+		node := m.nodes[nodeID]
+		if node != nil {
+			m.broadcast(node.ServiceType, &pb.NodeEvent{Type: pb.NodeEvent_LEAVE, Node: node})
+		}
+		delete(m.nodes, nodeID)
+		delete(m.leases, nodeID)
+		delete(m.lastHeartbeat, nodeID)
+		logger.Infof("[MemoryStore] TTL expired: node=%s", nodeID)
+	}
+	m.mu.Unlock()
 }
 
 func (m *MemoryStore) Register(ctx context.Context, node *pb.NodeInfo) (int64, error) {
@@ -35,6 +81,7 @@ func (m *MemoryStore) Register(ctx context.Context, node *pb.NodeInfo) (int64, e
 	m.seqID++
 	m.nodes[node.NodeId] = node
 	m.leases[node.NodeId] = leaseID
+	m.lastHeartbeat[node.NodeId] = time.Now()
 
 	// 复制 watchers 列表并在解锁后广播，避免同一线程内 Lock -> RLock 死锁
 	var watchers []chan *pb.NodeEvent
@@ -57,9 +104,12 @@ func (m *MemoryStore) Register(ctx context.Context, node *pb.NodeInfo) (int64, e
 }
 
 func (m *MemoryStore) Heartbeat(ctx context.Context, nodeID string) error {
-	m.mu.RLock()
+	m.mu.Lock()
 	_, ok := m.leases[nodeID]
-	m.mu.RUnlock()
+	if ok {
+		m.lastHeartbeat[nodeID] = time.Now()
+	}
+	m.mu.Unlock()
 	if !ok {
 		logger.Warnf("[MemoryStore] Heartbeat failed: node=%s not found", nodeID)
 		return fmt.Errorf("node not found: %s", nodeID)
@@ -168,6 +218,9 @@ func (m *MemoryStore) broadcast(serviceType string, ev *pb.NodeEvent) {
 }
 
 func (m *MemoryStore) Close() error {
+	close(m.stopCh)
+	m.wg.Wait()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {

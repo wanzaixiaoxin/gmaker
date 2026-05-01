@@ -21,6 +21,7 @@ const (
 type EtcdStore struct {
 	client   *clientv3.Client
 	leases   sync.Map // node_id -> leaseID
+	kaCancel sync.Map // node_id -> context.CancelFunc
 }
 
 func NewEtcdStore(endpoints string) (*EtcdStore, error) {
@@ -67,6 +68,21 @@ func (e *EtcdStore) Register(ctx context.Context, node *registry.NodeInfo) (int6
 	}
 
 	e.leases.Store(node.NodeId, resp.ID)
+
+	kaCtx, kaCancel := context.WithCancel(context.Background())
+	e.kaCancel.Store(node.NodeId, kaCancel)
+	kaCh, err := e.client.KeepAlive(kaCtx, resp.ID)
+	if err != nil {
+		kaCancel()
+		logger.Errorf("[EtcdStore] KeepAlive start failed: %s/%s, err=%v", node.ServiceType, node.NodeId, err)
+		return int64(resp.ID), nil
+	}
+	go func() {
+		for range kaCh {
+		}
+		logger.Debugf("[EtcdStore] KeepAlive channel closed: %s/%s", node.ServiceType, node.NodeId)
+	}()
+
 	logger.Infof("[EtcdStore] Node registered: %s/%s @ %s:%d, lease=%d", node.ServiceType, node.NodeId, node.Host, node.Port, resp.ID)
 	return int64(resp.ID), nil
 }
@@ -77,13 +93,8 @@ func (e *EtcdStore) Heartbeat(ctx context.Context, nodeID string) error {
 		logger.Warnf("[EtcdStore] Heartbeat failed: lease not found for node=%s", nodeID)
 		return fmt.Errorf("lease not found for node: %s", nodeID)
 	}
-	leaseID := v.(clientv3.LeaseID)
-	_, err := e.client.KeepAliveOnce(ctx, leaseID)
-	if err != nil {
-		logger.Warnf("[EtcdStore] Heartbeat failed: node=%s, lease=%d, err=%v", nodeID, leaseID, err)
-		return err
-	}
-	logger.Debugf("[EtcdStore] Heartbeat ok: node=%s, lease=%d", nodeID, leaseID)
+	_ = v
+	logger.Debugf("[EtcdStore] Heartbeat ok (auto-keepalive): node=%s", nodeID)
 	return nil
 }
 

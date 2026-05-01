@@ -115,7 +115,7 @@ func (l *Logger) With(key string, value interface{}) *Logger {
 		nodeID:  l.nodeID,
 		fields:  make(map[string]interface{}, len(l.fields)+1),
 		writeCh: l.writeCh,
-		stopCh:  l.stopCh,
+		stopCh:  make(chan struct{}),
 	}
 	for k, v := range l.fields {
 		child.fields[k] = v

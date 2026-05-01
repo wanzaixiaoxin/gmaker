@@ -62,7 +62,10 @@ func (c *Cache[T]) Get(ctx context.Context, key string) (T, error) {
 	var zero T
 	valStr, err := c.store.Get(ctx, c.key(key))
 	if err != nil {
-		return zero, ErrNotFound{Key: key}
+		if isRedisNil(err) {
+			return zero, ErrNotFound{Key: key}
+		}
+		return zero, StoreError{Err: err}
 	}
 	if IsNilPlaceholder(valStr) {
 		return zero, ErrNotFound{Key: key}
@@ -72,6 +75,13 @@ func (c *Cache[T]) Get(ctx context.Context, key string) (T, error) {
 		return zero, fmt.Errorf("cache decode failed: %w", err)
 	}
 	return v, nil
+}
+
+func isRedisNil(err error) bool {
+	if err == nil {
+		return false
+	}
+	return err.Error() == "redis: nil" || err.Error() == "nil"
 }
 
 // Set 写入缓存
@@ -105,7 +115,7 @@ func (c *Cache[T]) GetOrLoad(ctx context.Context, key string, loader func(ctx co
 		return v, nil
 	}
 	if _, ok := err.(ErrNotFound); !ok {
-		return zero, err // 解码错误等，直接返回
+		return zero, err
 	}
 
 	// 2. 缓存未命中，使用 singleflight 合并并发回源

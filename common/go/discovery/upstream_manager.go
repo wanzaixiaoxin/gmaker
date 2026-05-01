@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/gmaker/luffa/common/go/logger"
 	"github.com/gmaker/luffa/common/go/net"
@@ -87,8 +88,19 @@ func (m *UpstreamManager) Start() error {
 	// 后台启动 Watch 监听增量变更
 	go func() {
 		ctx := context.Background()
-		if err := m.sd.Watch(ctx, types, m.onNodeEvent); err != nil {
-			logger.Warnf("[UpstreamManager] Watch failed: %v", err)
+		backoff := time.Second
+		maxBackoff := 30 * time.Second
+		for {
+			if err := m.sd.Watch(ctx, types, m.onNodeEvent); err != nil {
+				logger.Warnf("[UpstreamManager] Watch failed: %v, retrying in %v", err, backoff)
+			}
+			select {
+			case <-time.After(backoff):
+				backoff = backoff * 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+			}
 		}
 	}()
 

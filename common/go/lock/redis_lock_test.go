@@ -8,7 +8,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// TestRedisLock 需要本地 Redis，未启动时跳过
 func TestRedisLock(t *testing.T) {
 	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
 	if err := client.Ping(context.Background()).Err(); err != nil {
@@ -18,30 +17,49 @@ func TestRedisLock(t *testing.T) {
 	lock := NewRedisLock(client, "test:lock:1", 5*time.Second)
 	ctx := context.Background()
 
-	// 获取锁
-	ok, err := lock.TryLock(ctx)
+	lease, err := lock.TryLock(ctx)
 	if err != nil {
 		t.Fatalf("try lock failed: %v", err)
 	}
-	if !ok {
+	if lease == nil {
 		t.Fatal("expected lock to be acquired")
 	}
 
-	// 再次获取应失败
-	ok2, _ := lock.TryLock(ctx)
-	if ok2 {
+	lease2, _ := lock.TryLock(ctx)
+	if lease2 != nil {
 		t.Fatal("expected lock to be already held")
 	}
 
-	// 释放锁
-	if err := lock.Unlock(ctx); err != nil {
+	if err := lease.Unlock(ctx); err != nil {
 		t.Fatalf("unlock failed: %v", err)
 	}
 
-	// 释放后应可再次获取
-	ok3, _ := lock.TryLock(ctx)
-	if !ok3 {
+	lease3, _ := lock.TryLock(ctx)
+	if lease3 == nil {
 		t.Fatal("expected lock to be re-acquired")
 	}
-	lock.Unlock(ctx)
+	lease3.Unlock(ctx)
+}
+
+func TestRedisLockConcurrent(t *testing.T) {
+	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		t.Skip("redis not available:", err)
+	}
+
+	lock := NewRedisLock(client, "test:lock:concurrent", 5*time.Second)
+	ctx := context.Background()
+
+	lease1, _ := lock.TryLock(ctx)
+	if lease1 == nil {
+		t.Fatal("first TryLock should succeed")
+	}
+
+	lease2, _ := lock.TryLock(ctx)
+	if lease2 != nil {
+		lease2.Unlock(ctx)
+		t.Fatal("second TryLock on same instance should fail")
+	}
+
+	lease1.Unlock(ctx)
 }

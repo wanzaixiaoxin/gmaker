@@ -129,6 +129,7 @@ func (c *TCPConn) Close() {
 
 func (c *TCPConn) readLoop() {
 	defer c.wg.Done()
+	defer c.Close()
 	for {
 		select {
 		case <-c.closeCh:
@@ -136,13 +137,10 @@ func (c *TCPConn) readLoop() {
 		default:
 		}
 
-		// 心跳超时检测
 		if c.isHeartbeatExpired() {
-			c.raw.Close()
 			return
 		}
 
-		// 使用 ReadDeadline 避免 select default 忙等，同时允许及时响应 closeCh
 		c.raw.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 		h, err := DecodeHeader(c.reader)
 		if err != nil {
@@ -150,13 +148,11 @@ func (c *TCPConn) readLoop() {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
-			c.raw.Close()
 			return
 		}
 		c.raw.SetReadDeadline(time.Time{})
 		payload, err := ReadPayload(c.reader, h)
 		if err != nil {
-			c.raw.Close()
 			return
 		}
 
@@ -169,7 +165,6 @@ func (c *TCPConn) readLoop() {
 		if len(c.sessionKey) > 0 && (pkt.Flags&uint32(FlagEncrypt)) != 0 {
 			dec, err := crypto.DecryptPacketPayload(c.sessionKey, pkt.Payload)
 			if err != nil {
-				c.raw.Close()
 				return
 			}
 			pkt.Payload = dec
@@ -183,11 +178,11 @@ func (c *TCPConn) readLoop() {
 
 func (c *TCPConn) writeLoop() {
 	defer c.wg.Done()
+	defer c.Close()
 	for {
 		select {
 		case data := <-c.writeCh:
 			if _, err := c.raw.Write(data); err != nil {
-				c.raw.Close()
 				return
 			}
 		case <-c.closeCh:

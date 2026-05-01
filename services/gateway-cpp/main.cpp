@@ -821,18 +821,8 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
             if (logger_) logger_->Warn("Room broadcast: room=" + std::to_string(room_id) + " not found in room_members_");
         }
     } else {
-        std::lock_guard<std::mutex> lk(room_mtx_);
-        auto it = conn_room_.find(conn_id);
-        if (it != conn_room_.end()) {
-            auto rit = room_members_.find(it->second);
-            if (rit != room_members_.end()) {
-                targets.assign(rit->second.begin(), rit->second.end());
-                if (logger_) logger_->Info("Unicast to room: conn=" + std::to_string(conn_id) + 
-                                           " room=" + std::to_string(it->second) + " members=" + std::to_string(targets.size()));
-            }
-        } else {
-            if (logger_) logger_->Warn("Unicast: conn=" + std::to_string(conn_id) + " not found in conn_room_");
-        }
+        targets.push_back(conn_id);
+        if (logger_) logger_->Info("Unicast to conn=" + std::to_string(conn_id));
     }
 
     // 准备响应包模板：payload 前 8 字节是目标 conn_id，不下发给客户端。

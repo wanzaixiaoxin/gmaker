@@ -132,10 +132,14 @@ func (p *UpstreamPool) Pick() *Node {
 // SendPacket 发送 Packet 到选中的健康节点
 func (p *UpstreamPool) SendPacket(pkt *Packet) bool {
 	n := p.Pick()
-	if n == nil || n.Client == nil || n.Client.Conn() == nil {
+	if n == nil || n.Client == nil {
 		return false
 	}
-	return n.Client.Conn().SendPacket(pkt)
+	conn := n.Client.Conn()
+	if conn == nil {
+		return false
+	}
+	return conn.SendPacket(pkt)
 }
 
 // HealthyCount 当前健康节点数

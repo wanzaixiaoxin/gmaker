@@ -139,35 +139,39 @@ private:
         // Gateway -> Realtime：解析客户端消息，投递到 Compute Thread
         switch (pkt.header.cmd_id) {
             case CMD_REALTIME_ENTER: {
-                // payload: [room_id: 4 BE][player_id: 8 BE][spawn_x: 4 BE][spawn_z: 4 BE]
-                if (pkt.payload.Size() < 20) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.Data());
-                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
-                float spawn_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 12);
-                float spawn_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 16);
+                if (pkt.payload.Size() < 28) return;
+                uint64_t gw_conn_id = ReadU64BE(pkt.payload.Data());
+                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
+                float spawn_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
+                float spawn_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 24);
                 auto msg = std::make_unique<PlayerEnterMsg>();
                 msg->player_id = player_id;
                 msg->spawn_pos = {spawn_x, 0, spawn_z};
-                msg->conn_id = pkt.header.seq_id; // 复用 seq_id 作为 conn_id（简化）
+                msg->conn_id = gw_conn_id;
                 compute_->PushMessage(room_id, std::move(msg));
                 break;
             }
             case CMD_REALTIME_LEAVE: {
-                if (pkt.payload.Size() < 12) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.Data());
-                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
+                if (pkt.payload.Size() < 20) return;
+                uint64_t gw_conn_id = ReadU64BE(pkt.payload.Data());
+                (void)gw_conn_id;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
                 auto msg = std::make_unique<PlayerLeaveMsg>();
                 msg->player_id = player_id;
                 compute_->PushMessage(room_id, std::move(msg));
                 break;
             }
             case CMD_REALTIME_MOVE: {
-                if (pkt.payload.Size() < 24) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.Data());
-                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
-                float x = *reinterpret_cast<const float*>(pkt.payload.Data() + 12);
-                float z = *reinterpret_cast<const float*>(pkt.payload.Data() + 16);
-                float yaw = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
+                if (pkt.payload.Size() < 32) return;
+                uint64_t gw_conn_id = ReadU64BE(pkt.payload.Data());
+                (void)gw_conn_id;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
+                float x = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
+                float z = *reinterpret_cast<const float*>(pkt.payload.Data() + 24);
+                float yaw = *reinterpret_cast<const float*>(pkt.payload.Data() + 28);
                 auto msg = std::make_unique<PlayerMoveMsg>();
                 msg->player_id = player_id;
                 msg->target_pos = {x, 0, z};
@@ -176,12 +180,14 @@ private:
                 break;
             }
             case CMD_REALTIME_ACTION: {
-                if (pkt.payload.Size() < 20) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.Data());
-                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
-                uint32_t action_id = ReadU32BE(pkt.payload.Data() + 12);
-                float x = *reinterpret_cast<const float*>(pkt.payload.Data() + 16);
-                float z = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
+                if (pkt.payload.Size() < 28) return;
+                uint64_t gw_conn_id = ReadU64BE(pkt.payload.Data());
+                (void)gw_conn_id;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
+                uint32_t action_id = ReadU32BE(pkt.payload.Data() + 20);
+                float x = *reinterpret_cast<const float*>(pkt.payload.Data() + 24);
+                float z = *reinterpret_cast<const float*>(pkt.payload.Data() + 28);
                 auto msg = std::make_unique<PlayerActionMsg>();
                 msg->player_id = player_id;
                 msg->action_id = action_id;
@@ -233,20 +239,18 @@ private:
         }
 
         std::lock_guard<std::mutex> lk(conn_mtx_);
-        // 为每个 target_conn 发送定向包；通过所有 Gateway 连接广播，
-        // Gateway 会根据 seq_id（即 conn_id）转发给对应客户端
-        for (uint64_t conn_id : target_conns) {
-            Packet pkt;
-            pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(payload.size());
-            pkt.header.magic = MAGIC_VALUE;
-            pkt.header.cmd_id = CMD_REALTIME_SYNC;
-            pkt.header.seq_id = static_cast<uint32_t>(conn_id);
-            pkt.header.flags = static_cast<uint32_t>(Flag::BROADCAST);
-            pkt.payload = Buffer::FromVector(payload);
-            for (const auto& [_, conn] : conns_) {
-                (void)_;
-                conn->SendPacket(pkt);
-            }
+        if (conns_.empty()) return;
+
+        Packet pkt;
+        pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(payload.size());
+        pkt.header.magic = MAGIC_VALUE;
+        pkt.header.cmd_id = CMD_REALTIME_SYNC;
+        pkt.header.seq_id = 0;
+        pkt.header.flags = static_cast<uint32_t>(Flag::ROOM_BCAST);
+        pkt.payload = Buffer::FromVector(payload);
+        for (const auto& [_, conn] : conns_) {
+            (void)_;
+            conn->SendPacket(pkt);
         }
     }
 

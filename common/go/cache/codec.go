@@ -52,3 +52,15 @@ type ErrNotFound struct {
 func (e ErrNotFound) Error() string {
 	return fmt.Sprintf("cache key not found: %s", e.Key)
 }
+
+type StoreError struct {
+	Err error
+}
+
+func (e StoreError) Error() string {
+	return fmt.Sprintf("cache store error: %v", e.Err)
+}
+
+func (e StoreError) Unwrap() error {
+	return e.Err
+}

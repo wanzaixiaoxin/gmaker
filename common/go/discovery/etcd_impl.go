@@ -21,6 +21,7 @@ type EtcdImpl struct {
 	nodeID         string
 	mu             sync.Mutex
 	watchesCancel  context.CancelFunc
+	nodeCache      sync.Map // "service_type/node_id" -> NodeInfo
 }
 
 // NewEtcdImpl 创建 etcd 模式的服务发现实例
@@ -109,6 +110,7 @@ func (e *EtcdImpl) Discover(ctx context.Context, serviceType string) ([]NodeInfo
 		var node NodeInfo
 		if err := json.Unmarshal(kv.Value, &node); err == nil {
 			nodes = append(nodes, node)
+			e.nodeCache.Store(node.ServiceType+"/"+node.NodeID, node)
 		}
 	}
 	return nodes, nil
@@ -134,21 +136,25 @@ func (e *EtcdImpl) Watch(ctx context.Context, serviceTypes []string, callback fu
 					var eventType NodeEventType
 
 					if ev.Type == clientv3.EventTypePut {
-						// 解析节点信息
 						if err := json.Unmarshal(ev.Kv.Value, &node); err != nil {
 							logger.Warnf("etcd watch unmarshal failed: %v", err)
 							continue
 						}
-						// etcd 不区分 create vs update，统一视为 UPDATE
-						// 业务层可通过 LoadScore 等字段判断是否有实质变化
 						eventType = NodeEventUpdate
+						cacheKey := node.ServiceType + "/" + node.NodeID
+						e.nodeCache.Store(cacheKey, node)
 					} else if ev.Type == clientv3.EventTypeDelete {
 						eventType = NodeEventLeave
-						// 从 key 中提取 service_type 和 node_id
 						parts := strings.Split(path.Clean(string(ev.Kv.Key)), "/")
 						if len(parts) >= 4 {
 							node.ServiceType = parts[2]
 							node.NodeID = parts[3]
+							cacheKey := node.ServiceType + "/" + node.NodeID
+							if cached, ok := e.nodeCache.LoadAndDelete(cacheKey); ok {
+								cachedNode := cached.(NodeInfo)
+								node.Host = cachedNode.Host
+								node.Port = cachedNode.Port
+							}
 						}
 					}
 

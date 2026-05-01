@@ -35,7 +35,7 @@ func (c *Checker) Check(ts time.Time, nonce string) error {
 		return fmt.Errorf("timestamp outside replay window")
 	}
 
-	key := ts.UTC().Format(time.RFC3339Nano) + ":" + nonce
+	key := nonce
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
