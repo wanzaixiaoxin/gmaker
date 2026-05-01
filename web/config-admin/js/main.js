@@ -170,6 +170,16 @@ function saveConfig(shouldPublish) {
   if (!name) { alert('配置名称不能为空'); return; }
   if (!content) { alert('配置内容不能为空'); return; }
 
+  // JSON 格式校验
+  if (format === 'json') {
+    try {
+      JSON.parse(content);
+    } catch (e) {
+      alert('JSON 格式错误: ' + e.message);
+      return;
+    }
+  }
+
   const body = { name, namespace, format, description, content };
 
   if (editingName) {
@@ -257,6 +267,101 @@ function actionTagClass(action) {
 function closeModal() {
   document.getElementById('modal-publish').classList.remove('show');
 }
+
+function closeDiffModal() {
+  document.getElementById('modal-diff').classList.remove('show');
+}
+
+// ===== Diff 算法与展示 =====
+
+function computeDiff(oldText, newText) {
+  const a = oldText.split('\n');
+  const b = newText.split('\n');
+  const result = [];
+  let i = 0, j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      result.push({ type: 'same', oldLine: a[i], newLine: b[j] });
+      i++; j++;
+    } else {
+      // 在 b 的后续几行中找 a[i]
+      let foundInB = -1;
+      for (let k = j; k < Math.min(j + 8, b.length); k++) {
+        if (b[k] === a[i]) { foundInB = k; break; }
+      }
+      // 在 a 的后续几行中找 b[j]
+      let foundInA = -1;
+      for (let k = i; k < Math.min(i + 8, a.length); k++) {
+        if (a[k] === b[j]) { foundInA = k; break; }
+      }
+
+      if (foundInB !== -1 && (foundInA === -1 || foundInB - j <= foundInA - i)) {
+        for (let k = j; k < foundInB; k++) result.push({ type: 'add', line: b[k] });
+        j = foundInB;
+      } else if (foundInA !== -1) {
+        for (let k = i; k < foundInA; k++) result.push({ type: 'del', line: a[k] });
+        i = foundInA;
+      } else {
+        if (i < a.length) result.push({ type: 'del', line: a[i++] });
+        if (j < b.length) result.push({ type: 'add', line: b[j++] });
+      }
+    }
+  }
+  return result;
+}
+
+function showDiff(oldText, newText, leftLabel, rightLabel) {
+  const diff = computeDiff(oldText || '', newText || '');
+  const container = document.getElementById('diff-container');
+  let html = '';
+  let oldNo = 1, newNo = 1;
+
+  diff.forEach(item => {
+    if (item.type === 'same') {
+      html += `<div class="diff-line diff-same"><span class="diff-lineno">${oldNo++}</span><span class="diff-lineno">${newNo++}</span> ${escapeHtml(item.oldLine)}</div>`;
+    } else if (item.type === 'del') {
+      html += `<div class="diff-line diff-del"><span class="diff-lineno">${oldNo++}</span><span class="diff-lineno">-</span> - ${escapeHtml(item.line)}</div>`;
+    } else if (item.type === 'add') {
+      html += `<div class="diff-line diff-add"><span class="diff-lineno">-</span><span class="diff-lineno">${newNo++}</span> + ${escapeHtml(item.line)}</div>`;
+    }
+  });
+
+  container.innerHTML = html || '<div style="color:#999;padding:20px;">无差异</div>';
+  document.getElementById('diff-label-left').textContent = leftLabel || '旧版本';
+  document.getElementById('diff-label-right').textContent = rightLabel || '新版本';
+  document.getElementById('modal-diff').classList.add('show');
+}
+
+function compareWithVersion(versionId) {
+  const v = editingVersions.find(x => x.id === versionId);
+  if (!v) return;
+  const current = document.getElementById('edit-content').value;
+  showDiff(v.content, current, `v${v.version} (历史)`, `当前编辑中`);
+}
+
+function compareVersionToVersion(leftId, rightId) {
+  const left = editingVersions.find(x => x.id === leftId);
+  const right = editingVersions.find(x => x.id === rightId);
+  if (!left || !right) return;
+  showDiff(left.content, right.content, `v${left.version}`, `v${right.version}`);
+}
+
+// 修改 renderVersions，增加对比按钮
+const originalRenderVersions = renderVersions;
+renderVersions = function(versions) {
+  originalRenderVersions(versions);
+  // 给每个版本 li 增加对比按钮
+  document.querySelectorAll('#version-list li').forEach((li, idx) => {
+    const ver = versions[idx];
+    if (!ver) return;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm';
+    btn.style = 'margin-top:6px;margin-right:4px;';
+    btn.textContent = '对比当前';
+    btn.onclick = (e) => { e.stopPropagation(); compareWithVersion(ver.id); };
+    li.appendChild(btn);
+  });
+};
 
 // 初始化
 loadConfigList();

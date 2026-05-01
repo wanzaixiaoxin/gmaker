@@ -256,6 +256,24 @@ struct ConfigLogEntryDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ConfigLogEntryDefaultTypeInternal _ConfigLogEntry_default_instance_;
+template <typename>
+constexpr ConfigChangeEvent_GrayTagsEntry_DoNotUse::ConfigChangeEvent_GrayTagsEntry_DoNotUse(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ConfigChangeEvent_GrayTagsEntry_DoNotUse::MapEntry(ConfigChangeEvent_GrayTagsEntry_DoNotUse_class_data_.base()){}
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ConfigChangeEvent_GrayTagsEntry_DoNotUse::MapEntry() {
+}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+struct ConfigChangeEvent_GrayTagsEntry_DoNotUseDefaultTypeInternal {
+  constexpr ConfigChangeEvent_GrayTagsEntry_DoNotUseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ConfigChangeEvent_GrayTagsEntry_DoNotUseDefaultTypeInternal() {}
+  union {
+    ConfigChangeEvent_GrayTagsEntry_DoNotUse _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ConfigChangeEvent_GrayTagsEntry_DoNotUseDefaultTypeInternal _ConfigChangeEvent_GrayTagsEntry_DoNotUse_default_instance_;
 
 inline constexpr ConfigChangeEvent::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
@@ -273,9 +291,25 @@ inline constexpr ConfigChangeEvent::Impl_::Impl_(
         action_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        gray_region_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        gray_node_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         version_id_{::int64_t{0}},
         timestamp_{::int64_t{0}},
-        version_no_{0} {}
+        version_no_{0},
+        gray_percent_{0},
+        #ifdef PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_MAP_FIELD
+        gray_tags_{visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::config::ConfigChangeEvent,
+            PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.gray_tags_)>()
+        }
+        #else
+        gray_tags_ {}
+        #endif
+     {}
 
 template <typename>
 constexpr ConfigChangeEvent::ConfigChangeEvent(::_pbi::ConstantInitialized)
@@ -305,8 +339,15 @@ const ::uint32_t
     TableStruct_config_2eproto::offsets[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
         protodesc_cold) = {
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent_GrayTagsEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent_GrayTagsEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent_GrayTagsEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_._has_bits_),
-        10, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.config_name_),
         PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.namespace__),
         PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.version_id_),
@@ -314,13 +355,21 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.checksum_),
         PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.action_),
         PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.timestamp_),
+        PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.gray_region_),
+        PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.gray_node_id_),
+        PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.gray_percent_),
+        PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.gray_tags_),
         0,
         1,
-        4,
         6,
+        8,
         2,
         3,
+        7,
+        4,
         5,
+        9,
+        10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::config::SubscribeReq, _impl_._has_bits_),
         6, // hasbit index offset
@@ -419,15 +468,17 @@ const ::uint32_t
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
-        {0, sizeof(::config::ConfigChangeEvent)},
-        {17, sizeof(::config::SubscribeReq)},
-        {26, sizeof(::config::ConfigPullReq)},
-        {35, sizeof(::config::ConfigPullRes)},
-        {52, sizeof(::config::ConfigMeta)},
-        {73, sizeof(::config::ConfigVersion)},
-        {92, sizeof(::config::ConfigLogEntry)},
+        {0, sizeof(::config::ConfigChangeEvent_GrayTagsEntry_DoNotUse)},
+        {7, sizeof(::config::ConfigChangeEvent)},
+        {32, sizeof(::config::SubscribeReq)},
+        {41, sizeof(::config::ConfigPullReq)},
+        {50, sizeof(::config::ConfigPullRes)},
+        {67, sizeof(::config::ConfigMeta)},
+        {88, sizeof(::config::ConfigVersion)},
+        {107, sizeof(::config::ConfigLogEntry)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
+    &::config::_ConfigChangeEvent_GrayTagsEntry_DoNotUse_default_instance_._instance,
     &::config::_ConfigChangeEvent_default_instance_._instance,
     &::config::_SubscribeReq_default_instance_._instance,
     &::config::_ConfigPullReq_default_instance_._instance,
@@ -438,44 +489,48 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
 };
 const char descriptor_table_protodef_config_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\014config.proto\022\006config\"\230\001\n\021ConfigChangeE"
+    "\n\014config.proto\022\006config\"\306\002\n\021ConfigChangeE"
     "vent\022\023\n\013config_name\030\001 \001(\t\022\021\n\tnamespace\030\002"
     " \001(\t\022\022\n\nversion_id\030\003 \001(\003\022\022\n\nversion_no\030\004"
     " \001(\005\022\020\n\010checksum\030\005 \001(\t\022\016\n\006action\030\006 \001(\t\022\021"
-    "\n\ttimestamp\030\007 \001(\003\"K\n\014SubscribeReq\022\024\n\014ser"
-    "vice_type\030\001 \001(\t\022\017\n\007node_id\030\002 \001(\t\022\024\n\014conf"
-    "ig_names\030\003 \003(\t\"K\n\rConfigPullReq\022\023\n\013confi"
-    "g_name\030\001 \001(\t\022\021\n\tnamespace\030\002 \001(\t\022\022\n\nversi"
-    "on_id\030\003 \001(\003\"\201\001\n\rConfigPullRes\022\n\n\002ok\030\001 \001("
-    "\010\022\014\n\004code\030\002 \001(\r\022\013\n\003msg\030\003 \001(\t\022\017\n\007content\030"
-    "\004 \001(\t\022\020\n\010checksum\030\005 \001(\t\022\022\n\nversion_id\030\006 "
-    "\001(\003\022\022\n\nversion_no\030\007 \001(\005\"\257\001\n\nConfigMeta\022\n"
-    "\n\002id\030\001 \001(\003\022\014\n\004name\030\002 \001(\t\022\021\n\tnamespace\030\003 "
-    "\001(\t\022\016\n\006format\030\004 \001(\t\022\023\n\013description\030\005 \001(\t"
-    "\022\027\n\017current_version\030\006 \001(\003\022\016\n\006status\030\007 \001("
-    "\005\022\022\n\ncreated_at\030\010 \001(\003\022\022\n\nupdated_at\030\t \001("
-    "\003\"\237\001\n\rConfigVersion\022\n\n\002id\030\001 \001(\003\022\021\n\tconfi"
-    "g_id\030\002 \001(\003\022\017\n\007version\030\003 \001(\005\022\020\n\010checksum\030"
-    "\004 \001(\t\022\016\n\006status\030\005 \001(\005\022\024\n\014published_at\030\006 "
-    "\001(\003\022\022\n\ncreated_by\030\007 \001(\t\022\022\n\ncreated_at\030\010 "
-    "\001(\003\"\225\001\n\016ConfigLogEntry\022\n\n\002id\030\001 \001(\003\022\021\n\tco"
-    "nfig_id\030\002 \001(\003\022\022\n\nversion_id\030\003 \001(\003\022\016\n\006act"
-    "ion\030\004 \001(\t\022\020\n\010operator\030\005 \001(\t\022\016\n\006detail\030\006 "
-    "\001(\t\022\n\n\002ip\030\007 \001(\t\022\022\n\ncreated_at\030\010 \001(\003B\'Z%g"
-    "ithub.com/gmaker/luffa/gen/go/configb\006pr"
-    "oto3"
+    "\n\ttimestamp\030\007 \001(\003\022\023\n\013gray_region\030\010 \001(\t\022\024"
+    "\n\014gray_node_id\030\t \001(\t\022\024\n\014gray_percent\030\n \001"
+    "(\005\022:\n\tgray_tags\030\013 \003(\0132\'.config.ConfigCha"
+    "ngeEvent.GrayTagsEntry\032/\n\rGrayTagsEntry\022"
+    "\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\t:\0028\001\"K\n\014Subsc"
+    "ribeReq\022\024\n\014service_type\030\001 \001(\t\022\017\n\007node_id"
+    "\030\002 \001(\t\022\024\n\014config_names\030\003 \003(\t\"K\n\rConfigPu"
+    "llReq\022\023\n\013config_name\030\001 \001(\t\022\021\n\tnamespace\030"
+    "\002 \001(\t\022\022\n\nversion_id\030\003 \001(\003\"\201\001\n\rConfigPull"
+    "Res\022\n\n\002ok\030\001 \001(\010\022\014\n\004code\030\002 \001(\r\022\013\n\003msg\030\003 \001"
+    "(\t\022\017\n\007content\030\004 \001(\t\022\020\n\010checksum\030\005 \001(\t\022\022\n"
+    "\nversion_id\030\006 \001(\003\022\022\n\nversion_no\030\007 \001(\005\"\257\001"
+    "\n\nConfigMeta\022\n\n\002id\030\001 \001(\003\022\014\n\004name\030\002 \001(\t\022\021"
+    "\n\tnamespace\030\003 \001(\t\022\016\n\006format\030\004 \001(\t\022\023\n\013des"
+    "cription\030\005 \001(\t\022\027\n\017current_version\030\006 \001(\003\022"
+    "\016\n\006status\030\007 \001(\005\022\022\n\ncreated_at\030\010 \001(\003\022\022\n\nu"
+    "pdated_at\030\t \001(\003\"\237\001\n\rConfigVersion\022\n\n\002id\030"
+    "\001 \001(\003\022\021\n\tconfig_id\030\002 \001(\003\022\017\n\007version\030\003 \001("
+    "\005\022\020\n\010checksum\030\004 \001(\t\022\016\n\006status\030\005 \001(\005\022\024\n\014p"
+    "ublished_at\030\006 \001(\003\022\022\n\ncreated_by\030\007 \001(\t\022\022\n"
+    "\ncreated_at\030\010 \001(\003\"\225\001\n\016ConfigLogEntry\022\n\n\002"
+    "id\030\001 \001(\003\022\021\n\tconfig_id\030\002 \001(\003\022\022\n\nversion_i"
+    "d\030\003 \001(\003\022\016\n\006action\030\004 \001(\t\022\020\n\010operator\030\005 \001("
+    "\t\022\016\n\006detail\030\006 \001(\t\022\n\n\002ip\030\007 \001(\t\022\022\n\ncreated"
+    "_at\030\010 \001(\003B\'Z%github.com/gmaker/luffa/gen"
+    "/go/configb\006proto3"
 };
 static ::absl::once_flag descriptor_table_config_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_config_2eproto = {
     false,
     false,
-    1004,
+    1178,
     descriptor_table_protodef_config_2eproto,
     "config.proto",
     &descriptor_table_config_2eproto_once,
     nullptr,
     0,
-    7,
+    8,
     schemas,
     file_default_instances,
     TableStruct_config_2eproto::offsets,
@@ -483,6 +538,103 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_config_2eproto
     file_level_service_descriptors_config_2eproto,
 };
 namespace config {
+// ===================================================================
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+ConfigChangeEvent_GrayTagsEntry_DoNotUse::ConfigChangeEvent_GrayTagsEntry_DoNotUse()
+    : SuperType(ConfigChangeEvent_GrayTagsEntry_DoNotUse_class_data_.base()) {}
+ConfigChangeEvent_GrayTagsEntry_DoNotUse::ConfigChangeEvent_GrayTagsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : SuperType(arena, ConfigChangeEvent_GrayTagsEntry_DoNotUse_class_data_.base()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+ConfigChangeEvent_GrayTagsEntry_DoNotUse::ConfigChangeEvent_GrayTagsEntry_DoNotUse() : SuperType() {}
+ConfigChangeEvent_GrayTagsEntry_DoNotUse::ConfigChangeEvent_GrayTagsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+inline void* PROTOBUF_NONNULL ConfigChangeEvent_GrayTagsEntry_DoNotUse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ConfigChangeEvent_GrayTagsEntry_DoNotUse(arena);
+}
+constexpr auto ConfigChangeEvent_GrayTagsEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ConfigChangeEvent_GrayTagsEntry_DoNotUse),
+                                            alignof(ConfigChangeEvent_GrayTagsEntry_DoNotUse));
+}
+constexpr auto ConfigChangeEvent_GrayTagsEntry_DoNotUse::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_ConfigChangeEvent_GrayTagsEntry_DoNotUse_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // IsInitialized
+          &ConfigChangeEvent_GrayTagsEntry_DoNotUse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ConfigChangeEvent_GrayTagsEntry_DoNotUse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ConfigChangeEvent_GrayTagsEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&ConfigChangeEvent_GrayTagsEntry_DoNotUse::ClearImpl),
+              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+              ,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ConfigChangeEvent_GrayTagsEntry_DoNotUse, _impl_._cached_size_),
+          false,
+      },
+      &ConfigChangeEvent_GrayTagsEntry_DoNotUse::kDescriptorMethods,
+      &descriptor_table_config_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ConfigChangeEvent_GrayTagsEntry_DoNotUse_class_data_ =
+        ConfigChangeEvent_GrayTagsEntry_DoNotUse::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ConfigChangeEvent_GrayTagsEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ConfigChangeEvent_GrayTagsEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ConfigChangeEvent_GrayTagsEntry_DoNotUse_class_data_.tc_table);
+  return ConfigChangeEvent_GrayTagsEntry_DoNotUse_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<1, 2, 0, 55, 2>
+ConfigChangeEvent_GrayTagsEntry_DoNotUse::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(ConfigChangeEvent_GrayTagsEntry_DoNotUse, _impl_._has_bits_),
+    0, // no _extensions_
+    2, 8,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967292,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    2,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    ConfigChangeEvent_GrayTagsEntry_DoNotUse_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::config::ConfigChangeEvent_GrayTagsEntry_DoNotUse>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // string value = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 1, 0,
+      PROTOBUF_FIELD_OFFSET(ConfigChangeEvent_GrayTagsEntry_DoNotUse, _impl_.value_)}},
+    // string key = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(ConfigChangeEvent_GrayTagsEntry_DoNotUse, _impl_.key_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string key = 1;
+    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent_GrayTagsEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string value = 2;
+    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent_GrayTagsEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+  }},
+  // no aux_entries
+  {{
+    "\46\3\5\0\0\0\0\0"
+    "config.ConfigChangeEvent.GrayTagsEntry"
+    "key"
+    "value"
+  }},
+};
 // ===================================================================
 
 class ConfigChangeEvent::_Internal {
@@ -511,7 +663,18 @@ PROTOBUF_NDEBUG_INLINE ConfigChangeEvent::Impl_::Impl_(
         config_name_(arena, from.config_name_),
         namespace__(arena, from.namespace__),
         checksum_(arena, from.checksum_),
-        action_(arena, from.action_) {}
+        action_(arena, from.action_),
+        gray_region_(arena, from.gray_region_),
+        gray_node_id_(arena, from.gray_node_id_),
+        #ifdef PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_MAP_FIELD
+        gray_tags_{visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::config::ConfigChangeEvent,
+            PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.gray_tags_)>()
+        , from.gray_tags_}
+        #else
+        gray_tags_ { visibility, arena, from.gray_tags_ }
+        #endif
+     {}
 
 ConfigChangeEvent::ConfigChangeEvent(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -530,9 +693,9 @@ ConfigChangeEvent::ConfigChangeEvent(
                offsetof(Impl_, version_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, version_id_),
-           offsetof(Impl_, version_no_) -
+           offsetof(Impl_, gray_percent_) -
                offsetof(Impl_, version_id_) +
-               sizeof(Impl_::version_no_));
+               sizeof(Impl_::gray_percent_));
 
   // @@protoc_insertion_point(copy_constructor:config.ConfigChangeEvent)
 }
@@ -543,16 +706,27 @@ PROTOBUF_NDEBUG_INLINE ConfigChangeEvent::Impl_::Impl_(
         config_name_(arena),
         namespace__(arena),
         checksum_(arena),
-        action_(arena) {}
+        action_(arena),
+        gray_region_(arena),
+        gray_node_id_(arena),
+        #ifdef PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_MAP_FIELD
+        gray_tags_{visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::config::ConfigChangeEvent,
+            PROTOBUF_FIELD_OFFSET(::config::ConfigChangeEvent, _impl_.gray_tags_)>()
+        }
+        #else
+        gray_tags_ { visibility, arena }
+        #endif
+     {}
 
 inline void ConfigChangeEvent::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, version_id_),
            0,
-           offsetof(Impl_, version_no_) -
+           offsetof(Impl_, gray_percent_) -
                offsetof(Impl_, version_id_) +
-               sizeof(Impl_::version_no_));
+               sizeof(Impl_::gray_percent_));
 }
 ConfigChangeEvent::~ConfigChangeEvent() {
   // @@protoc_insertion_point(destructor:config.ConfigChangeEvent)
@@ -569,6 +743,8 @@ inline void ConfigChangeEvent::SharedDtor(MessageLite& self) {
   this_._impl_.namespace__.Destroy();
   this_._impl_.checksum_.Destroy();
   this_._impl_.action_.Destroy();
+  this_._impl_.gray_region_.Destroy();
+  this_._impl_.gray_node_id_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -577,10 +753,29 @@ inline void* PROTOBUF_NONNULL ConfigChangeEvent::PlacementNew_(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
   return ::new (mem) ConfigChangeEvent(arena);
 }
+#ifdef PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_REPEATED_PTR_FIELD
 constexpr auto ConfigChangeEvent::InternalNewImpl_() {
   return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ConfigChangeEvent),
                                             alignof(ConfigChangeEvent));
 }
+#else  // !PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_REPEATED_PTR_FIELD
+constexpr auto ConfigChangeEvent::InternalNewImpl_() {
+  constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
+      PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.gray_tags_) +
+          decltype(ConfigChangeEvent::_impl_.gray_tags_)::
+              InternalGetArenaOffset(
+                  ::google::protobuf::Message::internal_visibility()),
+  });
+  if (arena_bits.has_value()) {
+    return ::google::protobuf::internal::MessageCreator::CopyInit(
+        sizeof(ConfigChangeEvent), alignof(ConfigChangeEvent), *arena_bits);
+  } else {
+    return ::google::protobuf::internal::MessageCreator(&ConfigChangeEvent::PlacementNew_,
+                                 sizeof(ConfigChangeEvent),
+                                 alignof(ConfigChangeEvent));
+  }
+}
+#endif
 constexpr auto ConfigChangeEvent::InternalGenerateClassData_() {
   return ::google::protobuf::internal::ClassDataFull{
       ::google::protobuf::internal::ClassData{
@@ -614,18 +809,18 @@ ConfigChangeEvent::GetClassData() const {
   return ConfigChangeEvent_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<3, 7, 0, 67, 2>
+const ::_pbi::TcParseTable<4, 11, 1, 107, 2>
 ConfigChangeEvent::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_._has_bits_),
     0, // no _extensions_
-    7, 56,  // max_field_number, fast_idx_mask
+    11, 120,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967168,  // skipmap
+    4294965248,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    7,  // num_field_entries
-    0,  // num_aux_entries
-    offsetof(decltype(_table_), field_names),  // no aux_entries
+    11,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
     ConfigChangeEvent_class_data_.base(),
     nullptr,  // post_loop_handler
     ::_pbi::TcParser::GenericFallback,  // fallback
@@ -643,12 +838,12 @@ ConfigChangeEvent::_table_ = {
      {18, 1, 0,
       PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.namespace__)}},
     // int64 version_id = 3;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ConfigChangeEvent, _impl_.version_id_), 4>(),
-     {24, 4, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ConfigChangeEvent, _impl_.version_id_), 6>(),
+     {24, 6, 0,
       PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.version_id_)}},
     // int32 version_no = 4;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ConfigChangeEvent, _impl_.version_no_), 6>(),
-     {32, 6, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ConfigChangeEvent, _impl_.version_no_), 8>(),
+     {32, 8, 0,
       PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.version_no_)}},
     // string checksum = 5;
     {::_pbi::TcParser::FastUS1,
@@ -659,9 +854,26 @@ ConfigChangeEvent::_table_ = {
      {50, 3, 0,
       PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.action_)}},
     // int64 timestamp = 7;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ConfigChangeEvent, _impl_.timestamp_), 5>(),
-     {56, 5, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ConfigChangeEvent, _impl_.timestamp_), 7>(),
+     {56, 7, 0,
       PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.timestamp_)}},
+    // string gray_region = 8;
+    {::_pbi::TcParser::FastUS1,
+     {66, 4, 0,
+      PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.gray_region_)}},
+    // string gray_node_id = 9;
+    {::_pbi::TcParser::FastUS1,
+     {74, 5, 0,
+      PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.gray_node_id_)}},
+    // int32 gray_percent = 10;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ConfigChangeEvent, _impl_.gray_percent_), 9>(),
+     {80, 9, 0,
+      PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.gray_percent_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
@@ -670,24 +882,38 @@ ConfigChangeEvent::_table_ = {
     // string namespace = 2;
     {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.namespace__), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // int64 version_id = 3;
-    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.version_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.version_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     // int32 version_no = 4;
-    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.version_no_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.version_no_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
     // string checksum = 5;
     {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.checksum_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // string action = 6;
     {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.action_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // int64 timestamp = 7;
-    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.timestamp_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.timestamp_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    // string gray_region = 8;
+    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.gray_region_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string gray_node_id = 9;
+    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.gray_node_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // int32 gray_percent = 10;
+    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.gray_percent_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+    // map<string, string> gray_tags = 11;
+    {PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.gray_tags_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
   }},
-  // no aux_entries
   {{
-    "\30\13\11\0\0\10\6\0"
+      {::_pbi::TcParser::GetMapAuxInfo(
+          1, 0, 9, 9, 0)},
+  }},
+  {{
+    "\30\13\11\0\0\10\6\0\13\14\0\11\0\0\0\0"
     "config.ConfigChangeEvent"
     "config_name"
     "namespace"
     "checksum"
     "action"
+    "gray_region"
+    "gray_node_id"
+    "gray_tags"
   }},
 };
 PROTOBUF_NOINLINE void ConfigChangeEvent::Clear() {
@@ -698,7 +924,7 @@ PROTOBUF_NOINLINE void ConfigChangeEvent::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.config_name_.ClearNonDefaultToEmpty();
     }
@@ -711,11 +937,25 @@ PROTOBUF_NOINLINE void ConfigChangeEvent::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _impl_.action_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.gray_region_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.gray_node_id_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000070U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
     ::memset(&_impl_.version_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.version_no_) -
-        reinterpret_cast<char*>(&_impl_.version_id_)) + sizeof(_impl_.version_no_));
+        reinterpret_cast<char*>(&_impl_.timestamp_) -
+        reinterpret_cast<char*>(&_impl_.version_id_)) + sizeof(_impl_.timestamp_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.version_no_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.gray_percent_) -
+        reinterpret_cast<char*>(&_impl_.version_no_)) + sizeof(_impl_.gray_percent_));
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00000400U)) {
+      _impl_.gray_tags_.Clear();
+    }
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -761,7 +1001,7 @@ PROTOBUF_NOINLINE void ConfigChangeEvent::Clear() {
   }
 
   // int64 version_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_version_id() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<3>(
@@ -770,7 +1010,7 @@ PROTOBUF_NOINLINE void ConfigChangeEvent::Clear() {
   }
 
   // int32 version_no = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_version_no() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<4>(
@@ -799,11 +1039,75 @@ PROTOBUF_NOINLINE void ConfigChangeEvent::Clear() {
   }
 
   // int64 timestamp = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_timestamp() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<7>(
               stream, this_._internal_timestamp(), target);
+    }
+  }
+
+  // string gray_region = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_gray_region().empty()) {
+      const ::std::string& _s = this_._internal_gray_region();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "config.ConfigChangeEvent.gray_region");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
+    }
+  }
+
+  // string gray_node_id = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_gray_node_id().empty()) {
+      const ::std::string& _s = this_._internal_gray_node_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "config.ConfigChangeEvent.gray_node_id");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
+    }
+  }
+
+  // int32 gray_percent = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_gray_percent() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<10>(
+              stream, this_._internal_gray_percent(), target);
+    }
+  }
+
+  // map<string, string> gray_tags = 11;
+  if (CheckHasBitForRepeated(cached_has_bits, 0x00000400U)) {
+    if (!this_._internal_gray_tags().empty()) {
+      using MapType = ::google::protobuf::Map<::std::string, ::std::string>;
+      using WireHelper = _pbi::MapEntryFuncs<::std::string, ::std::string,
+                                     _pbi::WireFormatLite::TYPE_STRING,
+                                     _pbi::WireFormatLite::TYPE_STRING>;
+      const auto& field = this_._internal_gray_tags();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterPtr<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              11, entry.first, entry.second, target, stream);
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "config.ConfigChangeEvent.gray_tags");
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.second.data(), static_cast<int>(entry.second.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "config.ConfigChangeEvent.gray_tags");
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              11, entry.first, entry.second, target, stream);
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "config.ConfigChangeEvent.gray_tags");
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.second.data(), static_cast<int>(entry.second.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "config.ConfigChangeEvent.gray_tags");
+        }
+      }
     }
   }
 
@@ -832,7 +1136,7 @@ PROTOBUF_NOINLINE void ConfigChangeEvent::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string config_name = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_config_name().empty()) {
@@ -861,25 +1165,58 @@ PROTOBUF_NOINLINE void ConfigChangeEvent::Clear() {
                                         this_._internal_action());
       }
     }
-    // int64 version_id = 3;
+    // string gray_region = 8;
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_gray_region().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_gray_region());
+      }
+    }
+    // string gray_node_id = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_gray_node_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_gray_node_id());
+      }
+    }
+    // int64 version_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_version_id() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_version_id());
       }
     }
     // int64 timestamp = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_timestamp() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_timestamp());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // int32 version_no = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_version_no() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_version_no());
+      }
+    }
+    // int32 gray_percent = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_gray_percent() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
+            this_._internal_gray_percent());
+      }
+    }
+    // map<string, string> gray_tags = 11;
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00000400U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_gray_tags_size());
+      for (const auto& entry : this_._internal_gray_tags()) {
+        total_size += _pbi::MapEntryFuncs<::std::string, ::std::string,
+                                       _pbi::WireFormatLite::TYPE_STRING,
+                                       _pbi::WireFormatLite::TYPE_STRING>::ByteSizeLong(entry.first, entry.second);
       }
     }
   }
@@ -901,7 +1238,7 @@ void ConfigChangeEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_config_name().empty()) {
         _this->_internal_set_config_name(from._internal_config_name());
@@ -939,19 +1276,47 @@ void ConfigChangeEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_gray_region().empty()) {
+        _this->_internal_set_gray_region(from._internal_gray_region());
+      } else {
+        if (_this->_impl_.gray_region_.IsDefault()) {
+          _this->_internal_set_gray_region("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_gray_node_id().empty()) {
+        _this->_internal_set_gray_node_id(from._internal_gray_node_id());
+      } else {
+        if (_this->_impl_.gray_node_id_.IsDefault()) {
+          _this->_internal_set_gray_node_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_version_id() != 0) {
         _this->_impl_.version_id_ = from._impl_.version_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_timestamp() != 0) {
         _this->_impl_.timestamp_ = from._impl_.timestamp_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_version_no() != 0) {
         _this->_impl_.version_no_ = from._impl_.version_no_;
       }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_gray_percent() != 0) {
+        _this->_impl_.gray_percent_ = from._impl_.gray_percent_;
+      }
+    }
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00000400U)) {
+      _this->_impl_.gray_tags_.MergeFrom(from._impl_.gray_tags_);
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -977,12 +1342,15 @@ void ConfigChangeEvent::InternalSwap(ConfigChangeEvent* PROTOBUF_RESTRICT PROTOB
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.namespace__, &other->_impl_.namespace__, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.checksum_, &other->_impl_.checksum_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.action_, &other->_impl_.action_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.gray_region_, &other->_impl_.gray_region_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.gray_node_id_, &other->_impl_.gray_node_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.version_no_)
-      + sizeof(ConfigChangeEvent::_impl_.version_no_)
+      PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.gray_percent_)
+      + sizeof(ConfigChangeEvent::_impl_.gray_percent_)
       - PROTOBUF_FIELD_OFFSET(ConfigChangeEvent, _impl_.version_id_)>(
           reinterpret_cast<char*>(&_impl_.version_id_),
           reinterpret_cast<char*>(&other->_impl_.version_id_));
+  _impl_.gray_tags_.InternalSwap(&other->_impl_.gray_tags_);
 }
 
 ::google::protobuf::Metadata ConfigChangeEvent::GetMetadata() const {

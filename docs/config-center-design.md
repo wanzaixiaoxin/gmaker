@@ -354,29 +354,34 @@ go watcher.Start(ctx)
 - 文件写入采用"写临时文件 + rename"的原子操作，避免服务读取到半成品配置
 - 如果拉取或校验失败，本地配置保持原状，不会触发 Reload
 
-### 8.2 C++ SDK（规划中）
+### 8.2 C++ SDK（已实现）
+
+**头文件**：`common/cpp/config/config_watcher.hpp`
 
 ```cpp
-// common/cpp/config/config_watcher.hpp
-class RedisWatcher {
-public:
-    void Subscribe(const std::string& configName, Handler handler);
-    void Start();
-    void Stop();
-};
+#include "config/config_watcher.hpp"
 
-// 使用示例
-auto watcher = std::make_unique<config::RedisWatcher>(redisContext, "default");
-watcher->Subscribe("gateway_policy", [](const ConfigChangeEvent& ev) {
-    config::PullAndReload("http://127.0.0.1:8087", ev, loader, configPath);
+// 创建 Watcher
+auto watcher = std::make_unique<gs::config::RedisWatcher>(redisContext, "default");
+watcher->SetConfigServiceAddr("http://127.0.0.1:8087");
+watcher->SetLocalLoader(loader, "conf/gateway.json");
+watcher->SetNodeInfo("cn", "gateway-1", {{"env", "prod"}});
+
+// 订阅配置变更
+watcher->Subscribe("gateway_policy", [](const gs::config::ConfigChangeEvent& ev) {
+    // 自定义处理，或留空由 SetLocalLoader 自动触发 PullAndReload
 });
+
+// 启动后台监听线程
 watcher->Start();
 ```
 
-实现要点：
+**实现要点**：
 - 基于 hiredis 的阻塞订阅模式，独立后台线程监听 Redis 消息
-- 收到消息后通过 `PostAsync` 投递到 IO/Compute 线程执行拉取与重载
-- HTTP 拉取使用 curl 或 libuv HTTP 客户端
+- 使用 WinHTTP 客户端（Windows）调用 `/pull` API 拉取配置内容
+- 文件写入采用".tmp + rename"原子操作
+- 自动触发 `Loader::Reload()`
+- 预留 `ShouldAcceptGray` 灰度匹配接口
 
 ---
 
@@ -389,9 +394,18 @@ watcher->Start();
 - **配置列表页**：表格展示全部配置，显示当前版本、状态、最近修改时间，支持搜索
 - **配置编辑页**：
   - 左侧：配置内容编辑器（原生 textarea，预留 Monaco/CodeMirror 升级接口）
-  - 右侧：版本历史列表，点击切换内容、发布草稿、回滚已发布版本
+  - 右侧：版本历史列表，点击切换内容、发布草稿、回滚已发布版本、**对比当前版本差异**
   - 底部：保存草稿 / 直接发布
 - **操作日志页**：全量审计记录，支持按配置名/操作人过滤
+
+### 9.3 Diff 对比功能
+
+在版本历史列表中点击 **"对比当前"**，弹出 diff 弹窗：
+- 绿色行：新增内容
+- 红色行：删除内容
+- 左侧显示行号，支持行级差异定位
+
+Diff 算法为原生 JS 实现的贪心行级 diff，在后续 8 行范围内查找最佳匹配。
 
 ### 9.2 打开方式
 
@@ -439,7 +453,104 @@ curl -X POST http://127.0.0.1:9090/admin/reload \
 
 ---
 
-## 11. 与现有框架的兼容策略
+## 11. 持久化存储分层（MySQL + Redis）
+
+配置内容采用**双写**策略：
+
+| 存储层 | 职责 | Key/Table |
+|--------|------|-----------|
+| **MySQL** | 配置元数据、完整版本历史、审计日志（关系型查询友好） | `configs`、`config_versions`、`config_logs` |
+| **Redis** | 当前生效版本缓存、指定版本缓存、Pub/Sub 推送通道 | `config:current:{ns}:{name}`、`config:version:{ns}:{name}:{ver_id}`、`pubsub:config:{ns}:{name}` |
+
+**设计要点**：
+- 发布/回滚时，Config Service **先写 MySQL 事务，再写 Redis 缓存**，最后推送 Pub/Sub 事件
+- `/pull` API **优先读 Redis**，命中直接返回（延迟 < 1ms）；Redis miss 时回源 MySQL
+- Redis 零 TTL 长期保留，MySQL 是最终可信源，Redis 作为高性能读缓存
+
+---
+
+## 12. 灰度发布设计
+
+### 12.1 灰度规则
+
+业务服务在启动时通过 `SetNodeInfo(region, node_id, tags)` 注册自身身份：
+
+```go
+watcher.SetNodeInfo("cn", "biz-01", map[string]string{"env": "prod", "zone": "a"})
+```
+
+Config Service 发布时支持以下灰度参数：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `gray_region` | string | 目标 region，如 `"cn"`，空表示不限 |
+| `gray_node_id` | string | 目标 node_id，如 `"biz-01"`，空表示不限 |
+| `gray_percent` | int32 | 百分比灰度 0-100，0 表示全量 |
+| `gray_tags` | map<string,string> | 标签匹配，如 `{"env": "prod"}` |
+
+### 12.2 灰度匹配算法
+
+```
+if gray_region 不为空且 != 本节点 region → 拒绝
+if gray_node_id 不为空且 != 本节点 node_id → 拒绝
+if gray_tags 存在不匹配的标签 → 拒绝
+if gray_percent > 0 且 gray_percent < 100:
+    hash = node_id 字符串 hash 取模
+    if hash % 100 >= gray_percent → 拒绝
+→ 接受
+```
+
+百分比灰度使用 `node_id` 哈希取模，确保**同一节点始终得到一致结果**（不会出现同一节点一会儿收到一会儿收不到）。
+
+### 12.3 发布示例
+
+```bash
+# 仅推送给 region=cn、env=prod 的 20% 节点
+curl -X POST http://127.0.0.1:8087/api/configs/feature_flags/publish \
+  -H "Content-Type: application/json" \
+  -d '{
+    "namespace": "default",
+    "version_id": 3,
+    "gray_region": "cn",
+    "gray_percent": 20,
+    "gray_tags": {"env": "prod"}
+  }'
+```
+
+---
+
+## 13. JSON Schema 校验
+
+### 13.1 后端校验
+
+`services/config-go/internal/handler/schema.go` 实现轻量级 JSON Schema 校验器：
+
+- `type`：string / number / integer / boolean / array / object
+- `required`：必填字段数组
+- `properties`：对象字段递归校验
+- `enum`：枚举值限制
+- `minimum` / `maximum`：数值范围
+- `minLength` / `maxLength`：字符串长度
+
+在**创建配置**和**编辑配置**时自动触发，校验失败返回 `400 Bad Request`。
+
+### 13.2 前端校验
+
+Web 管理后台在保存前执行 `JSON.parse(content)` 格式检查，格式错误立即拦截并提示具体错误位置。
+
+### 13.3 配置示例
+
+```json
+{
+  "name": "feature_flags",
+  "format": "json",
+  "schema_def": "{\"type\":\"object\",\"required\":[\"new_ui\"],\"properties\":{\"new_ui\":{\"type\":\"boolean\"},\"rate_limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10000}}}"
+}
+```
+
+---
+
+## 14. 与现有框架的兼容策略
 
 | 现有机制 | 处理方式 |
 |---------|---------|
@@ -450,7 +561,7 @@ curl -X POST http://127.0.0.1:9090/admin/reload \
 
 ---
 
-## 12. 配置分层模型
+## 15. 配置分层模型
 
 参考 DESIGN.md 的 L0~L3 分层，本方案优先支持 L1/L2：
 
@@ -463,7 +574,7 @@ curl -X POST http://127.0.0.1:9090/admin/reload \
 
 ---
 
-## 13. 演进路线
+## 16. 演进路线
 
 | 阶段 | 目标 | 状态 |
 |------|------|------|
@@ -471,22 +582,25 @@ curl -X POST http://127.0.0.1:9090/admin/reload \
 | **Phase 2** | Go SDK（RedisWatcher + PullAndReload）+ biz-go 接入示例 |  已完成 |
 | **Phase 3** | Web 管理后台（配置列表、编辑器、版本历史、日志） |  已完成 |
 | **Phase 4** | `/admin/reload` Bearer Token 鉴权 + CORS |  已完成 |
-| **Phase 5** | C++ SDK（hiredis Pub/Sub + HTTP 拉取） |  待实现 |
-| **Phase 6** | Web 端版本内容 diff 对比 |  待实现 |
-| **Phase 7** | JSON Schema 校验（前端 + 后端双重校验） |  待实现 |
-| **Phase 8** | 灰度发布（按 region / node_id / percent 推送） |  待实现 |
+| **Phase 5** | C++ SDK（hiredis Pub/Sub + HTTP 拉取） |  已完成 |
+| **Phase 6** | Web 端版本内容 diff 对比 |  已完成 |
+| **Phase 7** | JSON Schema 校验（前端 + 后端双重校验） |  已完成 |
+| **Phase 8** | 灰度发布（按 region / node_id / percent 推送） |  已完成 |
 | **Phase 9** | 配置内容加密存储（敏感配置如密钥） |  远期规划 |
 
 ---
 
-## 14. 相关文档与代码
+## 17. 相关文档与代码
 
 | 资源 | 路径 |
 |------|------|
 | 服务入口 | `services/config-go/main.go` |
 | HTTP Handler | `services/config-go/internal/handler/handler.go` |
+| Schema 校验 | `services/config-go/internal/handler/schema.go` |
 | 数据存储层 | `services/config-go/internal/store/store.go` |
 | Go SDK | `common/go/config/watcher.go` |
+| C++ SDK | `common/cpp/config/config_watcher.hpp` / `.cpp` |
+| C++ HTTP 客户端 | `common/cpp/config/http_client.hpp` / `.cpp` |
 | 本地加载器（含鉴权） | `common/go/config/loader.go` |
 | Protobuf 定义 | `spec/proto/config.proto` |
 | Web 管理后台 | `web/config-admin/` |
@@ -496,7 +610,7 @@ curl -X POST http://127.0.0.1:9090/admin/reload \
 
 ---
 
-## 15. 附录：术语表
+## 18. 附录：术语表
 
 | 术语 | 说明 |
 |------|------|

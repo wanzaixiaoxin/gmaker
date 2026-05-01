@@ -193,6 +193,7 @@ set(CPP_RPC_SOURCES
 set(CPP_PROTO_SOURCES
     gen/cpp/registry.pb.cc
     gen/cpp/protocol.pb.cc
+    gen/cpp/config.pb.cc
 )
 
 set(CPP_REGISTRY_SOURCES
@@ -208,6 +209,8 @@ set(CPP_DISCOVERY_SOURCES
 
 set(CPP_CONFIG_SOURCES
     common/cpp/config/config.cpp
+    common/cpp/config/config_watcher.cpp
+    common/cpp/config/http_client.cpp
 )
 
 set(CPP_CRYPTO_SOURCES

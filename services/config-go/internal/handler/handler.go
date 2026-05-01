@@ -210,6 +210,14 @@ func (h *ConfigHandler) createConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Schema 校验
+	if req.Format == "json" && cfg.SchemaDef != "" {
+		if err := ValidateJSONSchema(req.Content, cfg.SchemaDef); err != nil {
+			writeErr(w, http.StatusBadRequest, "schema validation failed: "+err.Error())
+			return
+		}
+	}
+
 	// 同时创建第一个版本（草稿）
 	verNo, err := h.store.GetNextVersionNo(ctx, cfg.ID)
 	if err != nil {
@@ -320,6 +328,13 @@ func (h *ConfigHandler) updateConfig(w http.ResponseWriter, r *http.Request, nam
 	// 如果有新内容，创建新版本（草稿）
 	var ver *store.ConfigVersion
 	if req.Content != "" {
+		// Schema 校验
+		if cfg.Format == "json" && cfg.SchemaDef != "" {
+			if err := ValidateJSONSchema(req.Content, cfg.SchemaDef); err != nil {
+				writeErr(w, http.StatusBadRequest, "schema validation failed: "+err.Error())
+				return
+			}
+		}
 		verNo, err := h.store.GetNextVersionNo(ctx, cfg.ID)
 		if err != nil {
 			h.log.Errorf("get next version failed: %v", err)
@@ -384,8 +399,12 @@ func (h *ConfigHandler) deleteConfig(w http.ResponseWriter, r *http.Request, nam
 
 func (h *ConfigHandler) publishConfig(w http.ResponseWriter, r *http.Request, name string) {
 	var req struct {
-		Namespace string `json:"namespace"`
-		VersionID int64  `json:"version_id"`
+		Namespace  string            `json:"namespace"`
+		VersionID  int64             `json:"version_id"`
+		GrayRegion string            `json:"gray_region"`
+		GrayNodeID string            `json:"gray_node_id"`
+		GrayPercent int32            `json:"gray_percent"`
+		GrayTags   map[string]string `json:"gray_tags"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -436,17 +455,22 @@ func (h *ConfigHandler) publishConfig(w http.ResponseWriter, r *http.Request, na
 	}
 
 	// 记录日志
+	detail := fmt.Sprintf(`{"version":%d,"checksum":"%s"}`, ver.Version, ver.Checksum)
+	if req.GrayPercent > 0 || req.GrayRegion != "" || req.GrayNodeID != "" {
+		detail = fmt.Sprintf(`{"version":%d,"checksum":"%s","gray":{"region":"%s","node_id":"%s","percent":%d}}`,
+			ver.Version, ver.Checksum, req.GrayRegion, req.GrayNodeID, req.GrayPercent)
+	}
 	_ = h.store.AddLog(ctx, &store.ConfigLog{
 		ConfigID:  cfg.ID,
 		VersionID: ver.ID,
 		Action:    "publish",
 		Operator:  getOperator(r),
-		Detail:    fmt.Sprintf(`{"version":%d,"checksum":"%s"}`, ver.Version, ver.Checksum),
+		Detail:    detail,
 		IP:        r.RemoteAddr,
 	})
 
-	// 推送 Redis 事件
-	h.pushEvent(ctx, cfg, ver, "publish")
+	// 推送 Redis 事件（携带灰度信息）
+	h.pushEventWithGray(ctx, cfg, ver, "publish", req.GrayRegion, req.GrayNodeID, req.GrayPercent, req.GrayTags)
 
 	writeOK(w, map[string]interface{}{"version_id": ver.ID, "version": ver.Version})
 }
@@ -526,7 +550,7 @@ func (h *ConfigHandler) rollbackConfig(w http.ResponseWriter, r *http.Request, n
 		IP:        r.RemoteAddr,
 	})
 
-	h.pushEvent(ctx, cfg, newVer, "rollback")
+	h.pushEventWithGray(ctx, cfg, newVer, "rollback", "", "", 0, nil)
 
 	writeOK(w, map[string]interface{}{"version_id": newVer.ID, "version": newVer.Version})
 }
@@ -687,6 +711,10 @@ func (h *ConfigHandler) subscribeConfig(w http.ResponseWriter, r *http.Request, 
 // ==================== 推送分发 ====================
 
 func (h *ConfigHandler) pushEvent(ctx context.Context, cfg *store.Config, ver *store.ConfigVersion, action string) {
+	h.pushEventWithGray(ctx, cfg, ver, action, "", "", 0, nil)
+}
+
+func (h *ConfigHandler) pushEventWithGray(ctx context.Context, cfg *store.Config, ver *store.ConfigVersion, action string, grayRegion, grayNodeID string, grayPercent int32, grayTags map[string]string) {
 	if h.redisClient == nil {
 		h.log.Warnf("redis not available, skip push event for %s", cfg.Name)
 		return
@@ -708,15 +736,19 @@ func (h *ConfigHandler) pushEvent(ctx context.Context, cfg *store.Config, ver *s
 		h.log.Errorf("save config version to redis failed: %v", err)
 	}
 
-	// 2. 发布变更事件到 Pub/Sub
+	// 2. 发布变更事件到 Pub/Sub（携带灰度信息）
 	event := &configpb.ConfigChangeEvent{
-		ConfigName: cfg.Name,
-		Namespace:  cfg.Namespace,
-		VersionId:  ver.ID,
-		VersionNo:  ver.Version,
-		Checksum:   ver.Checksum,
-		Action:     action,
-		Timestamp:  time.Now().UnixMilli(),
+		ConfigName:  cfg.Name,
+		Namespace:   cfg.Namespace,
+		VersionId:   ver.ID,
+		VersionNo:   ver.Version,
+		Checksum:    ver.Checksum,
+		Action:      action,
+		Timestamp:   time.Now().UnixMilli(),
+		GrayRegion:  grayRegion,
+		GrayNodeId:  grayNodeID,
+		GrayPercent: grayPercent,
+		GrayTags:    grayTags,
 	}
 	data, err := proto.Marshal(event)
 	if err != nil {
@@ -728,5 +760,6 @@ func (h *ConfigHandler) pushEvent(ctx context.Context, cfg *store.Config, ver *s
 		h.log.Errorf("publish config change event failed: %v", err)
 		return
 	}
-	h.log.Infof("pushed config change event to %s, version=%d action=%s", channel, ver.Version, action)
+	h.log.Infof("pushed config change event to %s, version=%d action=%s gray={region:%s node:%s percent:%d}",
+		channel, ver.Version, action, grayRegion, grayNodeID, grayPercent)
 }

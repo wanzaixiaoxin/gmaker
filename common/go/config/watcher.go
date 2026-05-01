@@ -23,6 +23,11 @@ type RedisWatcher struct {
 	subscriber  *redis.PubSub
 	log         *logger.Logger
 	namespace   string
+
+	// 节点身份信息（用于灰度匹配）
+	region string
+	nodeID string
+	tags   map[string]string
 }
 
 // NewRedisWatcher 创建配置监听器
@@ -42,6 +47,13 @@ func NewRedisWatcher(client redis.UniversalClient, namespace string) *RedisWatch
 // SetLogger 设置日志器
 func (w *RedisWatcher) SetLogger(log *logger.Logger) {
 	w.log = log
+}
+
+// SetNodeInfo 设置节点身份信息（用于灰度发布匹配）
+func (w *RedisWatcher) SetNodeInfo(region, nodeID string, tags map[string]string) {
+	w.region = region
+	w.nodeID = nodeID
+	w.tags = tags
 }
 
 func (w *RedisWatcher) infof(format string, v ...interface{}) {
@@ -161,14 +173,53 @@ func (w *RedisWatcher) handleMessage(msg *redis.Message) {
 		return
 	}
 
-	w.infof("[ConfigWatcher] received change event: config=%s version=%d action=%s",
-		event.ConfigName, event.VersionNo, event.Action)
+	w.infof("[ConfigWatcher] received change event: config=%s version=%d action=%s gray={region:%s node:%s percent:%d}",
+		event.ConfigName, event.VersionNo, event.Action, event.GrayRegion, event.GrayNodeId, event.GrayPercent)
+
+	// 灰度匹配
+	if !ShouldAcceptGray(&event, w.region, w.nodeID, w.tags) {
+		w.infof("[ConfigWatcher] gray rule rejected for %s", event.ConfigName)
+		return
+	}
 
 	// 在独立 goroutine 中执行 handler，避免阻塞 Redis 消费
 	go handler(&event)
 }
 
 // ==================== 拉取与重载工具 ====================
+
+// ShouldAcceptGray 判断当前节点是否应该接受灰度配置
+func ShouldAcceptGray(event *configpb.ConfigChangeEvent, region, nodeID string, tags map[string]string) bool {
+	// 无灰度规则，全量接收
+	if event.GrayRegion == "" && event.GrayNodeId == "" && event.GrayPercent == 0 && len(event.GrayTags) == 0 {
+		return true
+	}
+	// 精确匹配 region
+	if event.GrayRegion != "" && event.GrayRegion != region {
+		return false
+	}
+	// 精确匹配 node_id
+	if event.GrayNodeId != "" && event.GrayNodeId != nodeID {
+		return false
+	}
+	// 标签匹配
+	for k, v := range event.GrayTags {
+		if tags[k] != v {
+			return false
+		}
+	}
+	// 百分比灰度：使用 node_id hash 取模
+	if event.GrayPercent > 0 && event.GrayPercent < 100 {
+		hash := 0
+		for _, c := range nodeID {
+			hash = (hash*31 + int(c)) & 0x7FFFFFFF
+		}
+		if hash%100 >= int(event.GrayPercent) {
+			return false
+		}
+	}
+	return true
+}
 
 // PullAndReload 从 Config Service 拉取配置内容，校验 checksum，写入本地文件后触发重载
 //   - serviceAddr: Config Service HTTP 地址，如 "http://127.0.0.1:8087"

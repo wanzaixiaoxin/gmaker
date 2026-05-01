@@ -311,23 +311,31 @@ curl -X POST http://127.0.0.1:9090/admin/reload \
 
 ## 业务服务接入指南（C++）
 
-> C++ SDK 待实现，规划如下：
+**已实现**。C++ SDK 位于 `common/cpp/config/`：
 
-1. `common/cpp/config/config_watcher.hpp` — 基于 hiredis 的 Pub/Sub 订阅封装
-2. 后台线程阻塞监听 Redis 消息
-3. 收到 `ConfigChangeEvent` 后，通过 `PostAsync` 投递到主线程
-4. 使用 curl / libuv HTTP 客户端调用 `/pull` API 拉取内容
-5. 写入本地文件并触发 `Loader::Reload()`
-
-Gateway / Realtime 启动时示例：
+- `config_watcher.hpp/cpp` — 基于 hiredis 的 Pub/Sub 订阅封装
+- `http_client.hpp/cpp` — Windows WinHTTP 同步 GET 客户端
 
 ```cpp
-auto watcher = std::make_unique<config::RedisWatcher>(redisContext, "default");
-watcher->Subscribe("gateway_policy", [](const config::ConfigChangeEvent& ev) {
-    config::PullAndReload("http://127.0.0.1:8087", ev, loader, configPath);
+#include "config/config_watcher.hpp"
+
+auto watcher = std::make_unique<gs::config::RedisWatcher>(redisContext, "default");
+watcher->SetConfigServiceAddr("http://127.0.0.1:8087");
+watcher->SetLocalLoader(loader, "conf/gateway.json");
+watcher->SetNodeInfo("cn", "gateway-1", {{"env", "prod"}});
+
+watcher->Subscribe("gateway_policy", [](const gs::config::ConfigChangeEvent& ev) {
+    // 留空时由 SetLocalLoader 自动触发 PullAndReload
 });
 watcher->Start();
 ```
+
+**实现要点**：
+- 独立后台线程阻塞监听 Redis 消息
+- 收到事件后通过 WinHTTP 调用 `/pull` API
+- 文件写入采用".tmp + rename"原子操作
+- 自动触发 `Loader::Reload()`
+- 预留 `ShouldAcceptGray` 灰度匹配接口
 
 ---
 
@@ -344,8 +352,8 @@ watcher->Start();
 ### 功能概览
 
 - **配置列表**：搜索、新建、编辑、删除
-- **配置编辑**：语法高亮编辑器（原生 textarea，可扩展为 Monaco/CodeMirror）、保存草稿、直接发布
-- **版本历史**：右侧展示全部版本，点击切换内容、一键发布草稿、一键回滚已发布版本
+- **配置编辑**：语法高亮编辑器（原生 textarea，可扩展为 Monaco/CodeMirror）、保存草稿、直接发布、**JSON 格式实时校验**
+- **版本历史**：右侧展示全部版本，点击切换内容、一键发布草稿、一键回滚已发布版本、**与当前编辑内容 diff 对比**
 - **操作日志**：全量审计记录，支持按操作人/配置名过滤
 
 ---
@@ -357,7 +365,8 @@ services/config-go/
 ├── main.go                      # 服务入口：HTTP 服务 + MySQL/Redis/Registry 初始化
 ├── internal/
 │   ├── handler/
-│   │   └── handler.go           # HTTP API 路由与业务逻辑
+│   │   ├── handler.go           # HTTP API 路由与业务逻辑
+│   │   └── schema.go            # JSON Schema 轻量级校验器
 │   └── store/
 │       └── store.go             # MySQL 数据访问层（Config / Version / Log / Subscriber）
 └── README.md                    # 本文档
@@ -370,7 +379,7 @@ services/config-go/
 | 交互方 | 协议 | 用途 |
 |--------|------|------|
 | **MySQL** | `database/sql` + `go-sql-driver/mysql` | 配置元数据、版本、审计日志持久化 |
-| **Redis** | `go-redis/v9` | Pub/Sub 配置变更事件推送 |
+| **Redis** | `go-redis/v9` | Pub/Sub 推送 + 配置内容缓存（`config:current:*`、`config:version:*`） |
 | **Registry** | TCP + protobuf3（通过 `common/go/discovery`） | 服务注册与发现 |
 | **业务服务** | HTTP REST（业务服务作为客户端） | 配置拉取 `/pull`、订阅注册 `/subscribe` |
 | **Web 后台** | HTTP REST + CORS | 可视化配置管理 |
@@ -402,7 +411,7 @@ services/config-go/
 - [x] Go 侧 RedisWatcher SDK
 - [x] Web 管理后台（基础版本）
 - [x] `/admin/reload` Bearer Token 鉴权
-- [ ] C++ 侧 RedisWatcher SDK
-- [ ] Web 端版本内容 diff 对比
-- [ ] JSON Schema 校验（前端 + 后端）
-- [ ] 灰度发布（按 region / node_id / percent 推送）
+- [x] C++ 侧 RedisWatcher SDK
+- [x] Web 端版本内容 diff 对比
+- [x] JSON Schema 校验（前端 + 后端）
+- [x] 灰度发布（按 region / node_id / percent 推送）

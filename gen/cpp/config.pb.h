@@ -29,6 +29,10 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/map.h"  // IWYU pragma: export
+#include "google/protobuf/map_type_handler.h"  // IWYU pragma: export
+#include "google/protobuf/map_entry.h"
+#include "google/protobuf/map_field.h"
 #include "google/protobuf/unknown_field_set.h"
 // @@protoc_insertion_point(includes)
 
@@ -58,6 +62,10 @@ class ConfigChangeEvent;
 struct ConfigChangeEventDefaultTypeInternal;
 extern ConfigChangeEventDefaultTypeInternal _ConfigChangeEvent_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull ConfigChangeEvent_class_data_;
+class ConfigChangeEvent_GrayTagsEntry_DoNotUse;
+struct ConfigChangeEvent_GrayTagsEntry_DoNotUseDefaultTypeInternal;
+extern ConfigChangeEvent_GrayTagsEntry_DoNotUseDefaultTypeInternal _ConfigChangeEvent_GrayTagsEntry_DoNotUse_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull ConfigChangeEvent_GrayTagsEntry_DoNotUse_class_data_;
 class ConfigLogEntry;
 struct ConfigLogEntryDefaultTypeInternal;
 extern ConfigLogEntryDefaultTypeInternal _ConfigLogEntry_default_instance_;
@@ -151,7 +159,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubscribeReq final : public ::googl
     return *reinterpret_cast<const SubscribeReq*>(
         &_SubscribeReq_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(SubscribeReq& a, SubscribeReq& b) { a.Swap(&b); }
   inline void Swap(SubscribeReq* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -396,7 +404,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigVersion final : public ::goog
     return *reinterpret_cast<const ConfigVersion*>(
         &_ConfigVersion_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(ConfigVersion& a, ConfigVersion& b) { a.Swap(&b); }
   inline void Swap(ConfigVersion* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -686,7 +694,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigPullRes final : public ::goog
     return *reinterpret_cast<const ConfigPullRes*>(
         &_ConfigPullRes_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(ConfigPullRes& a, ConfigPullRes& b) { a.Swap(&b); }
   inline void Swap(ConfigPullRes* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -969,7 +977,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigPullReq final : public ::goog
     return *reinterpret_cast<const ConfigPullReq*>(
         &_ConfigPullReq_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(ConfigPullReq& a, ConfigPullReq& b) { a.Swap(&b); }
   inline void Swap(ConfigPullReq* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1199,7 +1207,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigMeta final : public ::google:
     return *reinterpret_cast<const ConfigMeta*>(
         &_ConfigMeta_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(ConfigMeta& a, ConfigMeta& b) { a.Swap(&b); }
   inline void Swap(ConfigMeta* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1511,7 +1519,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigLogEntry final : public ::goo
     return *reinterpret_cast<const ConfigLogEntry*>(
         &_ConfigLogEntry_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(ConfigLogEntry& a, ConfigLogEntry& b) { a.Swap(&b); }
   inline void Swap(ConfigLogEntry* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1755,6 +1763,45 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigLogEntry final : public ::goo
 extern const ::google::protobuf::internal::ClassDataFull ConfigLogEntry_class_data_;
 // -------------------------------------------------------------------
 
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigChangeEvent_GrayTagsEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::std::string, ::std::string,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_STRING> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::std::string, ::std::string,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING>;
+  ConfigChangeEvent_GrayTagsEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr ConfigChangeEvent_GrayTagsEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized);
+  explicit ConfigChangeEvent_GrayTagsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_default_instance() {
+    return &_ConfigChangeEvent_GrayTagsEntry_DoNotUse_default_instance_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_();
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_config_2eproto;
+
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 55,
+                                   2>
+      _table_;
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+};
+extern const ::google::protobuf::internal::ClassDataFull ConfigChangeEvent_GrayTagsEntry_DoNotUse_class_data_;
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigChangeEvent final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:config.ConfigChangeEvent) */ {
  public:
@@ -1811,7 +1858,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigChangeEvent final : public ::
     return *reinterpret_cast<const ConfigChangeEvent*>(
         &_ConfigChangeEvent_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 0;
+  static constexpr int kIndexInFileMessages = 1;
   friend void swap(ConfigChangeEvent& a, ConfigChangeEvent& b) { a.Swap(&b); }
   inline void Swap(ConfigChangeEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1905,9 +1952,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigChangeEvent final : public ::
     kNamespaceFieldNumber = 2,
     kChecksumFieldNumber = 5,
     kActionFieldNumber = 6,
+    kGrayRegionFieldNumber = 8,
+    kGrayNodeIdFieldNumber = 9,
     kVersionIdFieldNumber = 3,
     kTimestampFieldNumber = 7,
     kVersionNoFieldNumber = 4,
+    kGrayPercentFieldNumber = 10,
+    kGrayTagsFieldNumber = 11,
   };
   // string config_name = 1;
   void clear_config_name() ;
@@ -1969,6 +2020,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigChangeEvent final : public ::
   ::std::string* PROTOBUF_NONNULL _internal_mutable_action();
 
   public:
+  // string gray_region = 8;
+  void clear_gray_region() ;
+  [[nodiscard]] const ::std::string& gray_region() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_gray_region(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_gray_region();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_gray_region();
+  void set_allocated_gray_region(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_gray_region() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_gray_region(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_gray_region();
+
+  public:
+  // string gray_node_id = 9;
+  void clear_gray_node_id() ;
+  [[nodiscard]] const ::std::string& gray_node_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_gray_node_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_gray_node_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_gray_node_id();
+  void set_allocated_gray_node_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_gray_node_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_gray_node_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_gray_node_id();
+
+  public:
   // int64 version_id = 3;
   void clear_version_id() ;
   [[nodiscard]] ::int64_t version_id() const;
@@ -1999,12 +2080,38 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigChangeEvent final : public ::
   void _internal_set_version_no(::int32_t value);
 
   public:
+  // int32 gray_percent = 10;
+  void clear_gray_percent() ;
+  [[nodiscard]] ::int32_t gray_percent() const;
+  void set_gray_percent(::int32_t value);
+
+  private:
+  ::int32_t _internal_gray_percent() const;
+  void _internal_set_gray_percent(::int32_t value);
+
+  public:
+  // map<string, string> gray_tags = 11;
+  [[nodiscard]] int gray_tags_size()
+      const;
+  private:
+  int _internal_gray_tags_size() const;
+
+  public:
+  void clear_gray_tags() ;
+  [[nodiscard]] const ::google::protobuf::Map<::std::string, ::std::string>& gray_tags() const;
+  [[nodiscard]] ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL mutable_gray_tags();
+
+  private:
+  const ::google::protobuf::Map<::std::string, ::std::string>& _internal_gray_tags() const;
+  ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL _internal_mutable_gray_tags();
+
+  public:
   // @@protoc_insertion_point(class_scope:config.ConfigChangeEvent)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 7,
-                                   0, 67,
+  static const ::google::protobuf::internal::TcParseTable<4, 11,
+                                   1, 107,
                                    2>
       _table_;
 
@@ -2031,9 +2138,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ConfigChangeEvent final : public ::
     ::google::protobuf::internal::ArenaStringPtr namespace__;
     ::google::protobuf::internal::ArenaStringPtr checksum_;
     ::google::protobuf::internal::ArenaStringPtr action_;
+    ::google::protobuf::internal::ArenaStringPtr gray_region_;
+    ::google::protobuf::internal::ArenaStringPtr gray_node_id_;
     ::int64_t version_id_;
     ::int64_t timestamp_;
     ::int32_t version_no_;
+    ::int32_t gray_percent_;
+    ::google::protobuf::internal::MapField<ConfigChangeEvent_GrayTagsEntry_DoNotUse, ::std::string, ::std::string> gray_tags_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2054,6 +2165,8 @@ extern const ::google::protobuf::internal::ClassDataFull ConfigChangeEvent_class
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // ConfigChangeEvent
@@ -2193,7 +2306,7 @@ inline void ConfigChangeEvent::clear_version_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.version_id_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000040U);
 }
 inline ::int64_t ConfigChangeEvent::version_id() const {
   // @@protoc_insertion_point(field_get:config.ConfigChangeEvent.version_id)
@@ -2201,7 +2314,7 @@ inline ::int64_t ConfigChangeEvent::version_id() const {
 }
 inline void ConfigChangeEvent::set_version_id(::int64_t value) {
   _internal_set_version_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:config.ConfigChangeEvent.version_id)
 }
 inline ::int64_t ConfigChangeEvent::_internal_version_id() const {
@@ -2218,7 +2331,7 @@ inline void ConfigChangeEvent::clear_version_no() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.version_no_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000040U);
+                  0x00000100U);
 }
 inline ::int32_t ConfigChangeEvent::version_no() const {
   // @@protoc_insertion_point(field_get:config.ConfigChangeEvent.version_no)
@@ -2226,7 +2339,7 @@ inline ::int32_t ConfigChangeEvent::version_no() const {
 }
 inline void ConfigChangeEvent::set_version_no(::int32_t value) {
   _internal_set_version_no(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:config.ConfigChangeEvent.version_no)
 }
 inline ::int32_t ConfigChangeEvent::_internal_version_no() const {
@@ -2373,7 +2486,7 @@ inline void ConfigChangeEvent::clear_timestamp() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.timestamp_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000080U);
 }
 inline ::int64_t ConfigChangeEvent::timestamp() const {
   // @@protoc_insertion_point(field_get:config.ConfigChangeEvent.timestamp)
@@ -2381,7 +2494,7 @@ inline ::int64_t ConfigChangeEvent::timestamp() const {
 }
 inline void ConfigChangeEvent::set_timestamp(::int64_t value) {
   _internal_set_timestamp(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:config.ConfigChangeEvent.timestamp)
 }
 inline ::int64_t ConfigChangeEvent::_internal_timestamp() const {
@@ -2391,6 +2504,193 @@ inline ::int64_t ConfigChangeEvent::_internal_timestamp() const {
 inline void ConfigChangeEvent::_internal_set_timestamp(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.timestamp_ = value;
+}
+
+// string gray_region = 8;
+inline void ConfigChangeEvent::clear_gray_region() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gray_region_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline const ::std::string& ConfigChangeEvent::gray_region() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:config.ConfigChangeEvent.gray_region)
+  return _internal_gray_region();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ConfigChangeEvent::set_gray_region(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.gray_region_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:config.ConfigChangeEvent.gray_region)
+}
+inline ::std::string* PROTOBUF_NONNULL ConfigChangeEvent::mutable_gray_region()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_gray_region();
+  // @@protoc_insertion_point(field_mutable:config.ConfigChangeEvent.gray_region)
+  return _s;
+}
+inline const ::std::string& ConfigChangeEvent::_internal_gray_region() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gray_region_.Get();
+}
+inline void ConfigChangeEvent::_internal_set_gray_region(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gray_region_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ConfigChangeEvent::_internal_mutable_gray_region() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.gray_region_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ConfigChangeEvent::release_gray_region() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:config.ConfigChangeEvent.gray_region)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.gray_region_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.gray_region_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ConfigChangeEvent::set_allocated_gray_region(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.gray_region_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.gray_region_.IsDefault()) {
+    _impl_.gray_region_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:config.ConfigChangeEvent.gray_region)
+}
+
+// string gray_node_id = 9;
+inline void ConfigChangeEvent::clear_gray_node_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gray_node_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000020U);
+}
+inline const ::std::string& ConfigChangeEvent::gray_node_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:config.ConfigChangeEvent.gray_node_id)
+  return _internal_gray_node_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ConfigChangeEvent::set_gray_node_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.gray_node_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:config.ConfigChangeEvent.gray_node_id)
+}
+inline ::std::string* PROTOBUF_NONNULL ConfigChangeEvent::mutable_gray_node_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_gray_node_id();
+  // @@protoc_insertion_point(field_mutable:config.ConfigChangeEvent.gray_node_id)
+  return _s;
+}
+inline const ::std::string& ConfigChangeEvent::_internal_gray_node_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gray_node_id_.Get();
+}
+inline void ConfigChangeEvent::_internal_set_gray_node_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gray_node_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ConfigChangeEvent::_internal_mutable_gray_node_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.gray_node_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ConfigChangeEvent::release_gray_node_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:config.ConfigChangeEvent.gray_node_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.gray_node_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.gray_node_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ConfigChangeEvent::set_allocated_gray_node_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.gray_node_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.gray_node_id_.IsDefault()) {
+    _impl_.gray_node_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:config.ConfigChangeEvent.gray_node_id)
+}
+
+// int32 gray_percent = 10;
+inline void ConfigChangeEvent::clear_gray_percent() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gray_percent_ = 0;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000200U);
+}
+inline ::int32_t ConfigChangeEvent::gray_percent() const {
+  // @@protoc_insertion_point(field_get:config.ConfigChangeEvent.gray_percent)
+  return _internal_gray_percent();
+}
+inline void ConfigChangeEvent::set_gray_percent(::int32_t value) {
+  _internal_set_gray_percent(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:config.ConfigChangeEvent.gray_percent)
+}
+inline ::int32_t ConfigChangeEvent::_internal_gray_percent() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gray_percent_;
+}
+inline void ConfigChangeEvent::_internal_set_gray_percent(::int32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gray_percent_ = value;
+}
+
+// map<string, string> gray_tags = 11;
+inline int ConfigChangeEvent::_internal_gray_tags_size() const {
+  return _internal_gray_tags().size();
+}
+inline int ConfigChangeEvent::gray_tags_size() const {
+  return _internal_gray_tags_size();
+}
+inline void ConfigChangeEvent::clear_gray_tags() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gray_tags_.Clear();
+  ClearHasBitForRepeated(_impl_._has_bits_[0],
+                  0x00000400U);
+}
+inline const ::google::protobuf::Map<::std::string, ::std::string>& ConfigChangeEvent::_internal_gray_tags() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gray_tags_.GetMap();
+}
+inline const ::google::protobuf::Map<::std::string, ::std::string>& ConfigChangeEvent::gray_tags() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:config.ConfigChangeEvent.gray_tags)
+  return _internal_gray_tags();
+}
+inline ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL ConfigChangeEvent::_internal_mutable_gray_tags() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.gray_tags_.MutableMap();
+}
+inline ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL ConfigChangeEvent::mutable_gray_tags()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_mutable_map:config.ConfigChangeEvent.gray_tags)
+  return _internal_mutable_gray_tags();
 }
 
 // -------------------------------------------------------------------

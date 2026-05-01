@@ -129,3 +129,10 @@ nav { padding: 10px 0; }
 .tag-green { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
 .tag-red { background: #fff2f0; color: #cf1322; border: 1px solid #ffa39e; }
 .tag-orange { background: #fff7e6; color: #d46b08; border: 1px solid #ffd591; }
+
+/* Diff */
+.diff-line { padding: 2px 8px; white-space: pre-wrap; word-break: break-all; }
+.diff-same { color: #333; }
+.diff-del { background: #ffe6e6; color: #a8071a; }
+.diff-add { background: #e6ffed; color: #237804; }
+.diff-lineno { color: #999; font-size: 11px; display: inline-block; width: 30px; text-align: right; margin-right: 8px; user-select: none; }
