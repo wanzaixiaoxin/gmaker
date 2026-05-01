@@ -9,9 +9,28 @@ echo ========================================
 echo.
 
 echo [1/5] Checking tools...
+
+:: Try system protoc first, then fall back to local prebuilt
+set "PROTOC_CMD=protoc"
 protoc --version 2>nul
 if %errorlevel% neq 0 (
-    echo ERROR: protoc not found in PATH
+    if exist "3rd\protobuf\protobuf-34.1\build\Release\protoc.exe" (
+        set "PROTOC_CMD=3rd\protobuf\protobuf-34.1\build\Release\protoc.exe"
+    ) else (
+        echo ERROR: protoc not found in PATH or in 3rd\protobuf\protobuf-34.1\build\Release\
+        exit /b 1
+    )
+)
+
+:: Ensure Go bin directory is in PATH for protoc plugins
+for /f "tokens=*" %%a in ('go env GOPATH 2^>nul') do set "GOBIN=%%a\bin"
+if exist "%GOBIN%" (
+    set "PATH=%GOBIN%;%PATH%"
+)
+
+"%PROTOC_CMD%" --version 2>nul
+if %errorlevel% neq 0 (
+    echo ERROR: protoc failed to run
     exit /b 1
 )
 
@@ -41,7 +60,7 @@ set GEN_CPP_DIR=gen\cpp
 if not exist %GEN_GO_DIR% mkdir %GEN_GO_DIR%
 if not exist %GEN_CPP_DIR% mkdir %GEN_CPP_DIR%
 
-protoc --proto_path=%PROTO_DIR% --go_out=. --go_opt=module=github.com/gmaker/luffa --go-grpc_out=. --go-grpc_opt=module=github.com/gmaker/luffa --cpp_out=%GEN_CPP_DIR% %PROTO_DIR%\*.proto
+"%PROTOC_CMD%" --proto_path=%PROTO_DIR% --go_out=. --go_opt=module=github.com/gmaker/luffa --go-grpc_out=. --go-grpc_opt=module=github.com/gmaker/luffa --cpp_out=%GEN_CPP_DIR% %PROTO_DIR%\*.proto
 
 if %errorlevel% neq 0 (
     echo.
