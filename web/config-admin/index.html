@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>配置管理中心</title>
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>⚙️ Config Center</h1>
+      </div>
+      <nav>
+        <a href="#" class="nav-item active" data-page="list">📋 配置列表</a>
+        <a href="#" class="nav-item" data-page="logs">📜 操作日志</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <h2 id="page-title">配置列表</h2>
+        <div class="user">Admin</div>
+      </header>
+
+      <!-- 配置列表页 -->
+      <section id="page-list" class="page active">
+        <div class="toolbar">
+          <input type="text" id="search-input" placeholder="搜索配置名...">
+          <button class="btn btn-primary" id="btn-new-config">+ 新建配置</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>命名空间</th>
+              <th>格式</th>
+              <th>当前版本</th>
+              <th>状态</th>
+              <th>描述</th>
+              <th>更新时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="config-list-body">
+            <tr><td colspan="8" class="empty">加载中...</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- 配置编辑页 -->
+      <section id="page-edit" class="page">
+        <div class="edit-layout">
+          <div class="edit-main">
+            <div class="form-row">
+              <label>配置名称</label>
+              <input type="text" id="edit-name" placeholder="如 item_table">
+            </div>
+            <div class="form-row">
+              <label>命名空间</label>
+              <input type="text" id="edit-namespace" value="default">
+            </div>
+            <div class="form-row">
+              <label>格式</label>
+              <select id="edit-format">
+                <option value="json">JSON</option>
+                <option value="toml">TOML</option>
+                <option value="yaml">YAML</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>描述</label>
+              <input type="text" id="edit-desc" placeholder="配置用途说明">
+            </div>
+            <div class="form-row">
+              <label>配置内容</label>
+              <textarea id="edit-content" rows="20" placeholder="输入配置内容..."></textarea>
+            </div>
+            <div class="form-actions">
+              <button class="btn" id="btn-cancel">取消</button>
+              <button class="btn btn-primary" id="btn-save-draft">保存草稿</button>
+              <button class="btn btn-success" id="btn-publish">直接发布</button>
+            </div>
+          </div>
+          <div class="edit-side">
+            <h3>版本历史</h3>
+            <ul id="version-list" class="version-list">
+              <li class="empty">暂无版本</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 操作日志页 -->
+      <section id="page-logs" class="page">
+        <div class="toolbar">
+          <input type="text" id="log-filter" placeholder="过滤配置名或操作人...">
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>配置</th>
+              <th>操作</th>
+              <th>版本</th>
+              <th>操作人</th>
+              <th>详情</th>
+            </tr>
+          </thead>
+          <tbody id="log-list-body">
+            <tr><td colspan="6" class="empty">加载中...</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <!-- 发布/回滚弹窗 -->
+  <div class="modal" id="modal-publish">
+    <div class="modal-content">
+      <h3>发布确认</h3>
+      <p id="publish-msg">确认发布此版本？</p>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal()">取消</button>
+        <button class="btn btn-success" id="btn-confirm-publish">确认发布</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

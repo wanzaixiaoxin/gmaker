@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package config;
+option go_package = "github.com/gmaker/luffa/gen/go/config";
+
+// ==================== 配置变更推送事件 ====================
+// 由 Config Service 发布到 Redis Pub/Sub 频道，各服务订阅消费。
+
+message ConfigChangeEvent {
+    string config_name = 1;     // 配置唯一标识（如 item_table）
+    string namespace   = 2;     // 命名空间（默认 default）
+    int64  version_id  = 3;     // 版本记录 ID（对应 config_versions.id）
+    int32  version_no  = 4;     // 单调递增版本号
+    string checksum    = 5;     // SHA-256(content) 用于一致性校验
+    string action      = 6;     // publish | rollback
+    int64  timestamp   = 7;     // 事件时间戳（Unix 毫秒）
+}
+
+// ==================== 服务订阅注册 ====================
+// 服务节点启动时向 Config Service 注册自己关注的配置列表。
+
+message SubscribeReq {
+    string service_type = 1;              // 服务类型，如 "biz", "gateway", "realtime"
+    string node_id      = 2;              // 节点唯一 ID
+    repeated string config_names = 3;     // 关注的配置名称列表
+}
+
+// ==================== 配置内容拉取 ====================
+// 服务收到变更事件后，主动调用 /pull API 获取完整配置内容。
+
+message ConfigPullReq {
+    string config_name = 1;
+    string namespace   = 2;
+    int64  version_id  = 3;     // 可选，留空则拉取当前生效版本
+}
+
+message ConfigPullRes {
+    bool   ok         = 1;
+    uint32 code       = 2;
+    string msg        = 3;
+    string content    = 4;      // 配置原文（JSON/TOML/YAML）
+    string checksum   = 5;
+    int64  version_id = 6;
+    int32  version_no = 7;
+}
+
+// ==================== 配置元数据（内部传输/缓存） ====================
+
+message ConfigMeta {
+    int64  id             = 1;
+    string name           = 2;
+    string namespace      = 3;
+    string format         = 4;  // json | toml | yaml
+    string description    = 5;
+    int64  current_version = 6;
+    int32  status         = 7;  // 0=正常, 1=禁用
+    int64  created_at     = 8;
+    int64  updated_at     = 9;
+}
+
+// ==================== 版本信息 ====================
+
+message ConfigVersion {
+    int64  id           = 1;
+    int64  config_id    = 2;
+    int32  version      = 3;
+    string checksum     = 4;
+    int32  status       = 5;  // 0=草稿, 1=已发布, 2=已回滚, 3=已废弃
+    int64  published_at = 6;
+    string created_by   = 7;
+    int64  created_at   = 8;
+}
+
+// ==================== 审计日志条目 ====================
+
+message ConfigLogEntry {
+    int64  id          = 1;
+    int64  config_id   = 2;
+    int64  version_id  = 3;
+    string action      = 4;  // create | edit | save_draft | publish | rollback | delete
+    string operator    = 5;
+    string detail      = 6;  // JSON 格式变更摘要
+    string ip          = 7;
+    int64  created_at  = 8;
+}

@@ -24,6 +24,7 @@ import (
 	"github.com/gmaker/luffa/services/biz-go/internal/service"
 
 	commonpb "github.com/gmaker/luffa/gen/go/common"
+	configpb "github.com/gmaker/luffa/gen/go/config"
 )
 
 type BizConfig struct {
@@ -50,6 +51,10 @@ type BizConfig struct {
 	Bot struct {
 		MasterKey string `json:"master_key"`
 	} `json:"bot"`
+	ConfigService struct {
+		Addr      string   `json:"addr"`
+		WatchList []string `json:"watch_list"`
+	} `json:"config_service"`
 }
 
 func main() {
@@ -144,6 +149,23 @@ func main() {
 		} else {
 			log.Info("Biz connected to redis")
 		}
+	}
+
+	// 初始化 Config Watcher（如果配置了 Config Service 和 Redis）
+	if redisClient != nil && cfg.ConfigService.Addr != "" && len(cfg.ConfigService.WatchList) > 0 {
+		watcher := config.NewRedisWatcher(redisClient.RawClient(), "default")
+		watcher.SetLogger(log)
+		loader := config.NewLoader(*configFile)
+		_ = loader.Load()
+		for _, name := range cfg.ConfigService.WatchList {
+			watcher.Subscribe(name, func(ev *configpb.ConfigChangeEvent) {
+				if err := config.PullAndReload(cfg.ConfigService.Addr, ev.ConfigName, ev, loader, *configFile); err != nil {
+					log.Errorf("config reload failed: %v", err)
+				}
+			})
+		}
+		go watcher.Start(context.Background())
+		log.Infof("Biz config watcher started, watching: %v", cfg.ConfigService.WatchList)
 	}
 
 	// 通过服务发现订阅 DBProxy
