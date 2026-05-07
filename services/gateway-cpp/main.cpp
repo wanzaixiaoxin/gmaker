@@ -12,6 +12,8 @@
 #include "gateway_config.hpp"
 #include "net/async/ws_server.hpp"
 #include "net/async/tcp_server.hpp"
+#include "net/async/kcp_server.hpp"
+#include "net/async/udp_server.hpp"
 #include "net/async/upstream.hpp"
 #include "net/async/coalescer.hpp"
 #include "net/packet.hpp"
@@ -157,6 +159,10 @@ private:
                             gs::net::websocket::MessageType type,
                             Buffer& message);
     void OnWebSocketClose(gs::net::websocket::WebSocketConnection* conn);
+    void OnKCPConnect(KCPPacketConnection* conn);
+    void OnKCPPacket(KCPPacketConnection* conn, Packet& pkt);
+    void OnKCPClose(KCPPacketConnection* conn);
+    void OnUDPPacket(UDPPacketConnection* conn, Packet& pkt);
     void OnUpstreamPacket(IConnection* conn, Packet& pkt);
     
     // 根据命令 ID 路由到对应的上游池
@@ -166,6 +172,8 @@ private:
     
     std::unique_ptr<AsyncTCPServer> server_;
     std::unique_ptr<gs::net::websocket::WebSocketServer> ws_server_;
+    std::unique_ptr<KCPServer> kcp_server_;
+    std::unique_ptr<UDPServer> udp_server_;
     std::unique_ptr<gs::discovery::UpstreamManager> upstream_mgr_;
     std::unique_ptr<AsyncWriteCoalescer> coalescer_;
     std::unique_ptr<gs::discovery::ServiceDiscovery> sd_;
@@ -173,6 +181,8 @@ private:
     std::mutex sessions_mtx_;
     std::unordered_map<uint64_t, IConnection*> clients_;
     std::unordered_map<uint64_t, std::shared_ptr<WebSocketPacketConnection>> ws_clients_;
+    std::unordered_map<uint64_t, std::shared_ptr<KCPPacketConnection>> kcp_clients_;
+    std::unordered_map<uint64_t, std::shared_ptr<UDPPacketConnection>> udp_clients_;
     std::vector<uint8_t> master_key_;
     std::unique_ptr<gs::replay::Checker> replay_checker_;
     
@@ -310,29 +320,7 @@ bool EncryptionMiddleware::OnPacket(IConnection* conn, Packet& pkt) {
 }
 
 bool DecodeClientPacket(const Buffer& data, Packet& pkt) {
-    if (data.Size() < HEADER_SIZE || data.Size() > MAX_PACKET_LEN) {
-        return false;
-    }
-    const uint8_t* p = data.Data();
-    if (!p) return false;
-
-    Header h = DecodeHeader(p);
-    if (h.magic != MAGIC_VALUE || h.length != data.Size()) {
-        return false;
-    }
-    if (h.length < HEADER_SIZE || h.length > MAX_PACKET_LEN) {
-        return false;
-    }
-
-    pkt.header = h;
-    size_t payload_len = data.Size() - HEADER_SIZE;
-    if (payload_len > 0) {
-        pkt.payload = Buffer::Allocate(payload_len);
-        std::memcpy(pkt.payload.Data(), p + HEADER_SIZE, payload_len);
-    } else {
-        pkt.payload = Buffer();
-    }
-    return true;
+    return DecodePacket(data, pkt);
 }
 
 namespace {
@@ -415,6 +403,47 @@ bool Gateway::Start(const gs::gateway::Config& cfg) {
         }
     }
 
+    // 启动 KCP 服务器（如果配置端口 > 0）
+    if (cfg.kcp_port > 0) {
+        KCPServer::Config kcp_cfg;
+        kcp_cfg.port = cfg.kcp_port;
+        kcp_cfg.max_conn = cfg.max_connections;
+        kcp_cfg.kcp_interval = static_cast<uint32_t>(cfg.kcp_interval_ms);
+        kcp_cfg.kcp_nodelay = cfg.kcp_nodelay;
+        kcp_cfg.kcp_resend = cfg.kcp_resend;
+        kcp_cfg.kcp_nc = cfg.kcp_nc;
+        kcp_server_ = std::make_unique<KCPServer>(kcp_cfg);
+        kcp_server_->SetCallbacks(
+            [this](KCPPacketConnection* c) { OnKCPConnect(c); },
+            [this](KCPPacketConnection* c, Packet& p) { OnKCPPacket(c, p); },
+            [this](KCPPacketConnection* c) { OnKCPClose(c); }
+        );
+        kcp_server_->Use(handshake_mw_);
+        kcp_server_->Use(encryption_mw_);
+        if (!kcp_server_->Start()) {
+            if (logger_) logger_->Warn("Failed to start KCP server on port " + std::to_string(cfg.kcp_port));
+        } else {
+            if (logger_) logger_->Info("Gateway KCP server started on port " + std::to_string(cfg.kcp_port));
+        }
+    }
+
+    // 启动 UDP 服务器（如果配置端口 > 0）
+    if (cfg.udp_port > 0) {
+        UDPServer::Config udp_cfg;
+        udp_cfg.port = cfg.udp_port;
+        udp_cfg.max_conn = cfg.max_connections;
+        udp_cfg.session_timeout_ms = static_cast<uint32_t>(cfg.udp_session_timeout_ms);
+        udp_server_ = std::make_unique<UDPServer>(udp_cfg);
+        udp_server_->SetDataCallback(
+            [this](UDPPacketConnection* c, Packet& p) { OnUDPPacket(c, p); }
+        );
+        if (!udp_server_->Start()) {
+            if (logger_) logger_->Warn("Failed to start UDP server on port " + std::to_string(cfg.udp_port));
+        } else {
+            if (logger_) logger_->Info("Gateway UDP server started on port " + std::to_string(cfg.udp_port));
+        }
+    }
+
     // 初始化写聚合器
     coalescer_ = std::make_unique<AsyncWriteCoalescer>(server_->EventLoop(), cfg.coalescer_interval_ms);
     if (!coalescer_->Start()) {
@@ -473,6 +502,8 @@ void Gateway::Stop() {
     
     if (server_) server_->Stop();
     if (ws_server_) ws_server_->Stop();
+    if (kcp_server_) kcp_server_->Stop();
+    if (udp_server_) udp_server_->Stop();
     if (coalescer_) coalescer_->Stop();
     if (upstream_mgr_) upstream_mgr_->Stop();
     if (sd_) sd_->Close();
@@ -519,6 +550,88 @@ void Gateway::OnClientConnect(IConnection* conn) {
     clients_[conn->ID()] = conn;
     conn_gauge_->Inc();
     if (logger_) logger_->Info("Client connected: " + std::to_string(conn->ID()));
+}
+
+void Gateway::OnKCPConnect(KCPPacketConnection* conn) {
+    auto adapter = std::shared_ptr<KCPPacketConnection>(conn, [](KCPPacketConnection*){});
+    {
+        std::lock_guard<std::mutex> lk(sessions_mtx_);
+        kcp_clients_[conn->ID()] = adapter;
+        clients_[conn->ID()] = conn;
+    }
+    conn_gauge_->Inc();
+    if (logger_) logger_->Info("KCP client connected: " + std::to_string(conn->ID()));
+}
+
+void Gateway::OnKCPPacket(KCPPacketConnection* conn, Packet& pkt) {
+    OnClientPacket(conn, pkt);
+}
+
+void Gateway::OnKCPClose(KCPPacketConnection* conn) {
+    std::shared_ptr<KCPPacketConnection> adapter;
+    {
+        std::lock_guard<std::mutex> lk(sessions_mtx_);
+        auto it = kcp_clients_.find(conn->ID());
+        if (it != kcp_clients_.end()) {
+            adapter = it->second;
+            kcp_clients_.erase(it);
+        }
+    }
+    if (!adapter) return;
+
+    {
+        std::lock_guard<std::mutex> lk(room_mtx_);
+        auto it = conn_room_.find(adapter->ID());
+        if (it != conn_room_.end()) {
+            auto rit = room_members_.find(it->second);
+            if (rit != room_members_.end()) {
+                rit->second.erase(adapter->ID());
+                if (rit->second.empty()) room_members_.erase(rit);
+            }
+            conn_room_.erase(it);
+        }
+    }
+
+    CleanupPlayerState(adapter->ID());
+
+    {
+        std::lock_guard<std::mutex> lk(sessions_mtx_);
+        clients_.erase(adapter->ID());
+        handshake_mw_->RemoveSession(adapter->ID());
+    }
+    conn_gauge_->Dec();
+    if (logger_) logger_->Info("KCP client disconnected: " + std::to_string(adapter->ID()));
+}
+
+void Gateway::OnUDPPacket(UDPPacketConnection* conn, Packet& pkt) {
+    // UDP 包直接路由，不做 player bind 检查（UDP 用于高频广播，无状态）
+    auto start = std::chrono::steady_clock::now();
+    req_counter_->Inc();
+
+    if (logger_) logger_->Info("UDP packet: cmd=0x" + ToHex(pkt.header.cmd_id) +
+                               " conn=" + std::to_string(conn->ID()));
+
+    auto pool = RouteToPool(pkt.header.cmd_id);
+    if (!pool) {
+        if (logger_) logger_->Warn("No upstream pool for UDP cmd=0x" + ToHex(pkt.header.cmd_id));
+        return;
+    }
+
+    pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.Size());
+    std::vector<uint8_t> extended_payload(pkt.payload.Size() + 8);
+    WriteU64BE(extended_payload.data(), conn->ID());
+    if (pkt.payload.Size() > 0) {
+        std::memcpy(extended_payload.data() + 8, pkt.payload.Data(), pkt.payload.Size());
+    }
+    pkt.payload = Buffer(std::move(extended_payload));
+    pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(pkt.payload.Size());
+
+    if (!pool->SendPacket(pkt)) {
+        if (logger_) logger_->Warn("Failed to forward UDP packet to upstream");
+    }
+
+    auto elapsed = std::chrono::steady_clock::now() - start;
+    req_latency_->Observe(static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
 }
 
 void Gateway::OnWebSocketConnect(gs::net::websocket::WebSocketConnection* conn) {
@@ -878,9 +991,20 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
         auto ws_it = ws_clients_.find(target_id);
         if (ws_it != ws_clients_.end()) {
             coalescer_->Enqueue(std::static_pointer_cast<IConnection>(ws_it->second), response);
-        } else {
-            coalescer_->Enqueue(it->second, response);
+            return;
         }
+        auto kcp_it = kcp_clients_.find(target_id);
+        if (kcp_it != kcp_clients_.end()) {
+            // KCP 不经过 coalescer（跨 event loop），直接发送
+            kcp_it->second->SendPacket(response);
+            return;
+        }
+        auto udp_it = udp_clients_.find(target_id);
+        if (udp_it != udp_clients_.end()) {
+            udp_it->second->SendPacket(response);
+            return;
+        }
+        coalescer_->Enqueue(it->second, response);
     };
 
     if (targets.empty()) {
@@ -1081,9 +1205,15 @@ void Gateway::KickConnection(uint64_t conn_id, const std::string& reason) {
         }
 
         auto ws_it = ws_clients_.find(conn_id);
+        auto kcp_it = kcp_clients_.find(conn_id);
+        auto udp_it = udp_clients_.find(conn_id);
         auto encoded = EncodePacket(out);
         if (ws_it != ws_clients_.end()) {
             ws_it->second->Send(encoded);
+        } else if (kcp_it != kcp_clients_.end()) {
+            kcp_it->second->Send(encoded);
+        } else if (udp_it != udp_clients_.end()) {
+            udp_it->second->Send(encoded);
         } else {
             it->second->Send(encoded);
         }
@@ -1139,11 +1269,25 @@ void Gateway::SendToClientDirect(uint64_t conn_id, const Packet& pkt, bool close
     }
 
     auto ws_it = ws_clients_.find(conn_id);
+    auto kcp_it = kcp_clients_.find(conn_id);
+    auto udp_it = udp_clients_.find(conn_id);
     if (ws_it != ws_clients_.end()) {
         if (close_after_write) {
             ws_it->second->Send(EncodePacket(out));
         } else {
             coalescer_->Enqueue(std::static_pointer_cast<IConnection>(ws_it->second), out);
+        }
+    } else if (kcp_it != kcp_clients_.end()) {
+        if (close_after_write) {
+            kcp_it->second->Send(EncodePacket(out));
+        } else {
+            kcp_it->second->SendPacket(out);
+        }
+    } else if (udp_it != udp_clients_.end()) {
+        if (close_after_write) {
+            udp_it->second->Send(EncodePacket(out));
+        } else {
+            udp_it->second->SendPacket(out);
         }
     } else {
         if (close_after_write) {
@@ -1188,9 +1332,15 @@ void Gateway::SendErrorAndClose(uint64_t conn_id, uint32_t seq_id, uint32_t code
     }
 
     auto ws_it = ws_clients_.find(conn_id);
+    auto kcp_it = kcp_clients_.find(conn_id);
+    auto udp_it = udp_clients_.find(conn_id);
     auto encoded = EncodePacket(out);
     if (ws_it != ws_clients_.end()) {
         ws_it->second->Send(encoded);
+    } else if (kcp_it != kcp_clients_.end()) {
+        kcp_it->second->Send(encoded);
+    } else if (udp_it != udp_clients_.end()) {
+        udp_it->second->Send(encoded);
     } else {
         it->second->Send(encoded);
     }

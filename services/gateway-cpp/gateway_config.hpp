@@ -16,7 +16,18 @@ struct Config {
     // 网络配置
     uint16_t listen_port = 8081;
     uint16_t websocket_port = 0;   // 0 表示不启用 WebSocket
+    uint16_t kcp_port = 0;         // 0 表示不启用 KCP
+    uint16_t udp_port = 0;         // 0 表示不启用 UDP
     int max_connections = 10000;
+    
+    // KCP 参数调优
+    int kcp_interval_ms = 10;
+    int kcp_nodelay = 1;
+    int kcp_resend = 2;
+    int kcp_nc = 1;        // 1 = 关闭流控
+    
+    // UDP 会话超时
+    int udp_session_timeout_ms = 30000;
     
     // Metrics 配置
     std::string metrics_addr = ":9081";

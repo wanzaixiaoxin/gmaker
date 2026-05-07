@@ -127,5 +127,32 @@ inline Header DecodeHeader(const uint8_t* data) {
     return h;
 }
 
+// 从 Buffer 解析完整 Packet（校验 magic 和 length）
+inline bool DecodePacket(const Buffer& data, Packet& pkt) {
+    if (data.Size() < HEADER_SIZE || data.Size() > MAX_PACKET_LEN) {
+        return false;
+    }
+    const uint8_t* p = data.Data();
+    if (!p) return false;
+
+    Header h = DecodeHeader(p);
+    if (h.magic != MAGIC_VALUE || h.length != data.Size()) {
+        return false;
+    }
+    if (h.length < HEADER_SIZE || h.length > MAX_PACKET_LEN) {
+        return false;
+    }
+
+    pkt.header = h;
+    size_t payload_len = data.Size() - HEADER_SIZE;
+    if (payload_len > 0) {
+        pkt.payload = Buffer::Allocate(payload_len);
+        std::memcpy(pkt.payload.Data(), p + HEADER_SIZE, payload_len);
+    } else {
+        pkt.payload = Buffer();
+    }
+    return true;
+}
+
 } // namespace net
 } // namespace gs

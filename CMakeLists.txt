@@ -179,11 +179,16 @@ set(CPP_ASYNC_NET_SOURCES
     common/cpp/net/async/tcp_connection.cpp
     common/cpp/net/async/tcp_listener.cpp
     common/cpp/net/async/tcp_server.cpp
+    common/cpp/net/async/kcp_connection.cpp
+    common/cpp/net/async/kcp_server.cpp
+    common/cpp/net/async/udp_packet_connection.cpp
+    common/cpp/net/async/udp_server.cpp
     common/cpp/net/async/upstream.cpp
     common/cpp/net/async/coalescer.cpp
     common/cpp/net/async/ws_frame.cpp
     common/cpp/net/async/ws_connection.cpp
     common/cpp/net/async/ws_server.cpp
+    3rd/kcp/ikcp.c
 )
 
 set(CPP_RPC_SOURCES
@@ -264,6 +269,7 @@ target_include_directories(gateway-cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gen/cpp
     ${UV_INCLUDE_DIR}
     ${RAPIDJSON_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rd/kcp
 )
 target_link_libraries(gateway-cpp toml11::toml11 protobuf::libprotobuf ${UV_TARGET} hiredis)
 if(ENABLE_ETCD_DISCOVERY)
@@ -301,6 +307,7 @@ target_include_directories(realtime-cpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gen/cpp
     ${UV_INCLUDE_DIR}
     ${RAPIDJSON_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rd/kcp
 )
 target_link_libraries(realtime-cpp toml11::toml11 protobuf::libprotobuf ${UV_TARGET} hiredis)
 if(ENABLE_ETCD_DISCOVERY)

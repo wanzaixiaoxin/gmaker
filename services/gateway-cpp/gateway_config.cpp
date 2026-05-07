@@ -19,7 +19,18 @@ Config LoadConfig(const std::string& path) {
     auto network = json.GetObject("network");
     cfg.listen_port = static_cast<uint16_t>(network.GetInt("port", 8081));
     cfg.websocket_port = static_cast<uint16_t>(network.GetInt("websocket_port", 0));
+    cfg.kcp_port = static_cast<uint16_t>(network.GetInt("kcp_port", 0));
+    cfg.udp_port = static_cast<uint16_t>(network.GetInt("udp_port", 0));
     cfg.max_connections = static_cast<int>(network.GetInt("max_connections", 10000));
+    
+    auto kcp = json.GetObject("kcp");
+    cfg.kcp_interval_ms = static_cast<int>(kcp.GetInt("interval_ms", 10));
+    cfg.kcp_nodelay = static_cast<int>(kcp.GetInt("nodelay", 1));
+    cfg.kcp_resend = static_cast<int>(kcp.GetInt("resend", 2));
+    cfg.kcp_nc = static_cast<int>(kcp.GetInt("nc", 1));
+    
+    auto udp = json.GetObject("udp");
+    cfg.udp_session_timeout_ms = static_cast<int>(udp.GetInt("session_timeout_ms", 30000));
     
     auto discovery = json.GetObject("discovery");
     cfg.discovery_type = discovery.GetString("type", "registry");
@@ -45,6 +56,8 @@ void PrintConfig(const Config& cfg) {
     std::cout << "Node ID:          " << cfg.node_id << std::endl;
     std::cout << "Listen port:      " << cfg.listen_port << std::endl;
     std::cout << "WebSocket port:   " << (cfg.websocket_port ? std::to_string(cfg.websocket_port) : "disabled") << std::endl;
+    std::cout << "KCP port:         " << (cfg.kcp_port ? std::to_string(cfg.kcp_port) : "disabled") << std::endl;
+    std::cout << "UDP port:         " << (cfg.udp_port ? std::to_string(cfg.udp_port) : "disabled") << std::endl;
     std::cout << "Max connections:  " << cfg.max_connections << std::endl;
     std::cout << "Metrics addr:     " << cfg.metrics_addr << std::endl;
     std::cout << "Log level:        " << cfg.log_level << std::endl;
