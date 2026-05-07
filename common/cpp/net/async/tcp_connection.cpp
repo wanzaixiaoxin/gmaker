@@ -270,12 +270,8 @@ void AsyncTCPConnection::ProcessReadBuffer() {
                 return;
             }
 
-            Header h;
+            Header h = DecodeHeader(p);
             h.length = length;
-            h.magic = magic;
-            h.cmd_id = ReadU32BE(p + 6);
-            h.seq_id = ReadU32BE(p + 10);
-            h.flags = ReadU32BE(p + 14);
 
             size_t payload_len = length - HEADER_SIZE;
             net::Buffer payload;
@@ -314,12 +310,8 @@ void AsyncTCPConnection::ProcessReadBuffer() {
                 uint16_t magic = ReadU16BE(large_buf.data() + 4);
                 if (magic != MAGIC_VALUE) { Close(); return; }
 
-                Header h;
+                Header h = DecodeHeader(large_buf.data());
                 h.length = length;
-                h.magic = magic;
-                h.cmd_id = ReadU32BE(large_buf.data() + 6);
-                h.seq_id = ReadU32BE(large_buf.data() + 10);
-                h.flags = ReadU32BE(large_buf.data() + 14);
 
                 size_t payload_len = length - HEADER_SIZE;
                 net::Buffer payload;
@@ -354,12 +346,8 @@ void AsyncTCPConnection::ProcessReadBuffer() {
             uint16_t magic = ReadU16BE(temp_buf + 4);
             if (magic != MAGIC_VALUE) { Close(); return; }
 
-            Header h;
+            Header h = DecodeHeader(temp_buf);
             h.length = length;
-            h.magic = magic;
-            h.cmd_id = ReadU32BE(temp_buf + 6);
-            h.seq_id = ReadU32BE(temp_buf + 10);
-            h.flags = ReadU32BE(temp_buf + 14);
 
             size_t payload_len = length - HEADER_SIZE;
             net::Buffer payload;

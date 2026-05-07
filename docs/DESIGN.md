@@ -205,7 +205,7 @@ Redis 作为全服共享的高速存储层，承担**缓存、会话、排行榜
 **设计原则**：
 - 包头用纯二进制（避免 protobuf 自描述开销），便于 C++ 零拷贝解析
 - 包体用 protobuf3（跨语言、强类型、易扩展）
-- 包头长度固定 18 字节，保证快速拆包与粘包处理
+- 包头长度固定 34 字节，保证快速拆包与粘包处理
 
 #### 4.1.1 帧格式定义
 
@@ -221,29 +221,39 @@ Redis 作为全服共享的高速存储层，承担**缓存、会话、排行榜
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |           SeqId (cont.)       |             Flag              |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|           Flag (cont.)        |                               |
+|           Flag (cont.)        |          UserID (high)        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|          UserID (low)         |          ZoneID               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|          ServiceID            |                               |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
 |                          Payload ...                          |
 +                                                               +
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-Length  : 4 bytes  (Big Endian)  整包长度 = 18 + len(Payload)
-Magic   : 2 bytes  (Big Endian)  固定 0x9D7F
-CmdId   : 4 bytes  (Big Endian)  全局命令号
-SeqId   : 4 bytes  (Big Endian)  请求序列号，Req/Res 配对；Push = 0
-Flag    : 4 bytes  (Big Endian)  位标志
-Payload : N bytes                protobuf3 序列化后的业务数据
+Length    : 4 bytes  (Big Endian)  整包长度 = 34 + len(Payload)
+Magic     : 2 bytes  (Big Endian)  固定 0x9D7F
+CmdId     : 4 bytes  (Big Endian)  全局命令号
+SeqId     : 4 bytes  (Big Endian)  请求序列号，Req/Res 配对；Push = 0
+Flag      : 4 bytes  (Big Endian)  位标志
+UserID    : 8 bytes  (Big Endian)  用户/玩家 ID，未登录时填 0
+ZoneID    : 4 bytes  (Big Endian)  区域/分区 ID，默认填 0
+ServiceID : 4 bytes  (Big Endian)  服务实例 ID，Gateway 等中间件用于路由，默认填 0
+Payload   : N bytes                protobuf3 序列化后的业务数据
 ```
 
 #### 4.1.2 包头字段详解
 
 | 字段 | 偏移 | 长度 | 说明 |
 |------|------|------|------|
-| `Length` | 0 | 4 bytes | 整包长度（含自身 18 字节），大端序。最大允许 `16MB`（`0x01000000`），超限直接断开连接。 |
+| `Length` | 0 | 4 bytes | 整包长度（含自身 34 字节），大端序。最大允许 `16MB`（`0x01000000`），超限直接断开连接。 |
 | `Magic` | 4 | 2 bytes | 固定 `0x9D7F`。非法连接首包校验失败直接断开，用于快速过滤扫描流量。 |
 | `CmdId` | 6 | 4 bytes | 全局命令号，定义域如下：<br>• `0x00000001 ~ 0x00000FFF`：系统保留（心跳、握手、错误包）<br>• `0x00001000 ~ 0x0000FFFF`：公共协议（登录、注册、Gateway 转发）<br>• `0x00010000 ~ 0x7FFFFFFF`：业务协议（Biz、Realtime 各子系统按模块分段）<br>统一维护在 `spec/cmd_ids.yaml`。 |
 | `SeqId` | 10 | 4 bytes | 请求序列号。Client/服务发起请求时自增（从 1 开始），对端响应时原样返回；服务端主动 Push 填 `0`。用于 Req-Res 异步配对。 |
 | `Flag` | 14 | 4 bytes | 位标志，详见下表。 |
+| `UserID` | 18 | 8 bytes | 用户/玩家 ID（`uint64`），大端序。未登录或不需要时填 `0`。 |
+| `ZoneID` | 26 | 4 bytes | 区域/分区 ID（`uint32`），大端序。用于多区服路由，默认填 `0`。 |
+| `ServiceID` | 30 | 4 bytes | 服务实例 ID（`uint32`），大端序。中间件（如 Gateway）用于定向路由，默认填 `0`。 |
 
 #### 4.1.3 Flag 位定义
 
@@ -266,7 +276,7 @@ Payload : N bytes                protobuf3 序列化后的业务数据
 1. 根据业务消息类型查找 `CmdId`
 2. 调用 `protobuf.Marshal()` 生成 `Payload` bytes
 3. 若启用加密/压缩，对 `Payload` 进行处理并设置对应 `Flag` 位
-4. 填充包头：`Length = 18 + len(Payload)`，`Magic = 0x9D7F`，填入 `CmdId`、`SeqId`、`Flag`
+4. 填充包头：`Length = 34 + len(Payload)`，`Magic = 0x9D7F`，填入 `CmdId`、`SeqId`、`Flag`、`UserID`、`ZoneID`、`ServiceID`
 5. `write(full_header[18] + payload)` 到 TCP 连接
 
 **接收端**：

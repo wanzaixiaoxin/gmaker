@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	HeaderSize   = 18
+	HeaderSize   = 34
 	MaxPacketLen = 16 * 1024 * 1024 // 16MB
 	MagicValue   = uint16(0x9D7F)
 )
@@ -27,13 +27,16 @@ const (
 	FlagRoomBcast Flag = 1 << 8 // 按聊天室广播，payload 前 8 字节为 room_id（大端序）
 )
 
-// Header 固定 18 字节包头
+// Header 固定 34 字节包头
 type Header struct {
-	Length uint32 // 整包长度（含自身），大端序
-	Magic  uint16 // 0x9D7F
-	CmdID  uint32 // 命令号
-	SeqID  uint32 // 序列号
-	Flags  uint32 // 标志位
+	Length    uint32 // 整包长度（含自身），大端序
+	Magic     uint16 // 0x9D7F
+	CmdID     uint32 // 命令号
+	SeqID     uint32 // 序列号
+	Flags     uint32 // 标志位
+	UserID    uint64 // 用户/玩家 ID，未登录时填 0
+	ZoneID    uint32 // 区域/分区 ID，默认填 0
+	ServiceID uint32 // 服务实例 ID，默认填 0
 }
 
 // Packet 完整消息
@@ -50,7 +53,10 @@ func (p *Packet) Encode() []byte {
 	binary.BigEndian.PutUint32(buf[6:10], p.CmdID)
 	binary.BigEndian.PutUint32(buf[10:14], p.SeqID)
 	binary.BigEndian.PutUint32(buf[14:18], p.Flags)
-	copy(buf[18:], p.Payload)
+	binary.BigEndian.PutUint64(buf[18:26], p.UserID)
+	binary.BigEndian.PutUint32(buf[26:30], p.ZoneID)
+	binary.BigEndian.PutUint32(buf[30:34], p.ServiceID)
+	copy(buf[34:], p.Payload)
 	return buf
 }
 
@@ -71,11 +77,14 @@ func DecodeHeader(r io.Reader) (*Header, error) {
 	}
 
 	h := &Header{
-		Length: length,
-		Magic:  binary.BigEndian.Uint16(buf[0:2]),
-		CmdID:  binary.BigEndian.Uint32(buf[2:6]),
-		SeqID:  binary.BigEndian.Uint32(buf[6:10]),
-		Flags:  binary.BigEndian.Uint32(buf[10:14]),
+		Length:    length,
+		Magic:     binary.BigEndian.Uint16(buf[0:2]),
+		CmdID:     binary.BigEndian.Uint32(buf[2:6]),
+		SeqID:     binary.BigEndian.Uint32(buf[6:10]),
+		Flags:     binary.BigEndian.Uint32(buf[10:14]),
+		UserID:    binary.BigEndian.Uint64(buf[14:22]),
+		ZoneID:    binary.BigEndian.Uint32(buf[22:26]),
+		ServiceID: binary.BigEndian.Uint32(buf[26:30]),
 	}
 	if h.Magic != MagicValue {
 		return nil, errors.New("invalid magic")
