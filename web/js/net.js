@@ -1,5 +1,5 @@
 // ==================== Packet Codec ====================
-const HEADER_SIZE = 18;
+const HEADER_SIZE = 34;
 const MAGIC_VALUE = 0x9D7F;
 
 const Flag = {
@@ -15,7 +15,7 @@ const Flag = {
 };
 
 class PacketCodec {
-    static encode(cmdID, seqID, flags, payload) {
+    static encode(cmdID, seqID, flags, payload, userID = 0, zoneID = 0, serviceID = 0) {
         const len = HEADER_SIZE + (payload ? payload.length : 0);
         const buf = new ArrayBuffer(len);
         const dv = new DataView(buf);
@@ -25,6 +25,9 @@ class PacketCodec {
         dv.setUint32(off, cmdID, false); off += 4;
         dv.setUint32(off, seqID, false); off += 4;
         dv.setUint32(off, flags, false); off += 4;
+        dv.setBigUint64(off, BigInt(userID), false); off += 8;
+        dv.setUint32(off, zoneID, false); off += 4;
+        dv.setUint32(off, serviceID, false); off += 4;
         if (payload && payload.length > 0) {
             new Uint8Array(buf, off).set(payload);
         }
@@ -40,9 +43,12 @@ class PacketCodec {
         const cmdID = dv.getUint32(off, false); off += 4;
         const seqID = dv.getUint32(off, false); off += 4;
         const flags = dv.getUint32(off, false); off += 4;
+        const userID = dv.getBigUint64(off, false); off += 8;
+        const zoneID = dv.getUint32(off, false); off += 4;
+        const serviceID = dv.getUint32(off, false); off += 4;
         if (magic !== MAGIC_VALUE || len !== data.length) return null;
         const payload = new Uint8Array(data.buffer, data.byteOffset + HEADER_SIZE, data.length - HEADER_SIZE);
-        return { length: len, magic, cmdID, seqID, flags, payload };
+        return { length: len, magic, cmdID, seqID, flags, userID, zoneID, serviceID, payload };
     }
 }
 
