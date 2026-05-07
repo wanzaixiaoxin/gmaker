@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 )
 
 // LocalLoader 本地文件配置加载器
 type LocalLoader struct {
-	path     string
-	data     map[string]interface{}
-	mu       sync.RWMutex
-	onReload func()
+	path       string
+	data       map[string]interface{}
+	mu         sync.RWMutex
+	onReload   func()
+	adminToken string // Bearer Token 鉴权（空表示不校验）
 }
 
 // NewLoader 创建本地文件配置加载器（兼容 config_test.go）
@@ -22,6 +24,20 @@ func NewLoader(path string) *LocalLoader {
 		path: path,
 		data: make(map[string]interface{}),
 	}
+}
+
+// NewLoaderWithAuth 创建带鉴权的本地文件配置加载器
+func NewLoaderWithAuth(path string, adminToken string) *LocalLoader {
+	return &LocalLoader{
+		path:       path,
+		data:       make(map[string]interface{}),
+		adminToken: adminToken,
+	}
+}
+
+// SetAdminToken 设置/更新鉴权 Token
+func (l *LocalLoader) SetAdminToken(token string) {
+	l.adminToken = token
 }
 
 // Load 从文件加载配置
@@ -107,6 +123,16 @@ func (l *LocalLoader) ServeReloadHTTP(addr string) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
+		}
+		// Bearer Token 鉴权
+		if l.adminToken != "" {
+			auth := r.Header.Get("Authorization")
+			const prefix = "Bearer "
+			if !strings.HasPrefix(auth, prefix) || auth[len(prefix):] != l.adminToken {
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte("unauthorized"))
+				return
+			}
 		}
 		if err := l.Reload(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -21,5 +21,9 @@
   },
   "bot": {
     "master_key": "bot-internal-master-key-change-in-production"
+  },
+  "config_service": {
+    "addr": "http://127.0.0.1:8087",
+    "watch_list": ["feature_flags", "rate_limits"]
   }
 }

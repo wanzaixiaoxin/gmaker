@@ -8,7 +8,8 @@ $services = @(
     "biz-go",
     "chat-go",
     "bot-go",
-    "logstats-go"
+    "logstats-go",
+    "config-go"
 )
 
 $tools = @("testclient")

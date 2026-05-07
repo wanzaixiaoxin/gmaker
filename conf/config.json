@@ -1,0 +1,28 @@
+{
+  "service": {
+    "service_type": "config",
+    "node_id": "config-1",
+    "log_level": "info",
+    "log_file": "",
+    "metrics_addr": ":9087"
+  },
+  "network": {
+    "host": "127.0.0.1",
+    "port": 8087
+  },
+  "discovery": {
+    "type": "registry",
+    "addrs": ["127.0.0.1:2379"]
+  },
+  "mysql": {
+    "dsn": "root:123456@tcp(192.168.0.85:3306)/gmaker?charset=utf8mb4",
+    "max_open_conn": 10,
+    "max_idle_conn": 2,
+    "conn_max_lifetime_sec": 3600
+  },
+  "redis": {
+    "addrs": ["192.168.0.85:6379"],
+    "password": "",
+    "pool_size": 20
+  }
+}
