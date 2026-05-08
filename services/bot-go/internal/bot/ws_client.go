@@ -254,11 +254,14 @@ func (c *WSConn) readLoop() {
 			return
 		}
 		h := gsnet.Header{
-			Length: length,
-			Magic:  magic,
-			CmdID:  binary.BigEndian.Uint32(data[6:10]),
-			SeqID:  binary.BigEndian.Uint32(data[10:14]),
-			Flags:  binary.BigEndian.Uint32(data[14:18]),
+			Length:    length,
+			Magic:     magic,
+			CmdID:     binary.BigEndian.Uint32(data[6:10]),
+			SeqID:     binary.BigEndian.Uint32(data[10:14]),
+			Flags:     binary.BigEndian.Uint32(data[14:18]),
+			UserID:    binary.BigEndian.Uint64(data[18:26]),
+			ZoneID:    binary.BigEndian.Uint32(data[26:30]),
+			ServiceID: binary.BigEndian.Uint32(data[30:34]),
 		}
 		var payload []byte
 		payloadLen := int(length) - gsnet.HeaderSize

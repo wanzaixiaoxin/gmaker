@@ -9,7 +9,18 @@
   "network": {
     "port": 8081,
     "websocket_port": 8083,
+    "kcp_port": 8084,
+    "udp_port": 8085,
     "max_connections": 10000
+  },
+  "kcp": {
+    "interval_ms": 10,
+    "nodelay": 1,
+    "resend": 2,
+    "nc": 1
+  },
+  "udp": {
+    "session_timeout_ms": 30000
   },
   "discovery": {
     "type": "registry",

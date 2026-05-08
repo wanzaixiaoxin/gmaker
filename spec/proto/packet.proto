@@ -7,9 +7,12 @@ option go_package = "github.com/gmaker/luffa/gen/go/common";
 // 实际网络通信时，包头采用 18 字节固定二进制格式（详见 docs/DESIGN.md 4.1 节），
 // 仅 Payload 字段为 protobuf 序列化后的 bytes。
 message Packet {
-    uint32 magic   = 1;  // 0x9D7F
-    uint32 cmd_id  = 2;  // 全局命令号，见 spec/cmd_ids.yaml
-    uint32 seq_id  = 3;  // 请求序列号，Req/Res 配对使用；Push 填 0
-    uint32 flag    = 4;  // 位标志，见 docs/DESIGN.md 4.1.3
-    bytes  payload = 5;  // 具体业务消息的 protobuf 序列化 bytes
+    uint32 magic      = 1;  // 0x9D7F
+    uint32 cmd_id     = 2;  // 全局命令号，见 spec/cmd_ids.yaml
+    uint32 seq_id     = 3;  // 请求序列号，Req/Res 配对使用；Push 填 0
+    uint32 flag       = 4;  // 位标志，见 docs/DESIGN.md 4.1.3
+    uint64 user_id    = 5;  // 用户/玩家 ID，未登录时填 0
+    uint32 zone_id    = 6;  // 区域/分区 ID，默认填 0
+    uint32 service_id = 7;  // 服务实例 ID，默认填 0
+    bytes  payload    = 8;  // 具体业务消息的 protobuf 序列化 bytes
 }

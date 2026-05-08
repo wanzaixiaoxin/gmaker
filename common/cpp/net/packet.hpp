@@ -8,7 +8,7 @@
 namespace gs {
 namespace net {
 
-constexpr uint32_t HEADER_SIZE = 18;
+constexpr uint32_t HEADER_SIZE = 34;
 constexpr uint32_t MAX_PACKET_LEN = 16 * 1024 * 1024; // 16MB
 constexpr uint16_t MAGIC_VALUE = 0x9D7F;
 
@@ -37,11 +37,14 @@ inline bool HasFlag(uint32_t flags, Flag f) {
 
 // 包头结构（大端序）
 struct Header {
-    uint32_t length = 0; // 整包长度
-    uint16_t magic  = MAGIC_VALUE;
-    uint32_t cmd_id = 0;
-    uint32_t seq_id = 0;
-    uint32_t flags  = 0;
+    uint32_t length    = 0; // 整包长度
+    uint16_t magic     = MAGIC_VALUE;
+    uint32_t cmd_id    = 0;
+    uint32_t seq_id    = 0;
+    uint32_t flags     = 0;
+    uint64_t user_id   = 0; // 用户/玩家 ID，未登录时填 0
+    uint32_t zone_id   = 0; // 区域/分区 ID，默认填 0
+    uint32_t service_id = 0; // 服务实例 ID，默认填 0
 };
 
 struct Packet {
@@ -101,6 +104,9 @@ inline Buffer EncodePacket(const Packet& pkt) {
     WriteU32BE(buf.data() + 6, pkt.header.cmd_id);
     WriteU32BE(buf.data() + 10, pkt.header.seq_id);
     WriteU32BE(buf.data() + 14, pkt.header.flags);
+    WriteU64BE(buf.data() + 18, pkt.header.user_id);
+    WriteU32BE(buf.data() + 26, pkt.header.zone_id);
+    WriteU32BE(buf.data() + 30, pkt.header.service_id);
     if (payload_size > 0 && pkt.payload.Data()) {
         std::memcpy(buf.data() + HEADER_SIZE, pkt.payload.Data(), payload_size);
     }
@@ -110,12 +116,42 @@ inline Buffer EncodePacket(const Packet& pkt) {
 // 从缓冲区解析包头（假设缓冲区至少有 HEADER_SIZE 字节）
 inline Header DecodeHeader(const uint8_t* data) {
     Header h;
-    h.length = ReadU32BE(data + 0);
-    h.magic  = ReadU16BE(data + 4);
-    h.cmd_id = ReadU32BE(data + 6);
-    h.seq_id = ReadU32BE(data + 10);
-    h.flags  = ReadU32BE(data + 14);
+    h.length    = ReadU32BE(data + 0);
+    h.magic     = ReadU16BE(data + 4);
+    h.cmd_id    = ReadU32BE(data + 6);
+    h.seq_id    = ReadU32BE(data + 10);
+    h.flags     = ReadU32BE(data + 14);
+    h.user_id   = ReadU64BE(data + 18);
+    h.zone_id   = ReadU32BE(data + 26);
+    h.service_id= ReadU32BE(data + 30);
     return h;
+}
+
+// 从 Buffer 解析完整 Packet（校验 magic 和 length）
+inline bool DecodePacket(const Buffer& data, Packet& pkt) {
+    if (data.Size() < HEADER_SIZE || data.Size() > MAX_PACKET_LEN) {
+        return false;
+    }
+    const uint8_t* p = data.Data();
+    if (!p) return false;
+
+    Header h = DecodeHeader(p);
+    if (h.magic != MAGIC_VALUE || h.length != data.Size()) {
+        return false;
+    }
+    if (h.length < HEADER_SIZE || h.length > MAX_PACKET_LEN) {
+        return false;
+    }
+
+    pkt.header = h;
+    size_t payload_len = data.Size() - HEADER_SIZE;
+    if (payload_len > 0) {
+        pkt.payload = Buffer::Allocate(payload_len);
+        std::memcpy(pkt.payload.Data(), p + HEADER_SIZE, payload_len);
+    } else {
+        pkt.payload = Buffer();
+    }
+    return true;
 }
 
 } // namespace net

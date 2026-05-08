@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>gmaker Web 聊天室</title>
+    <title>聊天室</title>
     <link rel="stylesheet" href="css/style.css">
     <script>
 const PROTO_DESCRIPTOR = {
@@ -1009,10 +1009,11 @@ const PROTO_DESCRIPTOR = {
 <div id="app">
     <!-- 登录/注册面板 -->
     <div id="authPanel" class="panel">
-        <h2>🚀 gmaker Web 聊天室</h2>
+        <h2>聊天室</h2>
+        <div class="subtitle">演示</div>
         <div class="login-tabs">
-            <button id="tabLogin" class="active" onclick="switchTab('login')">登录</button>
-            <button id="tabRegister" onclick="switchTab('register')">注册</button>
+            <button id="tabLogin" class="tab-btn active" onclick="switchTab('login')">登录</button>
+            <button id="tabRegister" class="tab-btn" onclick="switchTab('register')">注册</button>
         </div>
         <input type="text" id="account" placeholder="账号" value="">
         <input type="password" id="password" placeholder="密码" value="">
@@ -1022,37 +1023,48 @@ const PROTO_DESCRIPTOR = {
 
     <!-- 大厅面板 -->
     <div id="lobbyPanel" class="panel hidden">
-        <div class="toolbar">
-            <div>
-                <strong id="userLabel">用户</strong>
-                <button class="secondary" onclick="logout()">登出</button>
+        <div class="lobby-header">
+            <div class="user-info">
+                <div class="avatar" id="userAvatar">U</div>
+                <span id="userLabel">用户</span>
             </div>
-            <button onclick="refreshRooms()">🔄 刷新列表</button>
+            <div style="display:flex;gap:8px;">
+                <button class="secondary" onclick="logout()">登出</button>
+                <button onclick="refreshRooms()">🔄 刷新</button>
+            </div>
         </div>
-        <div class="toolbar">
-            <input type="text" id="newRoomName" placeholder="新聊天室名称" style="width:200px;margin:0;">
+        <div class="lobby-toolbar">
+            <input type="text" id="newRoomName" placeholder="新聊天室名称" style="max-width:260px;">
             <button onclick="createRoom()">➕ 创建</button>
         </div>
-        <table class="room-list">
-            <thead>
-                <tr><th>ID</th><th>名称</th><th>创建者</th><th>创建时间</th><th>操作</th></tr>
-            </thead>
-            <tbody id="roomTableBody"></tbody>
-        </table>
+        <div class="room-table-wrap">
+            <table class="room-list">
+                <thead>
+                    <tr><th>ID</th><th>名称</th><th>创建者</th><th>创建时间</th><th>操作</th></tr>
+                </thead>
+                <tbody id="roomTableBody"></tbody>
+            </table>
+        </div>
         <div id="lobbyMsg"></div>
     </div>
 
     <!-- 房间面板 -->
     <div id="roomPanel" class="panel hidden">
-        <div class="toolbar">
-            <div>
-                <strong id="roomTitle">房间</strong>
-                <button class="secondary" onclick="backToLobby()">← 返回大厅</button>
+        <div class="room-header">
+            <div class="room-info">
+                <div class="room-icon">💬</div>
+                <div>
+                    <div class="room-name" id="roomTitle">房间</div>
+                    <div class="room-meta">实时消息</div>
+                </div>
             </div>
-            <button id="btnCloseRoom" class="danger hidden" onclick="closeRoom()">🗑 关闭房间</button>
+            <div style="display:flex;gap:8px;">
+                <button class="secondary" onclick="backToLobby()">← 返回</button>
+                <button id="btnCloseRoom" class="danger hidden" onclick="closeRoom()">🗑 关闭</button>
+            </div>
         </div>
         <div id="msgList" class="msg-list"></div>
-        <div class="msg-input-row">
+        <div class="msg-input-area">
             <input type="text" id="msgInput" placeholder="输入消息..." onkeydown="if(event.key==='Enter')sendMsg()">
             <button onclick="sendMsg()">发送</button>
         </div>
@@ -1083,7 +1095,9 @@ try {
 }
 
 function setStatus(text) {
-    document.getElementById('statusBar').textContent = text;
+    const bar = document.getElementById('statusBar');
+    bar.textContent = text;
+    bar.classList.toggle('connected', text.includes('已绑定') || text.includes('已连接'));
 }
 
 // 全局覆盖 Response.json()：所有 fetch 响应自动使用 lossless-json 解析，
@@ -1210,7 +1224,8 @@ async function doAuth() {
         };
 
         showPanel('lobbyPanel');
-        document.getElementById('userLabel').textContent = '用户: ' + account + ' (ID:' + playerID + ')';
+        document.getElementById('userLabel').textContent = account;
+        document.getElementById('userAvatar').textContent = account.charAt(0).toUpperCase();
         refreshRooms();
     } catch (e) {
         setStatus('连接失败');
@@ -1266,7 +1281,7 @@ async function refreshRooms() {
                 tbody.appendChild(tr);
             });
         } else {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">暂无聊天室</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5"><div class="room-empty">暂无聊天室，创建一个吧 🎉</div></td></tr>';
         }
     } catch (e) {
         showMsg('lobbyMsg', '获取列表失败: ' + e.message, true);
