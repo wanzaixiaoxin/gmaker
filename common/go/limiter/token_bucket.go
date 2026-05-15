@@ -10,7 +10,8 @@ const shardCount = 64
 
 // TokenBucket 分片令牌桶限流器，按 key hash 分片降低锁竞争
 type TokenBucket struct {
-	shards [shardCount]*tokenBucketShard
+	shards      [shardCount]*tokenBucketShard
+	globalShard *tokenBucketShard // 独立的全局 shard，容量不分片
 }
 
 type tokenBucketShard struct {
@@ -25,6 +26,13 @@ type tokenBucketShard struct {
 // capacity: 桶容量（突发上限）；fillRate: 每秒填充令牌数
 func NewTokenBucket(capacity int, fillRate int) *TokenBucket {
 	tb := &TokenBucket{}
+	// 创建独立的 globalShard，使用完整容量和填充率（不分片）
+	tb.globalShard = &tokenBucketShard{
+		capacity:   float64(capacity),
+		tokens:     float64(capacity),
+		fillRate:   float64(fillRate),
+		lastUpdate: time.Now(),
+	}
 	for i := 0; i < shardCount; i++ {
 		perShardCap := float64(capacity) / shardCount
 		if perShardCap < 1 {
@@ -70,12 +78,21 @@ func (tb *TokenBucket) Allow1Key(key string) bool {
 
 // Allow 请求 n 个令牌（全局，向后兼容）
 func (tb *TokenBucket) Allow(n int) bool {
-	return tb.AllowKey("__global__", n)
+	s := tb.globalShard
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.refill()
+	if s.tokens >= float64(n) {
+		s.tokens -= float64(n)
+		return true
+	}
+	return false
 }
 
 // Allow1 请求 1 个令牌（全局，向后兼容）
 func (tb *TokenBucket) Allow1() bool {
-	return tb.AllowKey("__global__", 1)
+	return tb.Allow(1)
 }
 
 func (s *tokenBucketShard) refill() {

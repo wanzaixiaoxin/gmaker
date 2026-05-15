@@ -27,6 +27,7 @@ const (
 type Server struct {
 	addr      string
 	store     store.Store
+	authToken string
 	tcpServer *net.TCPServer
 
 	watchers sync.Map // conn_id -> *Watcher
@@ -41,10 +42,11 @@ type Watcher struct {
 	watchCancel context.CancelFunc
 }
 
-func New(addr string, store store.Store) *Server {
+func New(addr string, store store.Store, authToken string) *Server {
 	return &Server{
-		addr:  addr,
-		store: store,
+		addr:      addr,
+		store:     store,
+		authToken: authToken,
 	}
 }
 
@@ -97,6 +99,15 @@ func (s *Server) handleRegister(conn *net.TCPConn, pkt *net.Packet) {
 	if err := proto.Unmarshal(pkt.Payload, &req); err != nil {
 		s.sendError(conn, pkt.SeqID, err)
 		return
+	}
+
+	// 认证检查
+	if s.authToken != "" {
+		token, _ := req.Metadata["auth_token"]
+		if token != s.authToken {
+			s.sendError(conn, pkt.SeqID, fmt.Errorf("unauthorized: invalid auth_token"))
+			return
+		}
 	}
 
 	leaseID, err := s.store.Register(context.Background(), &req)

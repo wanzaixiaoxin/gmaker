@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -42,7 +43,7 @@ func (l Level) String() string {
 type Logger struct {
 	mu       sync.RWMutex
 	out      io.Writer
-	level    Level
+	level    atomic.Int32
 	service  string
 	nodeID   string
 	fields   map[string]interface{}
@@ -67,13 +68,13 @@ func New(cfg Config) *Logger {
 	lvl := parseLevel(cfg.Level)
 	l := &Logger{
 		out:     cfg.Output,
-		level:   lvl,
 		service: cfg.Service,
 		nodeID:  cfg.NodeID,
 		fields:  make(map[string]interface{}),
 		writeCh: make(chan []byte, 256),
 		stopCh:  make(chan struct{}),
 	}
+	l.level.Store(int32(lvl))
 	l.wg.Add(1)
 	go l.writeLoop()
 	return l
@@ -99,9 +100,7 @@ func InitServiceLogger(service, nodeID, logLevel, logFile string) *Logger {
 
 // SetLevel 动态调整日志级别
 func (l *Logger) SetLevel(level string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.level = parseLevel(level)
+	l.level.Store(int32(parseLevel(level)))
 }
 
 // With 返回一个带有固定字段的子 Logger（线程安全，复制字段）
@@ -110,13 +109,13 @@ func (l *Logger) With(key string, value interface{}) *Logger {
 	defer l.mu.RUnlock()
 	child := &Logger{
 		out:     l.out,
-		level:   l.level,
 		service: l.service,
 		nodeID:  l.nodeID,
 		fields:  make(map[string]interface{}, len(l.fields)+1),
 		writeCh: l.writeCh,
 		stopCh:  make(chan struct{}),
 	}
+	child.level.Store(l.level.Load())
 	for k, v := range l.fields {
 		child.fields[k] = v
 	}
@@ -152,7 +151,7 @@ func (l *Logger) writeLoop() {
 }
 
 func (l *Logger) log(level Level, msg string, extra map[string]interface{}) {
-	if level < l.level {
+	if level < Level(l.level.Load()) {
 		return
 	}
 	l.mu.RLock()

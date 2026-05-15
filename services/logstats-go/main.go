@@ -59,9 +59,10 @@ func (ls *LogStats) Append(raw []byte) {
 		ls.byTrace[entry.TraceID] = append(ls.byTrace[entry.TraceID], idx)
 	}
 
-	// 环形缓冲：超限时淘汰旧数据（简化：直接清空，生产环境用更精细策略）
+	// 环形缓冲：超限时淘汰溢出的旧数据
 	if len(ls.entries) > ls.maxSize {
-		ls.entries = ls.entries[ls.maxSize/2:]
+		overflow := len(ls.entries) - ls.maxSize
+		ls.entries = ls.entries[overflow:]
 		ls.rebuildIndex()
 	}
 }

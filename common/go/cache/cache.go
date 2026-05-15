@@ -98,10 +98,11 @@ func (c *Cache[T]) Set(ctx context.Context, key string, value T, ttl time.Durati
 
 // Delete 删除缓存
 func (c *Cache[T]) Delete(ctx context.Context, keys ...string) error {
+	prefixed := make([]string, len(keys))
 	for i, k := range keys {
-		keys[i] = c.key(k)
+		prefixed[i] = c.key(k)
 	}
-	return c.store.Del(ctx, keys...)
+	return c.store.Del(ctx, prefixed...)
 }
 
 // GetOrLoad 旁路缓存读取：先读缓存，未命中则通过 singleflight 合并回源

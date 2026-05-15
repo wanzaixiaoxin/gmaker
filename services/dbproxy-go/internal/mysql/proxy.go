@@ -93,12 +93,12 @@ func (p *Proxy) RouteUID(uid uint64) int {
 }
 
 // QueryRowByUID 按 UID 路由执行单行查询
-func (p *Proxy) QueryRowByUID(ctx context.Context, uid uint64, sqlStr string, args ...interface{}) *sql.Row {
+func (p *Proxy) QueryRowByUID(ctx context.Context, uid uint64, sqlStr string, args ...interface{}) (*sql.Row, error) {
 	idx := p.RouteUID(uid)
 	if idx < 0 {
-		return nil
+		return nil, fmt.Errorf("no shard available")
 	}
-	return p.shards[idx].QueryRowContext(ctx, sqlStr, args...)
+	return p.shards[idx].QueryRowContext(ctx, sqlStr, args...), nil
 }
 
 // QueryByUID 按 UID 路由执行查询

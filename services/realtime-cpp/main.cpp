@@ -1,5 +1,6 @@
 #include <iostream>
 #include <unordered_map>
+#include <unordered_set>
 #include <mutex>
 #include <condition_variable>
 #include <thread>
@@ -10,7 +11,7 @@
 #include "net/packet.hpp"
 #include "net/address.hpp"
 #include "discovery/factory.hpp"
-#include "realtime/compute_thread.hpp"
+#include "realtime/compute_pool.hpp"
 #include "realtime/message.hpp"
 #include "metrics/metrics.hpp"
 #include "logger/logger.hpp"
@@ -39,7 +40,7 @@ struct RealtimeServer {
         gs::metrics::ServeDefaultHTTP(":9090");
 
         // 初始化 Compute Thread
-        compute_ = std::make_unique<ComputeThread>();
+        compute_ = std::make_unique<ComputePool>(4);
         compute_->SetOutputCallback([this](uint32_t room_id, const RoomSnapshot& snap, const std::vector<uint64_t>& conns) {
             (void)room_id;
             OnRoomBroadcast(snap, conns);
@@ -238,8 +239,12 @@ private:
             append_u32(p.anim_state);
         }
 
+        if (target_conns.empty()) return;
+
+        // 构建目标集合
+        std::unordered_set<uint64_t> target_set(target_conns.begin(), target_conns.end());
+
         std::lock_guard<std::mutex> lk(conn_mtx_);
-        if (conns_.empty()) return;
 
         Packet pkt;
         pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(payload.size());
@@ -248,16 +253,19 @@ private:
         pkt.header.seq_id = 0;
         pkt.header.flags = static_cast<uint32_t>(Flag::ROOM_BCAST);
         pkt.payload = Buffer::FromVector(payload);
-        for (const auto& [_, conn] : conns_) {
-            (void)_;
-            conn->SendPacket(pkt);
+
+        for (uint64_t conn_id : target_set) {
+            auto it = conns_.find(conn_id);
+            if (it != conns_.end()) {
+                it->second->SendPacket(pkt);
+            }
         }
     }
 
     std::shared_ptr<gs::logger::Logger> logger_;
     std::unique_ptr<AsyncTCPServer> server_;
     std::unique_ptr<gs::discovery::ServiceDiscovery> sd_;
-    std::unique_ptr<ComputeThread> compute_;
+    std::unique_ptr<ComputePool> compute_;
 
     std::mutex conn_mtx_;
     std::unordered_map<uint64_t, AsyncTCPConnection*> conns_;

@@ -16,6 +16,7 @@ func main() {
 		listenAddr = flag.String("listen", ":2379", "Registry listen address")
 		etcdAddrs  = flag.String("etcd", "127.0.0.1:2379", "Etcd endpoints, comma separated")
 		storeType  = flag.String("store", "memory", "Store backend: memory | etcd")
+		authToken  = flag.String("auth-token", "", "Authentication token for register/heartbeat (empty = no auth)")
 		logFile    = flag.String("log-file", "", "Log file path (stdout if empty)")
 		logLevel   = flag.String("log-level", "info", "Log level: debug | info | warn | error | fatal")
 	)
@@ -40,7 +41,7 @@ func main() {
 	}
 	defer s.Close()
 
-	srv := server.New(*listenAddr, s)
+	srv := server.New(*listenAddr, s, *authToken)
 	if err := srv.Start(); err != nil {
 		log.Fatalf("failed to start registry server: %v", err)
 	}

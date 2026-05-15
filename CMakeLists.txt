@@ -243,6 +243,7 @@ set(CPP_REDIS_SOURCES
 set(CPP_REALTIME_SOURCES
     common/cpp/realtime/room.cpp
     common/cpp/realtime/compute_thread.cpp
+    common/cpp/realtime/compute_pool.cpp
     common/cpp/realtime/aoi.cpp
 )
 

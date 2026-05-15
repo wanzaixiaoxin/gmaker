@@ -53,6 +53,11 @@ func (cb *CircuitBreaker) CurrentState() State {
 
 // Allow 判断是否允许请求通过
 func (cb *CircuitBreaker) Allow() bool {
+	return cb.allowWithRetry(3)
+}
+
+// allowWithRetry 带重试的 Allow，防止 CAS 竞争直接拒绝
+func (cb *CircuitBreaker) allowWithRetry(retries int) bool {
 	st := cb.CurrentState()
 	if st == StateClosed {
 		return true
@@ -65,7 +70,12 @@ func (cb *CircuitBreaker) Allow() bool {
 			if cb.state.CompareAndSwap(int32(StateOpen), int32(StateHalfOpen)) {
 				cb.failures.Store(0)
 				cb.successes.Store(0)
+				cb.halfOpenReqs.Store(0)
 				return true
+			}
+			// CAS 失败，说明有其他 goroutine 已完成状态转换，递归重试
+			if retries > 0 {
+				return cb.allowWithRetry(retries - 1)
 			}
 		}
 		return false
@@ -87,6 +97,7 @@ func (cb *CircuitBreaker) RecordSuccess() {
 			cb.state.Store(int32(StateClosed))
 			cb.failures.Store(0)
 			cb.successes.Store(0)
+			cb.halfOpenReqs.Store(0)
 		}
 	} else if st == StateClosed {
 		cb.failures.Store(0)
@@ -114,4 +125,5 @@ func (cb *CircuitBreaker) transitionToOpen() {
 	cb.mu.Unlock()
 	cb.state.Store(int32(StateOpen))
 	cb.successes.Store(0)
+	cb.halfOpenReqs.Store(0)
 }
