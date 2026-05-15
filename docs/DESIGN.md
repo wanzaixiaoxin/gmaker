@@ -106,16 +106,17 @@
 ### 3.6 数据库代理服 (DB Proxy)
 - **语言**：Go
 - **职责**：
-  - 统一数据库访问入口（MySQL、Redis、MongoDB 等）
+  - 统一 **MySQL** 数据库访问入口（仅代理关系型数据库，不代理 Redis）
   - 连接池管理、SQL 缓存、限流、分库分表路由
 - **设计要点**：
   - 多 DB Proxy 节点对等
   - 服务按 Key 哈希或一致性哈希选择节点
   - **数据持久化策略适配**：
     - **大字段角色存档**：protobuf bytes 直存 MySQL Blob，减少表结构变更，适用于复杂角色数据
-    - **大地图/分块数据**：Tile Map 按区域分库分表，Redis Pipeline 批量写入
+    - **大地图/分块数据**：Tile Map 按区域分库分表，批量写入优化
     - **轻量战斗数据**：战斗回放临时写入对象存储（MinIO/OSS），DB Proxy 代理生成预签名 URL
     - **社交/邮件批量写入**：异步队列合并，减少事务开销
+  - **Redis 由各服务直连**：Redis 不经过 DBProxy 代理，各业务服务通过自带 Redis 客户端直连 Redis Cluster，详见 3.9 节
 
 ### 3.7 机器人服 (Bot Server)
 - **语言**：Go / C++
@@ -172,27 +173,27 @@ Redis 作为全服共享的高速存储层，承担**缓存、会话、排行榜
 | **Gateway** | `EXISTS session:player:{id}` | 玩家重连时快速校验会话有效性 |
 | **Biz** | `HGETALL cache:player:{id}`、`ZADD rank:daily:{season}` | 玩家数据缓存、排行榜、好友关系 |
 | **Realtime** | `SET room:snapshot:{room_id} EX 300`、`GET room:snapshot:{room_id}` | 房间快照持久化（断线重连）、实时结果临时缓存 |
-| **DBProxy** | 全量代理 | 连接池管理、Pipeline 合并、热点 Key 限流、大 Key 告警 |
+| **DBProxy** | `不使用 Redis` | DBProxy 仅代理 MySQL，不代理 Redis；Redis 由各服务直连 |
 | **LogStats** | `LPUSH queue:events`（可选） | 高并发埋点先写入 Redis Stream，再异步消费落盘 |
 
 #### 缓存一致性策略
 
-- **Cache-Aside（旁路缓存）**：DBProxy 的核心模式
-  1. 读：先查 Redis，未命中则查 MySQL，回写 Redis
-  2. 写：先写 MySQL，成功后删除/更新 Redis
+- **Cache-Aside（旁路缓存）**：各服务直连 Redis 的核心模式
+  1. 读：先查 Redis，未命中则通过 DBProxy 查 MySQL，回写 Redis
+  2. 写：先通过 DBProxy 写 MySQL，成功后删除/更新 Redis
 - **过期时间**：玩家数据缓存 TTL 建议 `300s ~ 900s`，动态热点数据可延长至 `3600s`
 - **缓存击穿防护**：对热点 Key 使用本地 `singleflight` 合并回源请求
 - **缓存穿透**：对 DB 不存在的 Key 写入空值占位（TTL 60s）
 - **缓存雪崩**：核心数据设置随机浮动 TTL（如 `300s + rand(60s)`）
 
-#### DB Proxy 的 Redis 代理增强
+#### 各服务直连 Redis 的约定
 
-`dbproxy-go` 不仅是透传代理，还承担以下职责：
-- **连接池**：维护到 Redis Cluster 的长连接池，减少 TCP 握手开销
-- **Pipeline 合并**：将多个小请求合并为 Pipeline 批量发送
-- **限流与熔断**：对热点 Key 或危险命令（`KEYS`、`FLUSHALL`）进行拦截与限流
+Redis 由各业务服务直连（不经过 DBProxy），各服务需遵循以下约定：
+- **连接池**：各服务自行维护到 Redis Cluster 的连接池（Go 使用 `go-redis`，C++ 使用 `hiredis` / `redis-plus-plus`）
+- **Pipeline 优化**：批量操作场景下各服务自行使用 Pipeline 合并请求
+- **限流与防护**：各服务对自身的热点 Key 访问做本地限流；危险命令（`KEYS`、`FLUSHALL`）在公共库层面默认拦截
 - **序列化优化**：支持将 protobuf bytes 直接写入 Redis String，减少 JSON 编解码开销
-- **双写缓冲**：对同时写入 MySQL 和 Redis 的操作，提供事务化封装接口
+- **双写协调**：对同时写入 MySQL 和 Redis 的操作，由各业务服务负责协调一致性（先写 MySQL 通过 DBProxy，再更新 Redis）
 
 ---
 
@@ -576,7 +577,7 @@ func HandleBuyItem(ctx context.Context, req *BuyItemReq) (*BuyItemRes, error) {
     bag, err := dbproxyClient.QueryBag(ctx, req.PlayerID)
     if err != nil { return nil, err }
 
-    // 3. 扣减 + 写入（双写 MySQL + Redis，由 DBProxy 保证）
+    // 3. 扣减 + 写入（先写 MySQL 通过 DBProxy，再更新 Redis）
     res, err := dbproxyClient.BuyItem(ctx, req.PlayerID, req.ItemID, cfg.Price)
     return res, err
 }
@@ -963,15 +964,15 @@ var ProjectModules = map[string][]Module{
 
 #### 6.1.5 数据库与缓存的差异化策略
 
-DB Proxy 内部按 `storage_mode` 选择不同的持久化策略：
+DB Proxy 内部按 `storage_mode` 选择不同的持久化策略（MySQL 侧）；Redis 侧由各服务直连维护：
 
 - **大字段角色存档模式**：
   - 玩家数据采用 `protobuf bytes -> MySQL Blob` 大字段直存，减少表结构变更
   - 背包、邮件等复杂关系型数据使用 JSON 字段或辅助表
-  - Redis 缓存玩家全量数据，离线时异步落库
+  - Redis 缓存玩家全量数据（各服务直连 Redis），离线时通过 DBProxy 异步落库 MySQL
 
 - **大地图/分块数据模式**：
-  - 地图 Tile 数据按 `x,y` 坐标分片，使用 Redis Hash + MySQL 分表双写
+  - 地图 Tile 数据按 `x,y` 坐标分片，MySQL 分表由 DBProxy 代理写入，Redis Hash 由各服务直连写入
   - 联盟、战役记录使用宽表 + 时间序列数据库（如 ClickHouse，后期扩展）
   - 支持批量 Pipeline 写入，减少 IO 次数
 
@@ -1147,3 +1148,4 @@ Client --TCP/WS--> Gateway(C++) --RPC--> Biz(Go)
 | 2026-04-17 | v0.8 | 将具体游戏类型命名修正为通用能力命名：`moba_room`→`sync_room`、`mmorpg_scene`→`spatial_scene`、`slg_async_battle`→`async_combat`；DBProxy/Biz/Gateway 描述去游戏化 | - |
 | 2026-04-17 | v0.9 | 新增 4.6 网络库架构设计：C++ 侧 IO 线程 + Compute 线程 + Async IO 线程三层模型、无锁队列消息流转、Room/Scene 绑定策略；Go 侧 goroutine 池 + 多 IO 协作（并行聚合 / 管道顺序）模型；同步修复文档中残留的 `Battle`→`Realtime`、`battle:room`→`room:snapshot` 命名 | - |
 | 2026-04-17 | v1.0 | 新增 IMPLEMENTATION.md：分 6 个 Phase 定义了从通信骨架到生产化部署的落地路径、任务分解表、验收标准、依赖关系图与风险控制；DESIGN.md 第 9 章改为引用链接；工程目录结构已同步落地到磁盘 | - |
+| 2026-05-15 | v1.1 | 明确 DBProxy 不代理 Redis：DBProxy 仅代理 MySQL，Redis 由各服务直连 Redis Cluster；更新 3.6 DBProxy 职责、3.9 各服务 Redis 使用约定表、缓存一致性策略、直连 Redis 约定、6.1.5 数据持久化策略等相关描述 | - |
