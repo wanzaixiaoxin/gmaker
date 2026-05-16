@@ -26,6 +26,11 @@
       "anyone here?"
     ],
     "auto_start": true,
-    "use_ws": true
+    "use_ws": true,
+    "batch_size": 10,
+    "batch_interval_ms": 500,
+    "connect_timeout_ms": 5000,
+    "retry_delay_ms": 3000,
+    "max_retries": 3
   }
 }

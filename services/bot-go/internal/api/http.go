@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -45,13 +46,39 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, stats)
 }
 
+// handleStart 启动所有 bot（支持 query 参数覆盖批量配置）
+//
+// POST /api/v1/start?batch_size=5&batch_interval_ms=1000
 func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		s.writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"code": 405, "msg": "method not allowed"})
 		return
 	}
+
+	// 从 query 参数读取可选的批量覆盖配置
+	if v := r.URL.Query().Get("batch_size"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			s.Manager.OverrideBatchSize(n)
+		}
+	}
+	if v := r.URL.Query().Get("batch_interval_ms"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			s.Manager.OverrideBatchInterval(n)
+		}
+	}
+
 	s.Manager.Start()
-	s.writeJSON(w, http.StatusOK, map[string]interface{}{"code": 0, "msg": "bots started"})
+
+	cfg := s.Manager.GetConfig()
+	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"code":              0,
+		"msg":               "bots starting in batches",
+		"batch_size":        cfg.BatchSize,
+		"batch_interval_ms": cfg.BatchIntervalMs,
+		"connect_timeout":   fmt.Sprintf("%dms", cfg.ConnectTimeoutMs),
+		"retry_delay":       fmt.Sprintf("%dms", cfg.RetryDelayMs),
+		"max_retries":       cfg.MaxRetries,
+	})
 }
 
 func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {

@@ -30,6 +30,13 @@ type Config struct {
 	Messages           []string `json:"messages"`
 	AutoStart          bool     `json:"auto_start"`
 	UseWS              bool     `json:"use_ws"`
+
+	// 批量上线参数
+	BatchSize        int `json:"batch_size"`          // 每批上线的 bot 数量（默认 10）
+	BatchIntervalMs  int `json:"batch_interval_ms"`   // 两批之间的间隔毫秒数（默认 500）
+	ConnectTimeoutMs int `json:"connect_timeout_ms"`  // 单个 bot 连接超时毫秒数（默认 5000）
+	RetryDelayMs     int `json:"retry_delay_ms"`      // 连接失败后重试间隔毫秒数（默认 3000）
+	MaxRetries       int `json:"max_retries"`         // 单个 bot 最大重试次数（默认 3，0=无限）
 }
 
 // BotAccount 机器人账号记录
@@ -51,6 +58,9 @@ type Manager struct {
 	idGen     *idgen.Snowflake
 	log       *logger.Logger
 
+	// 批量启动控制
+	cancel context.CancelFunc // 用于停止所有 bot
+
 	// 统计
 	running   atomic.Int32
 	msgCount  atomic.Uint64
@@ -59,6 +69,19 @@ type Manager struct {
 
 // NewManager 创建管理器
 func NewManager(cfg Config, gatewayAddr, masterKey string, db *dbproxy.Client, idGen *idgen.Snowflake, log *logger.Logger) *Manager {
+	// 填充默认值
+	if cfg.BatchSize <= 0 {
+		cfg.BatchSize = 10
+	}
+	if cfg.BatchIntervalMs <= 0 {
+		cfg.BatchIntervalMs = 500
+	}
+	if cfg.ConnectTimeoutMs <= 0 {
+		cfg.ConnectTimeoutMs = 5000
+	}
+	if cfg.RetryDelayMs <= 0 {
+		cfg.RetryDelayMs = 3000
+	}
 	return &Manager{
 		clients:   make(map[int]*Client),
 		config:    cfg,
@@ -112,27 +135,96 @@ func (m *Manager) LoadBotsFromDB() ([]BotAccount, error) {
 	return bots, nil
 }
 
-// Start 启动所有从 DB 加载的机器人
+// Start 启动所有从 DB 加载的机器人（分批错峰）
 func (m *Manager) Start() {
+	// 如果已有任务在运行，先停止
+	m.Stop()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
+
 	bots, err := m.LoadBotsFromDB()
 	if err != nil {
 		m.log.Errorf("LoadBotsFromDB failed: %v, fallback to config generation", err)
 		// fallback：用 Snowflake 生成指定数量的 bot
 		if m.idGen != nil {
+			var fallback []BotAccount
 			for i := 0; i < 10; i++ {
-				go m.runBotWithID(i, 0)
+				fallback = append(fallback, BotAccount{BotID: i, PlayerID: 0, BotType: "chatbot", Status: 0})
+			}
+			bots = fallback
+		}
+	}
+
+	m.log.Infof("BotManager loaded %d bots, starting in batches (batch_size=%d, interval=%dms)",
+		len(bots), m.config.BatchSize, m.config.BatchIntervalMs)
+
+	go m.startBatches(ctx, bots)
+}
+
+// startBatches 分批错峰启动 bot
+// 每批 BatchSize 个 bot 同时连接，两批之间等待 BatchIntervalMs
+func (m *Manager) startBatches(ctx context.Context, bots []BotAccount) {
+	total := len(bots)
+	batchSize := m.config.BatchSize
+	batchInterval := time.Duration(m.config.BatchIntervalMs) * time.Millisecond
+
+	for i := 0; i < total; i += batchSize {
+		// 检查是否被取消
+		select {
+		case <-ctx.Done():
+			m.log.Infof("BotManager startBatches cancelled")
+			return
+		default:
+		}
+
+		// 计算本批范围
+		end := i + batchSize
+		if end > total {
+			end = total
+		}
+		batch := bots[i:end]
+		batchNum := (i / batchSize) + 1
+		totalBatches := (total + batchSize - 1) / batchSize
+
+		m.log.Infof("[Batch %d/%d] starting %d bots...", batchNum, totalBatches, len(batch))
+
+		// 本批内每个 bot 错开一小段时间启动（每个 bot 之间间隔 50ms）
+		for j, b := range batch {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			go m.runBotWithID(b.BotID, b.PlayerID)
+			// 批内错峰：每个 bot 间隔 50ms，避免同一瞬间全部并发连接
+			if j < len(batch)-1 {
+				time.Sleep(50 * time.Millisecond)
 			}
 		}
-		return
+
+		// 不是最后一批，等待间隔后再启动下一批
+		if end < total {
+			m.log.Infof("[Batch %d/%d] waiting %dms before next batch...", batchNum, totalBatches, m.config.BatchIntervalMs)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(batchInterval):
+			}
+		}
 	}
-	m.log.Infof("BotManager loaded %d bots from DB", len(bots))
-	for _, b := range bots {
-		go m.runBotWithID(b.BotID, b.PlayerID)
-	}
+
+	m.log.Infof("BotManager all %d bots launched", total)
 }
 
 // Stop 停止所有机器人
 func (m *Manager) Stop() {
+	// 取消批量启动任务
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
+	}
+
 	m.log.Info("BotManager stopping all bots...")
 	m.mu.RLock()
 	list := make([]*Client, 0, len(m.clients))
@@ -202,10 +294,28 @@ func (m *Manager) Stats() map[string]interface{} {
 		"msg_failed":           m.failCount.Load(),
 		"room_id":              m.config.RoomID,
 		"message_interval_sec": m.config.MessageIntervalSec,
+		"batch_size":           m.config.BatchSize,
+		"batch_interval_ms":    m.config.BatchIntervalMs,
 	}
 }
 
+// GetConfig 返回当前配置（只读副本）
+func (m *Manager) GetConfig() Config {
+	return m.config
+}
+
+// OverrideBatchSize 运行时覆盖每批启动数量
+func (m *Manager) OverrideBatchSize(n int) {
+	m.config.BatchSize = n
+}
+
+// OverrideBatchInterval 运行时覆盖批间间隔（毫秒）
+func (m *Manager) OverrideBatchInterval(ms int) {
+	m.config.BatchIntervalMs = ms
+}
+
 // runBotWithID 单个 bot 的生命周期 goroutine
+// 带重试限制：连接失败最多重试 MaxRetries 次，成功后断线重连不受限制
 func (m *Manager) runBotWithID(id int, playerID uint64) {
 	if playerID == 0 && m.idGen != nil {
 		rawID, err := m.idGen.NextID()
@@ -222,13 +332,27 @@ func (m *Manager) runBotWithID(id int, playerID uint64) {
 	m.clients[id] = client
 	m.mu.Unlock()
 
+	retryDelay := time.Duration(m.config.RetryDelayMs) * time.Millisecond
+	if retryDelay <= 0 {
+		retryDelay = 3 * time.Second
+	}
+	maxRetries := m.config.MaxRetries // 0 = 无限重试
+	consecutiveFails := 0
+
 	for {
 		if err := m.connectAndBind(client); err != nil {
-			m.log.Warnf("Bot-%d setup failed: %v, retry in 5s...", id, err)
-			time.Sleep(5 * time.Second)
+			consecutiveFails++
+			if maxRetries > 0 && consecutiveFails > maxRetries {
+				m.log.Errorf("Bot-%d exceeded max retries (%d), giving up", id, maxRetries)
+				return
+			}
+			m.log.Warnf("Bot-%d setup failed (attempt %d): %v, retry in %dms...", id, consecutiveFails, err, m.config.RetryDelayMs)
+			time.Sleep(retryDelay)
 			continue
 		}
 
+		// 连接成功，重置失败计数
+		consecutiveFails = 0
 		m.running.Add(1)
 		m.log.Infof("Bot-%d (player_id=%d) is now active in room %d", id, playerID, m.config.RoomID)
 
@@ -236,8 +360,8 @@ func (m *Manager) runBotWithID(id int, playerID uint64) {
 
 		m.running.Add(-1)
 		client.Close()
-		m.log.Warnf("Bot-%d disconnected, reconnect in 3s...", id)
-		time.Sleep(3 * time.Second)
+		m.log.Warnf("Bot-%d disconnected, reconnect in %dms...", id, m.config.RetryDelayMs)
+		time.Sleep(retryDelay)
 	}
 }
 
