@@ -23,6 +23,7 @@ enum ServiceType {
     
     // 实时服务 (20-29)
     SERVICE_REALTIME  = 20;  // 实时服务
+    SERVICE_MATCH     = 21;  // 匹配服务
     
     // 工具服务 (30-39)
     SERVICE_BOT       = 30;  // 机器人服务
@@ -41,6 +42,7 @@ enum ServiceType {
 // - 0x00020000 - 0x0002FFFF: Login / Realtime 服务命令
 // - 0x00030000 - 0x0003FFFF: Chat 服务命令
 // - 0x00040000 - 0x0004FFFF: LogStats 服务命令
+// - 0x00050000 - 0x0005FFFF: Match 服务命令
 // - 0x000E0000 - 0x000EFFFF: DBProxy 内部 RPC 命令
 // - 0x000F0000 - 0x000FFFFF: Registry 内部 RPC 命令
 // ============================================================
@@ -154,6 +156,17 @@ enum CmdLogStats {
     CMD_LOGSTATS_BASE     = 0x00040000;
 }
 
+enum CmdMatch {
+    // Match 服务命令 (0x00050000 - 0x0005FFFF)
+    CMD_MATCH_UNKNOWN       = 0;
+    CMD_MATCH_REQ           = 0x00050000;
+    CMD_MATCH_RES           = 0x00050001;
+    CMD_MATCH_CANCEL_REQ    = 0x00050002;
+    CMD_MATCH_CANCEL_RES    = 0x00050003;
+    CMD_MATCH_STATUS_REQ    = 0x00050004;
+    CMD_MATCH_STATUS_RES    = 0x00050005;
+}
+
 enum CmdRealtime {
     // Realtime 服务命令 (0x00020000 - 0x0002FFFF)
     CMD_RT_UNKNOWN        = 0;
@@ -180,6 +193,7 @@ message ServiceCmdRanges {
     CmdRange biz = 2;       // Biz 服务命令范围
     CmdRange login = 3;     // Login 服务命令范围
     CmdRange realtime = 4;  // Realtime 服务命令范围
+    CmdRange match = 5;     // Match 服务命令范围
 }
 
 // 默认命令范围
@@ -187,3 +201,4 @@ message ServiceCmdRanges {
 // Biz:     0x00010000 - 0x0001FFFF
 // Login:   0x00020000 - 0x0002FFFF
 // Realtime: 0x00050000 - 0x0005FFFF
+// Match:    0x00050000 - 0x0005FFFF

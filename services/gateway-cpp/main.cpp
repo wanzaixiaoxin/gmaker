@@ -1033,6 +1033,8 @@ AsyncUpstreamPool* Gateway::RouteToPool(uint32_t cmd_id) {
         svc_type = "chat";
     } else if (cmd_id >= 0x00040000 && cmd_id <= 0x0004FFFF) {
         svc_type = "logstats";
+    } else if (cmd_id >= 0x00050000 && cmd_id <= 0x0005FFFF) {
+        svc_type = "match";
     }
     
     // 通过 UpstreamManager 获取连接池

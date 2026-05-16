@@ -1,0 +1,27 @@
+{
+  "service": {
+    "service_type": "match",
+    "node_id": "match-1",
+    "log_level": "info",
+    "log_file": "",
+    "metrics_addr": ":9105"
+  },
+  "network": {
+    "host": "0.0.0.0",
+    "port": 8085
+  },
+  "discovery": {
+    "type": "etcd",
+    "addrs": ["http://127.0.0.1:2379"]
+  },
+  "redis": {
+    "addrs": ["127.0.0.1:6379"],
+    "password": "",
+    "pool_size": 20
+  },
+  "election": {
+    "enabled": true,
+    "etcd_addr": "http://127.0.0.1:2379",
+    "lock_key": "/gmaker/match/leader"
+  }
+}

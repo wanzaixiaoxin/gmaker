@@ -1,0 +1,49 @@
+syntax = "proto3";
+package match;
+option go_package = "github.com/gmaker/luffa/gen/go/match";
+
+import "common.proto";
+
+// ============================================================
+// 匹配服务命令 (0x00050000 - 0x0005FFFF)
+// ============================================================
+
+// 匹配请求
+message MatchReq {
+    uint64 player_id = 1;   // 玩家ID
+    int32  mmr        = 2;  // 玩家MMR分数
+    int32  mode       = 3;  // 游戏模式 (1=5v5, 2=3v3, 3=1v1)
+    int32  team_size  = 4;  // 每队人数 (5, 3, 1)
+}
+
+// 匹配响应
+message MatchRes {
+    common.Result result   = 1;
+    uint64         match_id = 2;  // 匹配ID（成功时返回）
+    uint64         room_id  = 3;  // 房间ID（成功时返回）
+    repeated uint64 team_a  = 4;  // 队伍A玩家列表
+    repeated uint64 team_b  = 5;  // 队伍B玩家列表
+}
+
+// 取消匹配请求
+message MatchCancelReq {
+    uint64 player_id = 1;
+}
+
+// 取消匹配响应
+message MatchCancelRes {
+    common.Result result = 1;
+}
+
+// 匹配状态查询请求
+message MatchStatusReq {
+    uint64 player_id = 1;
+}
+
+// 匹配状态查询响应
+message MatchStatusRes {
+    common.Result result    = 1;
+    string        state     = 2;  // idle / queuing / matching / settling
+    int32         wait_ms   = 3;  // 已等待毫秒数
+    int32         queue_len = 4;  // 当前队列人数
+}

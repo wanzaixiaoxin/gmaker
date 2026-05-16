@@ -32,6 +32,9 @@ constexpr uint32_t CMD_REALTIME_SYNC   = protocol::CMD_RT_STATE_SYNC;
 struct RealtimeServer {
     void SetLogger(std::shared_ptr<gs::logger::Logger> logger) { logger_ = logger; }
 
+private:
+    std::atomic<uint32_t> next_dynamic_room_id_{100}; // 动态房间 ID 从 100 开始
+
     bool Start(uint16_t listen_port,
                const std::string& discovery_type,
                const std::vector<std::string>& discovery_addrs) {
@@ -146,6 +149,22 @@ private:
                 uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
                 float spawn_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
                 float spawn_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 24);
+
+                // room_id=0 表示动态创建房间（匹配服分配）
+                if (room_id == 0) {
+                    room_id = next_dynamic_room_id_.fetch_add(1);
+                    RoomConfig cfg;
+                    cfg.room_id = room_id;
+                    cfg.max_players = 20;
+                    cfg.map_size_x = 1000.0f;
+                    cfg.map_size_z = 1000.0f;
+                    cfg.tick_rate_hz = 60;
+                    cfg.enable_aoi = true;
+                    cfg.aoi_radius = 200.0f;
+                    compute_->CreateRoom(cfg);
+                    if (logger_) logger_->Info("Dynamic room created: " + std::to_string(room_id));
+                }
+
                 auto msg = std::make_unique<PlayerEnterMsg>();
                 msg->player_id = player_id;
                 msg->spawn_pos = {spawn_x, 0, spawn_z};
