@@ -147,7 +147,8 @@ inline constexpr ServiceCmdRanges::Impl_::Impl_(
         chat_{nullptr},
         biz_{nullptr},
         login_{nullptr},
-        realtime_{nullptr} {}
+        realtime_{nullptr},
+        match_{nullptr} {}
 
 template <typename>
 constexpr ServiceCmdRanges::ServiceCmdRanges(::_pbi::ConstantInitialized)
@@ -170,7 +171,7 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ServiceCmdRangesDefaultTypeInternal _ServiceCmdRanges_default_instance_;
 }  // namespace protocol
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_protocol_2eproto[10];
+    file_level_enum_descriptors_protocol_2eproto[11];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_protocol_2eproto = nullptr;
 const ::uint32_t
@@ -204,15 +205,17 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::protocol::ServiceCmdRanges, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::protocol::ServiceCmdRanges, _impl_.chat_),
         PROTOBUF_FIELD_OFFSET(::protocol::ServiceCmdRanges, _impl_.biz_),
         PROTOBUF_FIELD_OFFSET(::protocol::ServiceCmdRanges, _impl_.login_),
         PROTOBUF_FIELD_OFFSET(::protocol::ServiceCmdRanges, _impl_.realtime_),
+        PROTOBUF_FIELD_OFFSET(::protocol::ServiceCmdRanges, _impl_.match_),
         0,
         1,
         2,
         3,
+        4,
 };
 
 static const ::_pbi::MigrationSchema
@@ -236,71 +239,77 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "Req\022\021\n\tplayer_id\030\001 \001(\004\022\r\n\005token\030\002 \001(\t\"*\n"
     "\rPlayerBindRes\022\014\n\004code\030\001 \001(\r\022\013\n\003msg\030\002 \001("
     "\t\"\"\n\020PlayerKickNotify\022\016\n\006reason\030\001 \001(\t\"&\n"
-    "\010CmdRange\022\r\n\005start\030\001 \001(\r\022\013\n\003end\030\002 \001(\r\"\236\001"
+    "\010CmdRange\022\r\n\005start\030\001 \001(\r\022\013\n\003end\030\002 \001(\r\"\301\001"
     "\n\020ServiceCmdRanges\022 \n\004chat\030\001 \001(\0132\022.proto"
     "col.CmdRange\022\037\n\003biz\030\002 \001(\0132\022.protocol.Cmd"
     "Range\022!\n\005login\030\003 \001(\0132\022.protocol.CmdRange"
-    "\022$\n\010realtime\030\004 \001(\0132\022.protocol.CmdRange*\325"
-    "\001\n\013ServiceType\022\023\n\017SERVICE_UNKNOWN\020\000\022\024\n\020S"
-    "ERVICE_REGISTRY\020\001\022\023\n\017SERVICE_GATEWAY\020\002\022\023"
-    "\n\017SERVICE_DBPROXY\020\003\022\017\n\013SERVICE_BIZ\020\n\022\020\n\014"
-    "SERVICE_CHAT\020\013\022\021\n\rSERVICE_LOGIN\020\014\022\024\n\020SER"
-    "VICE_LOGSTATS\020\r\022\024\n\020SERVICE_REALTIME\020\024\022\017\n"
-    "\013SERVICE_BOT\020\036*h\n\tCmdSystem\022\023\n\017CMD_SYS_U"
-    "NKNOWN\020\000\022\025\n\021CMD_SYS_HEARTBEAT\020\001\022\025\n\021CMD_S"
-    "YS_HANDSHAKE\020\002\022\030\n\024CMD_SYS_ERROR_PACKET\020\003"
-    "*\244\001\n\tCmdCommon\022\023\n\017CMD_CMN_UNKNOWN\020\000\022\026\n\021C"
-    "MD_CMN_LOGIN_REQ\020\200 \022\026\n\021CMD_CMN_LOGIN_RES"
-    "\020\201 \022\031\n\024CMD_CMN_REGISTER_REQ\020\202 \022\031\n\024CMD_CM"
-    "N_REGISTER_RES\020\203 \022\034\n\027CMD_CMN_GATEWAY_FOR"
-    "WARD\020\204 *\211\001\n\022CmdGatewayInternal\022\022\n\016CMD_GW"
-    "_UNKNOWN\020\000\022\025\n\020CMD_GW_ROOM_JOIN\020\220 \022\026\n\021CMD"
-    "_GW_ROOM_LEAVE\020\221 \022\027\n\022CMD_GW_PLAYER_BIND\020"
-    "\240 \022\027\n\022CMD_GW_PLAYER_KICK\020\241 *\327\001\n\023CmdRegis"
-    "tryInternal\022\027\n\023CMD_REG_INT_UNKNOWN\020\000\022\032\n\024"
-    "CMD_REG_INT_REGISTER\020\201\200<\022\033\n\025CMD_REG_INT_"
-    "HEARTBEAT\020\202\200<\022\032\n\024CMD_REG_INT_DISCOVER\020\203\200"
-    "<\022\027\n\021CMD_REG_INT_WATCH\020\204\200<\022\034\n\026CMD_REG_IN"
-    "T_NODE_EVENT\020\205\200<\022\033\n\025CMD_REG_INT_SUBSCRIB"
-    "E\020\206\200<*\252\001\n\022CmdDBProxyInternal\022\026\n\022CMD_DB_I"
-    "NT_UNKNOWN\020\000\022\034\n\026CMD_DB_INT_MYSQL_QUERY\020\201"
-    "\2008\022 \n\032CMD_DB_INT_MYSQL_QUERY_RES\020\202\2008\022\033\n\025"
-    "CMD_DB_INT_MYSQL_EXEC\020\203\2008\022\037\n\031CMD_DB_INT_"
-    "MYSQL_EXEC_RES\020\204\2008*\301\002\n\006CmdBiz\022\023\n\017CMD_BIZ"
-    "_UNKNOWN\020\000\022\034\n\026CMD_BIZ_GET_PLAYER_REQ\020\200\200\004"
-    "\022\034\n\026CMD_BIZ_GET_PLAYER_RES\020\201\200\004\022\031\n\023CMD_BI"
-    "Z_GET_BAG_REQ\020\202\200\004\022\031\n\023CMD_BIZ_GET_BAG_RES"
-    "\020\203\200\004\022\022\n\014CMD_BIZ_PING\020\204\200\004\022\022\n\014CMD_BIZ_PONG"
-    "\020\205\200\004\022\037\n\031CMD_BIZ_UPDATE_PLAYER_REQ\020\206\200\004\022\037\n"
-    "\031CMD_BIZ_UPDATE_PLAYER_RES\020\207\200\004\022\"\n\034CMD_BI"
-    "Z_GET_PLAYER_ROOMS_REQ\020\210\200\004\022\"\n\034CMD_BIZ_GE"
-    "T_PLAYER_ROOMS_RES\020\211\200\004*\350\003\n\007CmdChat\022\024\n\020CM"
-    "D_CHAT_UNKNOWN\020\000\022\036\n\030CMD_CHAT_CREATE_ROOM"
-    "_REQ\020\200\200\014\022\036\n\030CMD_CHAT_CREATE_ROOM_RES\020\201\200\014"
-    "\022\034\n\026CMD_CHAT_JOIN_ROOM_REQ\020\202\200\014\022\034\n\026CMD_CH"
-    "AT_JOIN_ROOM_RES\020\203\200\014\022\035\n\027CMD_CHAT_LEAVE_R"
-    "OOM_REQ\020\204\200\014\022\035\n\027CMD_CHAT_LEAVE_ROOM_RES\020\205"
-    "\200\014\022\033\n\025CMD_CHAT_SEND_MSG_REQ\020\206\200\014\022\033\n\025CMD_C"
-    "HAT_SEND_MSG_RES\020\207\200\014\022\031\n\023CMD_CHAT_MSG_NOT"
-    "IFY\020\210\200\014\022\036\n\030CMD_CHAT_GET_HISTORY_REQ\020\211\200\014\022"
-    "\036\n\030CMD_CHAT_GET_HISTORY_RES\020\212\200\014\022\035\n\027CMD_C"
-    "HAT_CLOSE_ROOM_REQ\020\213\200\014\022\035\n\027CMD_CHAT_CLOSE"
-    "_ROOM_RES\020\214\200\014\022\034\n\026CMD_CHAT_LIST_ROOM_REQ\020"
-    "\215\200\014\022\034\n\026CMD_CHAT_LIST_ROOM_RES\020\216\200\014*@\n\013Cmd"
-    "LogStats\022\030\n\024CMD_LOGSTATS_UNKNOWN\020\000\022\027\n\021CM"
-    "D_LOGSTATS_BASE\020\200\200\020*\307\001\n\013CmdRealtime\022\022\n\016C"
-    "MD_RT_UNKNOWN\020\000\022\033\n\025CMD_RT_ROOM_ENTER_REQ"
-    "\020\200\200\010\022\033\n\025CMD_RT_ROOM_ENTER_RES\020\201\200\010\022\033\n\025CMD"
-    "_RT_ROOM_LEAVE_REQ\020\202\200\010\022\033\n\025CMD_RT_ROOM_LE"
-    "AVE_RES\020\203\200\010\022\027\n\021CMD_RT_FRAME_SYNC\020\204\200\010\022\027\n\021"
-    "CMD_RT_STATE_SYNC\020\205\200\010B)Z\'github.com/gmak"
-    "er/luffa/gen/go/protocolb\006proto3"
+    "\022$\n\010realtime\030\004 \001(\0132\022.protocol.CmdRange\022!"
+    "\n\005match\030\005 \001(\0132\022.protocol.CmdRange*\350\001\n\013Se"
+    "rviceType\022\023\n\017SERVICE_UNKNOWN\020\000\022\024\n\020SERVIC"
+    "E_REGISTRY\020\001\022\023\n\017SERVICE_GATEWAY\020\002\022\023\n\017SER"
+    "VICE_DBPROXY\020\003\022\017\n\013SERVICE_BIZ\020\n\022\020\n\014SERVI"
+    "CE_CHAT\020\013\022\021\n\rSERVICE_LOGIN\020\014\022\024\n\020SERVICE_"
+    "LOGSTATS\020\r\022\024\n\020SERVICE_REALTIME\020\024\022\021\n\rSERV"
+    "ICE_MATCH\020\025\022\017\n\013SERVICE_BOT\020\036*h\n\tCmdSyste"
+    "m\022\023\n\017CMD_SYS_UNKNOWN\020\000\022\025\n\021CMD_SYS_HEARTB"
+    "EAT\020\001\022\025\n\021CMD_SYS_HANDSHAKE\020\002\022\030\n\024CMD_SYS_"
+    "ERROR_PACKET\020\003*\244\001\n\tCmdCommon\022\023\n\017CMD_CMN_"
+    "UNKNOWN\020\000\022\026\n\021CMD_CMN_LOGIN_REQ\020\200 \022\026\n\021CMD"
+    "_CMN_LOGIN_RES\020\201 \022\031\n\024CMD_CMN_REGISTER_RE"
+    "Q\020\202 \022\031\n\024CMD_CMN_REGISTER_RES\020\203 \022\034\n\027CMD_C"
+    "MN_GATEWAY_FORWARD\020\204 *\211\001\n\022CmdGatewayInte"
+    "rnal\022\022\n\016CMD_GW_UNKNOWN\020\000\022\025\n\020CMD_GW_ROOM_"
+    "JOIN\020\220 \022\026\n\021CMD_GW_ROOM_LEAVE\020\221 \022\027\n\022CMD_G"
+    "W_PLAYER_BIND\020\240 \022\027\n\022CMD_GW_PLAYER_KICK\020\241"
+    " *\327\001\n\023CmdRegistryInternal\022\027\n\023CMD_REG_INT"
+    "_UNKNOWN\020\000\022\032\n\024CMD_REG_INT_REGISTER\020\201\200<\022\033"
+    "\n\025CMD_REG_INT_HEARTBEAT\020\202\200<\022\032\n\024CMD_REG_I"
+    "NT_DISCOVER\020\203\200<\022\027\n\021CMD_REG_INT_WATCH\020\204\200<"
+    "\022\034\n\026CMD_REG_INT_NODE_EVENT\020\205\200<\022\033\n\025CMD_RE"
+    "G_INT_SUBSCRIBE\020\206\200<*\252\001\n\022CmdDBProxyIntern"
+    "al\022\026\n\022CMD_DB_INT_UNKNOWN\020\000\022\034\n\026CMD_DB_INT"
+    "_MYSQL_QUERY\020\201\2008\022 \n\032CMD_DB_INT_MYSQL_QUE"
+    "RY_RES\020\202\2008\022\033\n\025CMD_DB_INT_MYSQL_EXEC\020\203\2008\022"
+    "\037\n\031CMD_DB_INT_MYSQL_EXEC_RES\020\204\2008*\301\002\n\006Cmd"
+    "Biz\022\023\n\017CMD_BIZ_UNKNOWN\020\000\022\034\n\026CMD_BIZ_GET_"
+    "PLAYER_REQ\020\200\200\004\022\034\n\026CMD_BIZ_GET_PLAYER_RES"
+    "\020\201\200\004\022\031\n\023CMD_BIZ_GET_BAG_REQ\020\202\200\004\022\031\n\023CMD_B"
+    "IZ_GET_BAG_RES\020\203\200\004\022\022\n\014CMD_BIZ_PING\020\204\200\004\022\022"
+    "\n\014CMD_BIZ_PONG\020\205\200\004\022\037\n\031CMD_BIZ_UPDATE_PLA"
+    "YER_REQ\020\206\200\004\022\037\n\031CMD_BIZ_UPDATE_PLAYER_RES"
+    "\020\207\200\004\022\"\n\034CMD_BIZ_GET_PLAYER_ROOMS_REQ\020\210\200\004"
+    "\022\"\n\034CMD_BIZ_GET_PLAYER_ROOMS_RES\020\211\200\004*\350\003\n"
+    "\007CmdChat\022\024\n\020CMD_CHAT_UNKNOWN\020\000\022\036\n\030CMD_CH"
+    "AT_CREATE_ROOM_REQ\020\200\200\014\022\036\n\030CMD_CHAT_CREAT"
+    "E_ROOM_RES\020\201\200\014\022\034\n\026CMD_CHAT_JOIN_ROOM_REQ"
+    "\020\202\200\014\022\034\n\026CMD_CHAT_JOIN_ROOM_RES\020\203\200\014\022\035\n\027CM"
+    "D_CHAT_LEAVE_ROOM_REQ\020\204\200\014\022\035\n\027CMD_CHAT_LE"
+    "AVE_ROOM_RES\020\205\200\014\022\033\n\025CMD_CHAT_SEND_MSG_RE"
+    "Q\020\206\200\014\022\033\n\025CMD_CHAT_SEND_MSG_RES\020\207\200\014\022\031\n\023CM"
+    "D_CHAT_MSG_NOTIFY\020\210\200\014\022\036\n\030CMD_CHAT_GET_HI"
+    "STORY_REQ\020\211\200\014\022\036\n\030CMD_CHAT_GET_HISTORY_RE"
+    "S\020\212\200\014\022\035\n\027CMD_CHAT_CLOSE_ROOM_REQ\020\213\200\014\022\035\n\027"
+    "CMD_CHAT_CLOSE_ROOM_RES\020\214\200\014\022\034\n\026CMD_CHAT_"
+    "LIST_ROOM_REQ\020\215\200\014\022\034\n\026CMD_CHAT_LIST_ROOM_"
+    "RES\020\216\200\014*@\n\013CmdLogStats\022\030\n\024CMD_LOGSTATS_U"
+    "NKNOWN\020\000\022\027\n\021CMD_LOGSTATS_BASE\020\200\200\020*\273\001\n\010Cm"
+    "dMatch\022\025\n\021CMD_MATCH_UNKNOWN\020\000\022\023\n\rCMD_MAT"
+    "CH_REQ\020\200\200\024\022\023\n\rCMD_MATCH_RES\020\201\200\024\022\032\n\024CMD_M"
+    "ATCH_CANCEL_REQ\020\202\200\024\022\032\n\024CMD_MATCH_CANCEL_"
+    "RES\020\203\200\024\022\032\n\024CMD_MATCH_STATUS_REQ\020\204\200\024\022\032\n\024C"
+    "MD_MATCH_STATUS_RES\020\205\200\024*\307\001\n\013CmdRealtime\022"
+    "\022\n\016CMD_RT_UNKNOWN\020\000\022\033\n\025CMD_RT_ROOM_ENTER"
+    "_REQ\020\200\200\010\022\033\n\025CMD_RT_ROOM_ENTER_RES\020\201\200\010\022\033\n"
+    "\025CMD_RT_ROOM_LEAVE_REQ\020\202\200\010\022\033\n\025CMD_RT_ROO"
+    "M_LEAVE_RES\020\203\200\010\022\027\n\021CMD_RT_FRAME_SYNC\020\204\200\010"
+    "\022\027\n\021CMD_RT_STATE_SYNC\020\205\200\010B)Z\'github.com/"
+    "gmaker/luffa/gen/go/protocolb\006proto3"
 };
 static ::absl::once_flag descriptor_table_protocol_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_protocol_2eproto = {
     false,
     false,
-    2512,
+    2756,
     descriptor_table_protodef_protocol_2eproto,
     "protocol.proto",
     &descriptor_table_protocol_2eproto_once,
@@ -320,7 +329,7 @@ ServiceType_descriptor() {
   return file_level_enum_descriptors_protocol_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t ServiceType_internal_data_[] = {
-    262144u, 32u, 67175360u, };
+    262144u, 32u, 67306432u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 CmdSystem_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_protocol_2eproto);
@@ -378,9 +387,16 @@ CmdLogStats_descriptor() {
 PROTOBUF_CONSTINIT const uint32_t CmdLogStats_internal_data_[] = {
     65536u, 65536u, 262144u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
-CmdRealtime_descriptor() {
+CmdMatch_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_protocol_2eproto);
   return file_level_enum_descriptors_protocol_2eproto[9];
+}
+PROTOBUF_CONSTINIT const uint32_t CmdMatch_internal_data_[] = {
+    65536u, 393216u, 327683u, 327681u, 327685u, 327680u, 327682u, 327684u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+CmdRealtime_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_protocol_2eproto);
+  return file_level_enum_descriptors_protocol_2eproto[10];
 }
 PROTOBUF_CONSTINIT const uint32_t CmdRealtime_internal_data_[] = {
     65536u, 393216u, 131075u, 131073u, 131077u, 131072u, 131074u, 131076u, };
@@ -1618,6 +1634,9 @@ ServiceCmdRanges::ServiceCmdRanges(
   _impl_.realtime_ = (CheckHasBit(cached_has_bits, 0x00000008U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.realtime_)
                 : nullptr;
+  _impl_.match_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.match_)
+                : nullptr;
 
   // @@protoc_insertion_point(copy_constructor:protocol.ServiceCmdRanges)
 }
@@ -1631,9 +1650,9 @@ inline void ServiceCmdRanges::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, chat_),
            0,
-           offsetof(Impl_, realtime_) -
+           offsetof(Impl_, match_) -
                offsetof(Impl_, chat_) +
-               sizeof(Impl_::realtime_));
+               sizeof(Impl_::match_));
 }
 ServiceCmdRanges::~ServiceCmdRanges() {
   // @@protoc_insertion_point(destructor:protocol.ServiceCmdRanges)
@@ -1650,6 +1669,7 @@ inline void ServiceCmdRanges::SharedDtor(MessageLite& self) {
   delete this_._impl_.biz_;
   delete this_._impl_.login_;
   delete this_._impl_.realtime_;
+  delete this_._impl_.match_;
   this_._impl_.~Impl_();
 }
 
@@ -1695,17 +1715,17 @@ ServiceCmdRanges::GetClassData() const {
   return ServiceCmdRanges_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<2, 4, 4, 0, 2>
+const ::_pbi::TcParseTable<3, 5, 5, 0, 2>
 ServiceCmdRanges::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(ServiceCmdRanges, _impl_._has_bits_),
     0, // no _extensions_
-    4, 24,  // max_field_number, fast_idx_mask
+    5, 56,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967280,  // skipmap
+    4294967264,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    4,  // num_field_entries
-    4,  // num_aux_entries
+    5,  // num_field_entries
+    5,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     ServiceCmdRanges_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -1714,10 +1734,7 @@ ServiceCmdRanges::_table_ = {
     ::_pbi::TcParser::GetTable<::protocol::ServiceCmdRanges>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // .protocol.CmdRange realtime = 4;
-    {::_pbi::TcParser::FastMtS1,
-     {34, 3, 3,
-      PROTOBUF_FIELD_OFFSET(ServiceCmdRanges, _impl_.realtime_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // .protocol.CmdRange chat = 1;
     {::_pbi::TcParser::FastMtS1,
      {10, 0, 0,
@@ -1730,6 +1747,16 @@ ServiceCmdRanges::_table_ = {
     {::_pbi::TcParser::FastMtS1,
      {26, 2, 2,
       PROTOBUF_FIELD_OFFSET(ServiceCmdRanges, _impl_.login_)}},
+    // .protocol.CmdRange realtime = 4;
+    {::_pbi::TcParser::FastMtS1,
+     {34, 3, 3,
+      PROTOBUF_FIELD_OFFSET(ServiceCmdRanges, _impl_.realtime_)}},
+    // .protocol.CmdRange match = 5;
+    {::_pbi::TcParser::FastMtS1,
+     {42, 4, 4,
+      PROTOBUF_FIELD_OFFSET(ServiceCmdRanges, _impl_.match_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
@@ -1741,8 +1768,11 @@ ServiceCmdRanges::_table_ = {
     {PROTOBUF_FIELD_OFFSET(ServiceCmdRanges, _impl_.login_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     // .protocol.CmdRange realtime = 4;
     {PROTOBUF_FIELD_OFFSET(ServiceCmdRanges, _impl_.realtime_), _Internal::kHasBitsOffset + 3, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .protocol.CmdRange match = 5;
+    {PROTOBUF_FIELD_OFFSET(ServiceCmdRanges, _impl_.match_), _Internal::kHasBitsOffset + 4, 4, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
+      {::_pbi::TcParser::GetTable<::protocol::CmdRange>()},
       {::_pbi::TcParser::GetTable<::protocol::CmdRange>()},
       {::_pbi::TcParser::GetTable<::protocol::CmdRange>()},
       {::_pbi::TcParser::GetTable<::protocol::CmdRange>()},
@@ -1759,7 +1789,7 @@ PROTOBUF_NOINLINE void ServiceCmdRanges::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(_impl_.chat_ != nullptr);
       _impl_.chat_->Clear();
@@ -1775,6 +1805,10 @@ PROTOBUF_NOINLINE void ServiceCmdRanges::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(_impl_.realtime_ != nullptr);
       _impl_.realtime_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(_impl_.match_ != nullptr);
+      _impl_.match_->Clear();
     }
   }
   _impl_._has_bits_.Clear();
@@ -1828,6 +1862,13 @@ PROTOBUF_NOINLINE void ServiceCmdRanges::Clear() {
         stream);
   }
 
+  // .protocol.CmdRange match = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.match_, this_._impl_.match_->GetCachedSize(), target,
+        stream);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1853,7 +1894,7 @@ PROTOBUF_NOINLINE void ServiceCmdRanges::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // .protocol.CmdRange chat = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
@@ -1873,6 +1914,11 @@ PROTOBUF_NOINLINE void ServiceCmdRanges::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.realtime_);
+    }
+    // .protocol.CmdRange match = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.match_);
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -1894,7 +1940,7 @@ void ServiceCmdRanges::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.chat_ != nullptr);
       if (_this->_impl_.chat_ == nullptr) {
@@ -1927,6 +1973,14 @@ void ServiceCmdRanges::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.realtime_->MergeFrom(*from._impl_.realtime_);
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(from._impl_.match_ != nullptr);
+      if (_this->_impl_.match_ == nullptr) {
+        _this->_impl_.match_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.match_);
+      } else {
+        _this->_impl_.match_->MergeFrom(*from._impl_.match_);
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1946,8 +2000,8 @@ void ServiceCmdRanges::InternalSwap(ServiceCmdRanges* PROTOBUF_RESTRICT PROTOBUF
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ServiceCmdRanges, _impl_.realtime_)
-      + sizeof(ServiceCmdRanges::_impl_.realtime_)
+      PROTOBUF_FIELD_OFFSET(ServiceCmdRanges, _impl_.match_)
+      + sizeof(ServiceCmdRanges::_impl_.match_)
       - PROTOBUF_FIELD_OFFSET(ServiceCmdRanges, _impl_.chat_)>(
           reinterpret_cast<char*>(&_impl_.chat_),
           reinterpret_cast<char*>(&other->_impl_.chat_));

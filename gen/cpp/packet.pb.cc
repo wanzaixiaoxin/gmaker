@@ -37,7 +37,10 @@ inline constexpr Packet::Impl_::Impl_(
         magic_{0u},
         cmd_id_{0u},
         seq_id_{0u},
-        flag_{0u} {}
+        flag_{0u},
+        user_id_{::uint64_t{0u}},
+        zone_id_{0u},
+        service_id_{0u} {}
 
 template <typename>
 constexpr Packet::Packet(::_pbi::ConstantInitialized)
@@ -68,16 +71,22 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::common::Packet, _impl_._has_bits_),
-        8, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::common::Packet, _impl_.magic_),
         PROTOBUF_FIELD_OFFSET(::common::Packet, _impl_.cmd_id_),
         PROTOBUF_FIELD_OFFSET(::common::Packet, _impl_.seq_id_),
         PROTOBUF_FIELD_OFFSET(::common::Packet, _impl_.flag_),
+        PROTOBUF_FIELD_OFFSET(::common::Packet, _impl_.user_id_),
+        PROTOBUF_FIELD_OFFSET(::common::Packet, _impl_.zone_id_),
+        PROTOBUF_FIELD_OFFSET(::common::Packet, _impl_.service_id_),
         PROTOBUF_FIELD_OFFSET(::common::Packet, _impl_.payload_),
         1,
         2,
         3,
         4,
+        5,
+        6,
+        7,
         0,
 };
 
@@ -90,16 +99,18 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
 };
 const char descriptor_table_protodef_packet_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\014packet.proto\022\006common\"V\n\006Packet\022\r\n\005magi"
-    "c\030\001 \001(\r\022\016\n\006cmd_id\030\002 \001(\r\022\016\n\006seq_id\030\003 \001(\r\022"
-    "\014\n\004flag\030\004 \001(\r\022\017\n\007payload\030\005 \001(\014B\'Z%github"
-    ".com/gmaker/luffa/gen/go/commonb\006proto3"
+    "\n\014packet.proto\022\006common\"\214\001\n\006Packet\022\r\n\005mag"
+    "ic\030\001 \001(\r\022\016\n\006cmd_id\030\002 \001(\r\022\016\n\006seq_id\030\003 \001(\r"
+    "\022\014\n\004flag\030\004 \001(\r\022\017\n\007user_id\030\005 \001(\004\022\017\n\007zone_"
+    "id\030\006 \001(\r\022\022\n\nservice_id\030\007 \001(\r\022\017\n\007payload\030"
+    "\010 \001(\014B\'Z%github.com/gmaker/luffa/gen/go/"
+    "commonb\006proto3"
 };
 static ::absl::once_flag descriptor_table_packet_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_packet_2eproto = {
     false,
     false,
-    159,
+    214,
     descriptor_table_protodef_packet_2eproto,
     "packet.proto",
     &descriptor_table_packet_2eproto_once,
@@ -157,9 +168,9 @@ Packet::Packet(
                offsetof(Impl_, magic_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, magic_),
-           offsetof(Impl_, flag_) -
+           offsetof(Impl_, service_id_) -
                offsetof(Impl_, magic_) +
-               sizeof(Impl_::flag_));
+               sizeof(Impl_::service_id_));
 
   // @@protoc_insertion_point(copy_constructor:common.Packet)
 }
@@ -174,9 +185,9 @@ inline void Packet::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, magic_),
            0,
-           offsetof(Impl_, flag_) -
+           offsetof(Impl_, service_id_) -
                offsetof(Impl_, magic_) +
-               sizeof(Impl_::flag_));
+               sizeof(Impl_::service_id_));
 }
 Packet::~Packet() {
   // @@protoc_insertion_point(destructor:common.Packet)
@@ -235,16 +246,16 @@ Packet::GetClassData() const {
   return Packet_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<3, 5, 0, 0, 2>
+const ::_pbi::TcParseTable<3, 8, 0, 0, 2>
 Packet::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(Packet, _impl_._has_bits_),
     0, // no _extensions_
-    5, 56,  // max_field_number, fast_idx_mask
+    8, 56,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967264,  // skipmap
+    4294967040,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    5,  // num_field_entries
+    8,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     Packet_class_data_.base(),
@@ -254,7 +265,10 @@ Packet::_table_ = {
     ::_pbi::TcParser::GetTable<::common::Packet>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    {::_pbi::TcParser::MiniParse, {}},
+    // bytes payload = 8;
+    {::_pbi::TcParser::FastBS1,
+     {66, 0, 0,
+      PROTOBUF_FIELD_OFFSET(Packet, _impl_.payload_)}},
     // uint32 magic = 1;
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Packet, _impl_.magic_), 1>(),
      {8, 1, 0,
@@ -271,12 +285,18 @@ Packet::_table_ = {
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Packet, _impl_.flag_), 4>(),
      {32, 4, 0,
       PROTOBUF_FIELD_OFFSET(Packet, _impl_.flag_)}},
-    // bytes payload = 5;
-    {::_pbi::TcParser::FastBS1,
-     {42, 0, 0,
-      PROTOBUF_FIELD_OFFSET(Packet, _impl_.payload_)}},
-    {::_pbi::TcParser::MiniParse, {}},
-    {::_pbi::TcParser::MiniParse, {}},
+    // uint64 user_id = 5;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(Packet, _impl_.user_id_), 5>(),
+     {40, 5, 0,
+      PROTOBUF_FIELD_OFFSET(Packet, _impl_.user_id_)}},
+    // uint32 zone_id = 6;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Packet, _impl_.zone_id_), 6>(),
+     {48, 6, 0,
+      PROTOBUF_FIELD_OFFSET(Packet, _impl_.zone_id_)}},
+    // uint32 service_id = 7;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Packet, _impl_.service_id_), 7>(),
+     {56, 7, 0,
+      PROTOBUF_FIELD_OFFSET(Packet, _impl_.service_id_)}},
   }}, {{
     65535, 65535
   }}, {{
@@ -288,7 +308,13 @@ Packet::_table_ = {
     {PROTOBUF_FIELD_OFFSET(Packet, _impl_.seq_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 flag = 4;
     {PROTOBUF_FIELD_OFFSET(Packet, _impl_.flag_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-    // bytes payload = 5;
+    // uint64 user_id = 5;
+    {PROTOBUF_FIELD_OFFSET(Packet, _impl_.user_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    // uint32 zone_id = 6;
+    {PROTOBUF_FIELD_OFFSET(Packet, _impl_.zone_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    // uint32 service_id = 7;
+    {PROTOBUF_FIELD_OFFSET(Packet, _impl_.service_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    // bytes payload = 8;
     {PROTOBUF_FIELD_OFFSET(Packet, _impl_.payload_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
   }},
   // no aux_entries
@@ -306,10 +332,10 @@ PROTOBUF_NOINLINE void Packet::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.payload_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
     ::memset(&_impl_.magic_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.flag_) -
-        reinterpret_cast<char*>(&_impl_.magic_)) + sizeof(_impl_.flag_));
+        reinterpret_cast<char*>(&_impl_.service_id_) -
+        reinterpret_cast<char*>(&_impl_.magic_)) + sizeof(_impl_.service_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -370,11 +396,38 @@ PROTOBUF_NOINLINE void Packet::Clear() {
     }
   }
 
-  // bytes payload = 5;
+  // uint64 user_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_user_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_user_id(), target);
+    }
+  }
+
+  // uint32 zone_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_zone_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_zone_id(), target);
+    }
+  }
+
+  // uint32 service_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_service_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_service_id(), target);
+    }
+  }
+
+  // bytes payload = 8;
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_payload().empty()) {
       const ::std::string& _s = this_._internal_payload();
-      target = stream->WriteBytesMaybeAliased(5, _s, target);
+      target = stream->WriteBytesMaybeAliased(8, _s, target);
     }
   }
 
@@ -403,8 +456,8 @@ PROTOBUF_NOINLINE void Packet::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
-    // bytes payload = 5;
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // bytes payload = 8;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_payload().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
@@ -439,6 +492,27 @@ PROTOBUF_NOINLINE void Packet::Clear() {
             this_._internal_flag());
       }
     }
+    // uint64 user_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_user_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_user_id());
+      }
+    }
+    // uint32 zone_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_zone_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_zone_id());
+      }
+    }
+    // uint32 service_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_service_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_service_id());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -458,7 +532,7 @@ void Packet::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_payload().empty()) {
         _this->_internal_set_payload(from._internal_payload());
@@ -488,6 +562,21 @@ void Packet::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.flag_ = from._impl_.flag_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_user_id() != 0) {
+        _this->_impl_.user_id_ = from._impl_.user_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_zone_id() != 0) {
+        _this->_impl_.zone_id_ = from._impl_.zone_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_service_id() != 0) {
+        _this->_impl_.service_id_ = from._impl_.service_id_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -510,8 +599,8 @@ void Packet::InternalSwap(Packet* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.payload_, &other->_impl_.payload_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(Packet, _impl_.flag_)
-      + sizeof(Packet::_impl_.flag_)
+      PROTOBUF_FIELD_OFFSET(Packet, _impl_.service_id_)
+      + sizeof(Packet::_impl_.service_id_)
       - PROTOBUF_FIELD_OFFSET(Packet, _impl_.magic_)>(
           reinterpret_cast<char*>(&_impl_.magic_),
           reinterpret_cast<char*>(&other->_impl_.magic_));

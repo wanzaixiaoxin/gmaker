@@ -217,13 +217,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Packet final : public ::google::pro
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPayloadFieldNumber = 5,
+    kPayloadFieldNumber = 8,
     kMagicFieldNumber = 1,
     kCmdIdFieldNumber = 2,
     kSeqIdFieldNumber = 3,
     kFlagFieldNumber = 4,
+    kUserIdFieldNumber = 5,
+    kZoneIdFieldNumber = 6,
+    kServiceIdFieldNumber = 7,
   };
-  // bytes payload = 5;
+  // bytes payload = 8;
   void clear_payload() ;
   [[nodiscard]] const ::std::string& payload() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
@@ -278,11 +281,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Packet final : public ::google::pro
   void _internal_set_flag(::uint32_t value);
 
   public:
+  // uint64 user_id = 5;
+  void clear_user_id() ;
+  [[nodiscard]] ::uint64_t user_id() const;
+  void set_user_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_user_id() const;
+  void _internal_set_user_id(::uint64_t value);
+
+  public:
+  // uint32 zone_id = 6;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
+  // uint32 service_id = 7;
+  void clear_service_id() ;
+  [[nodiscard]] ::uint32_t service_id() const;
+  void set_service_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_service_id() const;
+  void _internal_set_service_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:common.Packet)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 5,
+  static const ::google::protobuf::internal::TcParseTable<3, 8,
                                    0, 0,
                                    2>
       _table_;
@@ -311,6 +344,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Packet final : public ::google::pro
     ::uint32_t cmd_id_;
     ::uint32_t seq_id_;
     ::uint32_t flag_;
+    ::uint64_t user_id_;
+    ::uint32_t zone_id_;
+    ::uint32_t service_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -435,7 +471,82 @@ inline void Packet::_internal_set_flag(::uint32_t value) {
   _impl_.flag_ = value;
 }
 
-// bytes payload = 5;
+// uint64 user_id = 5;
+inline void Packet::clear_user_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.user_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000020U);
+}
+inline ::uint64_t Packet::user_id() const {
+  // @@protoc_insertion_point(field_get:common.Packet.user_id)
+  return _internal_user_id();
+}
+inline void Packet::set_user_id(::uint64_t value) {
+  _internal_set_user_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:common.Packet.user_id)
+}
+inline ::uint64_t Packet::_internal_user_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.user_id_;
+}
+inline void Packet::_internal_set_user_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.user_id_ = value;
+}
+
+// uint32 zone_id = 6;
+inline void Packet::clear_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000040U);
+}
+inline ::uint32_t Packet::zone_id() const {
+  // @@protoc_insertion_point(field_get:common.Packet.zone_id)
+  return _internal_zone_id();
+}
+inline void Packet::set_zone_id(::uint32_t value) {
+  _internal_set_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:common.Packet.zone_id)
+}
+inline ::uint32_t Packet::_internal_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.zone_id_;
+}
+inline void Packet::_internal_set_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = value;
+}
+
+// uint32 service_id = 7;
+inline void Packet::clear_service_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.service_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000080U);
+}
+inline ::uint32_t Packet::service_id() const {
+  // @@protoc_insertion_point(field_get:common.Packet.service_id)
+  return _internal_service_id();
+}
+inline void Packet::set_service_id(::uint32_t value) {
+  _internal_set_service_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:common.Packet.service_id)
+}
+inline ::uint32_t Packet::_internal_service_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.service_id_;
+}
+inline void Packet::_internal_set_service_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.service_id_ = value;
+}
+
+// bytes payload = 8;
 inline void Packet::clear_payload() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.payload_.ClearToEmpty();

@@ -67,6 +67,8 @@ enum CmdGatewayInternal : int;
 extern const uint32_t CmdGatewayInternal_internal_data_[];
 enum CmdLogStats : int;
 extern const uint32_t CmdLogStats_internal_data_[];
+enum CmdMatch : int;
+extern const uint32_t CmdMatch_internal_data_[];
 enum CmdRealtime : int;
 extern const uint32_t CmdRealtime_internal_data_[];
 enum CmdRegistryInternal : int;
@@ -117,6 +119,9 @@ template <>
 internal::EnumTraitsT<::protocol::CmdLogStats_internal_data_>
     internal::EnumTraitsImpl::value<::protocol::CmdLogStats>;
 template <>
+internal::EnumTraitsT<::protocol::CmdMatch_internal_data_>
+    internal::EnumTraitsImpl::value<::protocol::CmdMatch>;
+template <>
 internal::EnumTraitsT<::protocol::CmdRealtime_internal_data_>
     internal::EnumTraitsImpl::value<::protocol::CmdRealtime>;
 template <>
@@ -142,6 +147,7 @@ enum ServiceType : int {
   SERVICE_LOGIN = 12,
   SERVICE_LOGSTATS = 13,
   SERVICE_REALTIME = 20,
+  SERVICE_MATCH = 21,
   SERVICE_BOT = 30,
   ServiceType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
@@ -155,7 +161,7 @@ inline constexpr ServiceType ServiceType_MIN =
 inline constexpr ServiceType ServiceType_MAX =
     static_cast<ServiceType>(30);
 [[nodiscard]] inline bool ServiceType_IsValid(int value) {
-  return 0 <= value && value <= 30 && ((1074805775u >> value) & 1) != 0;
+  return 0 <= value && value <= 30 && ((1076902927u >> value) & 1) != 0;
 }
 inline constexpr int ServiceType_ARRAYSIZE = 30 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
@@ -498,6 +504,46 @@ template <typename T>
 [[nodiscard]] inline bool CmdLogStats_Parse(
     ::absl::string_view name, CmdLogStats* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<CmdLogStats>(CmdLogStats_descriptor(), name,
+                                           value);
+}
+enum CmdMatch : int {
+  CMD_MATCH_UNKNOWN = 0,
+  CMD_MATCH_REQ = 327680,
+  CMD_MATCH_RES = 327681,
+  CMD_MATCH_CANCEL_REQ = 327682,
+  CMD_MATCH_CANCEL_RES = 327683,
+  CMD_MATCH_STATUS_REQ = 327684,
+  CMD_MATCH_STATUS_RES = 327685,
+  CmdMatch_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  CmdMatch_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t CmdMatch_internal_data_[];
+inline constexpr CmdMatch CmdMatch_MIN =
+    static_cast<CmdMatch>(0);
+inline constexpr CmdMatch CmdMatch_MAX =
+    static_cast<CmdMatch>(327685);
+[[nodiscard]] inline bool CmdMatch_IsValid(int value) {
+  return ::google::protobuf::internal::ValidateEnum(value, CmdMatch_internal_data_);
+}
+inline constexpr int CmdMatch_ARRAYSIZE = 327685 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+CmdMatch_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(CmdMatch) {
+  return CmdMatch_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& CmdMatch_Name(T value) {
+  static_assert(::std::is_same<T, CmdMatch>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to CmdMatch_Name().");
+  return ::google::protobuf::internal::NameOfEnum(CmdMatch_descriptor(), value);
+}
+[[nodiscard]] inline bool CmdMatch_Parse(
+    ::absl::string_view name, CmdMatch* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<CmdMatch>(CmdMatch_descriptor(), name,
                                            value);
 }
 enum CmdRealtime : int {
@@ -1531,6 +1577,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ServiceCmdRanges final : public ::g
     kBizFieldNumber = 2,
     kLoginFieldNumber = 3,
     kRealtimeFieldNumber = 4,
+    kMatchFieldNumber = 5,
   };
   // .protocol.CmdRange chat = 1;
   [[nodiscard]] bool has_chat()
@@ -1596,12 +1643,28 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ServiceCmdRanges final : public ::g
   ::protocol::CmdRange* PROTOBUF_NONNULL _internal_mutable_realtime();
 
   public:
+  // .protocol.CmdRange match = 5;
+  [[nodiscard]] bool has_match()
+      const;
+  void clear_match() ;
+  [[nodiscard]] const ::protocol::CmdRange& match() const;
+  [[nodiscard]] ::protocol::CmdRange* PROTOBUF_NULLABLE release_match();
+  ::protocol::CmdRange* PROTOBUF_NONNULL mutable_match();
+  void set_allocated_match(::protocol::CmdRange* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_match(::protocol::CmdRange* PROTOBUF_NULLABLE value);
+  ::protocol::CmdRange* PROTOBUF_NULLABLE unsafe_arena_release_match();
+
+  private:
+  const ::protocol::CmdRange& _internal_match() const;
+  ::protocol::CmdRange* PROTOBUF_NONNULL _internal_mutable_match();
+
+  public:
   // @@protoc_insertion_point(class_scope:protocol.ServiceCmdRanges)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
-                                   4, 0,
+  static const ::google::protobuf::internal::TcParseTable<3, 5,
+                                   5, 0,
                                    2>
       _table_;
 
@@ -1628,6 +1691,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ServiceCmdRanges final : public ::g
     ::protocol::CmdRange* PROTOBUF_NULLABLE biz_;
     ::protocol::CmdRange* PROTOBUF_NULLABLE login_;
     ::protocol::CmdRange* PROTOBUF_NULLABLE realtime_;
+    ::protocol::CmdRange* PROTOBUF_NULLABLE match_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2359,6 +2423,105 @@ inline void ServiceCmdRanges::set_allocated_realtime(::protocol::CmdRange* PROTO
   // @@protoc_insertion_point(field_set_allocated:protocol.ServiceCmdRanges.realtime)
 }
 
+// .protocol.CmdRange match = 5;
+inline bool ServiceCmdRanges::has_match() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.match_ != nullptr);
+  return value;
+}
+inline void ServiceCmdRanges::clear_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.match_ != nullptr) _impl_.match_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline const ::protocol::CmdRange& ServiceCmdRanges::_internal_match() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::protocol::CmdRange* p = _impl_.match_;
+  return p != nullptr ? *p : reinterpret_cast<const ::protocol::CmdRange&>(::protocol::_CmdRange_default_instance_);
+}
+inline const ::protocol::CmdRange& ServiceCmdRanges::match() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:protocol.ServiceCmdRanges.match)
+  return _internal_match();
+}
+inline void ServiceCmdRanges::unsafe_arena_set_allocated_match(
+    ::protocol::CmdRange* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.match_);
+  }
+  _impl_.match_ = reinterpret_cast<::protocol::CmdRange*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:protocol.ServiceCmdRanges.match)
+}
+inline ::protocol::CmdRange* PROTOBUF_NULLABLE ServiceCmdRanges::release_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::protocol::CmdRange* released = _impl_.match_;
+  _impl_.match_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::protocol::CmdRange* PROTOBUF_NULLABLE ServiceCmdRanges::unsafe_arena_release_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:protocol.ServiceCmdRanges.match)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::protocol::CmdRange* temp = _impl_.match_;
+  _impl_.match_ = nullptr;
+  return temp;
+}
+inline ::protocol::CmdRange* PROTOBUF_NONNULL ServiceCmdRanges::_internal_mutable_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.match_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::protocol::CmdRange>(GetArena());
+    _impl_.match_ = reinterpret_cast<::protocol::CmdRange*>(p);
+  }
+  return _impl_.match_;
+}
+inline ::protocol::CmdRange* PROTOBUF_NONNULL ServiceCmdRanges::mutable_match()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::protocol::CmdRange* _msg = _internal_mutable_match();
+  // @@protoc_insertion_point(field_mutable:protocol.ServiceCmdRanges.match)
+  return _msg;
+}
+inline void ServiceCmdRanges::set_allocated_match(::protocol::CmdRange* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.match_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.match_ = reinterpret_cast<::protocol::CmdRange*>(value);
+  // @@protoc_insertion_point(field_set_allocated:protocol.ServiceCmdRanges.match)
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -2423,6 +2586,12 @@ struct is_proto_enum<::protocol::CmdLogStats> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::protocol::CmdLogStats>() {
   return ::protocol::CmdLogStats_descriptor();
+}
+template <>
+struct is_proto_enum<::protocol::CmdMatch> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::protocol::CmdMatch>() {
+  return ::protocol::CmdMatch_descriptor();
 }
 template <>
 struct is_proto_enum<::protocol::CmdRealtime> : std::true_type {};

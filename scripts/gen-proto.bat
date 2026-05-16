@@ -1,7 +1,49 @@
 @echo off
 :: Generate protobuf code for Go and C++
+:: Usage:
+::   gen-proto          Compile all spec/proto/*.proto -> gen/go + gen/cpp
+::   gen-proto --clean  Remove all generated Go/C++ protobuf files
 
 cd /d "%~dp0.."
+
+:: --- Clean mode ---
+
+if "%~1"=="--clean" (
+    echo Removing generated protobuf code...
+    echo.
+    set "CLEAN_COUNT=0"
+    if exist "gen\go" (
+        for /r gen\go %%f in (*.pb.go) do (
+            echo   x %%f
+            del /q "%%f"
+            set /a CLEAN_COUNT+=1
+        )
+        for /r gen\go %%f in (*_grpc.pb.go) do (
+            echo   x %%f
+            del /q "%%f"
+            set /a CLEAN_COUNT+=1
+        )
+        for /d %%d in (gen\go\*) do (
+            dir /b "%%d" 2>nul | findstr "^" >nul || (
+                rd "%%d"
+                echo   x %%d\
+                set /a CLEAN_COUNT+=1
+            )
+        )
+    )
+    if exist "gen\cpp" (
+        for %%f in (gen\cpp\*.pb.cc gen\cpp\*.pb.h) do (
+            echo   x %%f
+            del /q "%%f"
+            set /a CLEAN_COUNT+=1
+        )
+    )
+    echo.
+    echo Done.
+    exit /b 0
+)
+
+:: --- Generate mode ---
 
 echo ========================================
 echo  Protobuf Code Generation
