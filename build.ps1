@@ -32,6 +32,12 @@ if ($Clean) {
 $buildGo  = -not $CppOnly
 $buildCpp = -not $GoOnly
 
+# Fix Chinese encoding: sync PowerShell output encoding with system code page
+# MSBuild/CMake output GBK (cp936) on Chinese Windows, but PowerShell defaults to UTF-8
+$originalEncoding = [Console]::OutputEncoding
+[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding("gb2312")
+$originalCP = chcp | ForEach-Object { if ($_ -match ':\s*(\d+)') { $matches[1] } }
+
 $services = @(
     "registry-go",
     "dbproxy-go",
@@ -160,6 +166,10 @@ if ($buildCpp) {
     Write-Host "[Phase 2/2] Building C++ services ..." -ForegroundColor Yellow
     Write-Host "------------------------------------------"
 
+    # Switch to UTF-8 code page so MSBuild outputs UTF-8 instead of GBK
+    chcp 65001 > $null 2>&1
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
     $cmake = Get-Command cmake -ErrorAction SilentlyContinue
     if (-not $cmake) {
         Write-Host "  [SKIP] CMake not found." -ForegroundColor Yellow
@@ -232,6 +242,12 @@ if ($buildCpp) {
 # ============================================================
 
 $sw.Stop()
+
+# Restore original code page
+if ($originalCP -and $originalCP -ne "65001") {
+    chcp $originalCP > $null 2>&1
+    [Console]::OutputEncoding = $originalEncoding
+}
 
 Write-Host "=========================================="
 if ($buildErrors -eq 0) {

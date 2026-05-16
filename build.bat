@@ -177,6 +177,9 @@ if "%BUILD_CPP%"=="0" goto :summary
 echo [Phase 2/2] Building C++ services ...
 echo ------------------------------------------
 
+:: Switch to UTF-8 code page so MSBuild outputs UTF-8 instead of GBK
+chcp 65001 >nul 2>nul
+
 where cmake >nul 2>nul
 if errorlevel 1 (
     echo   [SKIP] CMake not found. C++ services skipped.
