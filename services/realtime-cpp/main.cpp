@@ -35,6 +35,7 @@ struct RealtimeServer {
 private:
     std::atomic<uint32_t> next_dynamic_room_id_{100}; // 动态房间 ID 从 100 开始
 
+public:
     bool Start(uint16_t listen_port,
                const std::string& discovery_type,
                const std::vector<std::string>& discovery_addrs) {
@@ -113,13 +114,6 @@ private:
         if (sd_) sd_->Close();
     }
 
-    void HeartbeatLoop() {
-        // 心跳已由 discovery::RegistryImpl 内部自动管理，此处保留空实现
-        while (!heartbeat_stop_.load()) {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-        }
-    }
-
     void Wait() {
         std::unique_lock<std::mutex> lk(stop_mtx_);
         stop_cv_.wait(lk, [this] { return stop_flag_; });
@@ -132,6 +126,13 @@ private:
     }
 
 private:
+    void HeartbeatLoop() {
+        // 心跳已由 discovery::RegistryImpl 内部自动管理，此处保留空实现
+        while (!heartbeat_stop_.load()) {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
+    }
+
     void OnClientConnect(AsyncTCPConnection* conn) {
         std::lock_guard<std::mutex> lk(conn_mtx_);
         conns_[conn->ID()] = conn;
