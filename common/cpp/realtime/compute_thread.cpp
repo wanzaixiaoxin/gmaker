@@ -46,7 +46,35 @@ bool ComputeThread::CreateRoom(const RoomConfig& cfg) {
     if (rooms_.find(cfg.room_id) != rooms_.end()) {
         return false;
     }
-    auto room = std::make_unique<Room>(cfg);
+
+    std::unique_ptr<Room> room;
+    if (room_factory_) {
+        room = room_factory_(cfg);
+    } else {
+        room = std::make_unique<Room>(cfg);
+    }
+
+    room->SetBroadcastCallback([this, rid = cfg.room_id](const RoomSnapshot& snap, const std::vector<uint64_t>& conns) {
+        if (output_cb_) {
+            output_cb_(rid, snap, conns);
+        }
+    });
+    rooms_[cfg.room_id] = std::move(room);
+    return true;
+}
+
+bool ComputeThread::CreateRoom(const RoomConfig& cfg, RoomFactory factory) {
+    if (started_.load()) {
+        std::cerr << "CreateRoom called after Start, room_id=" << cfg.room_id << std::endl;
+        return false;
+    }
+    if (rooms_.find(cfg.room_id) != rooms_.end()) {
+        return false;
+    }
+
+    auto room = factory(cfg);
+    if (!room) return false;
+
     room->SetBroadcastCallback([this, rid = cfg.room_id](const RoomSnapshot& snap, const std::vector<uint64_t>& conns) {
         if (output_cb_) {
             output_cb_(rid, snap, conns);
@@ -58,6 +86,10 @@ bool ComputeThread::CreateRoom(const RoomConfig& cfg) {
 
 void ComputeThread::SetOutputCallback(OutputCallback cb) {
     output_cb_ = std::move(cb);
+}
+
+void ComputeThread::SetRoomFactory(RoomFactory factory) {
+    room_factory_ = std::move(factory);
 }
 
 void ComputeThread::RunLoop() {

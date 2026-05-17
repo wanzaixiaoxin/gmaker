@@ -25,12 +25,18 @@ public:
     // 按 room_id hash 路由到对应 ComputeThread
     void PushMessage(uint32_t room_id, MessagePtr msg);
 
-    // 创建 Room 并分配到对应线程
+    // 创建 Room 并分配到对应线程（使用默认工厂）
     bool CreateRoom(const RoomConfig& cfg);
+
+    // 使用自定义工厂创建 Room
+    bool CreateRoom(const RoomConfig& cfg, RoomFactory factory);
 
     // 所有线程共享同一个 OutputCallback
     using OutputCallback = ComputeThread::OutputCallback;
     void SetOutputCallback(OutputCallback cb);
+
+    // 设置所有线程的默认 Room 工厂
+    void SetRoomFactory(RoomFactory factory);
 
 private:
     ComputeThread& PickThread(uint32_t room_id);
@@ -38,6 +44,7 @@ private:
     std::vector<std::unique_ptr<ComputeThread>> threads_;
     uint32_t thread_count_;
     OutputCallback output_cb_;
+    RoomFactory room_factory_;
 };
 
 } // namespace realtime

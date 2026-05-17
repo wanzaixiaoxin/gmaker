@@ -13,6 +13,8 @@
 #include "discovery/factory.hpp"
 #include "realtime/compute_pool.hpp"
 #include "realtime/message.hpp"
+#include "realtime/battle_types.hpp"
+#include "realtime/battle_room.hpp"
 #include "metrics/metrics.hpp"
 #include "logger/logger.hpp"
 #include "protocol.pb.h"
@@ -27,13 +29,21 @@ constexpr uint32_t CMD_REALTIME_MOVE   = 0x00020020; // 预留：玩家移动（
 constexpr uint32_t CMD_REALTIME_ACTION = 0x00020021; // 预留：玩家动作（proto 待补充）
 constexpr uint32_t CMD_REALTIME_SYNC   = protocol::CMD_RT_STATE_SYNC;
 
+// MOBA 战斗命令
+constexpr uint32_t CMD_BATTLE_READY     = 0x00030001; // 加载完成
+constexpr uint32_t CMD_BATTLE_MOVE      = 0x00030002; // 英雄移动输入
+constexpr uint32_t CMD_BATTLE_CAST      = 0x00030003; // 释放技能
+constexpr uint32_t CMD_BATTLE_RECONNECT = 0x00030004; // 重连
+
 // RealtimeServer 实时服
 // Gateway 主动连接到 Realtime，Realtime 通过已有连接回推 Snapshot
 struct RealtimeServer {
     void SetLogger(std::shared_ptr<gs::logger::Logger> logger) { logger_ = logger; }
+    void SetBattleMode(bool enabled) { battle_mode_ = enabled; }
 
 private:
     std::atomic<uint32_t> next_dynamic_room_id_{100}; // 动态房间 ID 从 100 开始
+    bool battle_mode_ = false; // MOBA 战斗模式
 
 public:
     bool Start(uint16_t listen_port,
@@ -50,18 +60,52 @@ public:
             OnRoomBroadcast(snap, conns);
         });
 
-        // 创建示例房间（MVP：预创建几个房间）
-        for (uint32_t i = 1; i <= 5; ++i) {
-            RoomConfig cfg;
-            cfg.room_id = i;
-            cfg.max_players = 20;
-            cfg.map_size_x = 1000.0f;
-            cfg.map_size_z = 1000.0f;
-            cfg.tick_rate_hz = 60;
-            cfg.enable_aoi = true;
-            cfg.aoi_radius = 200.0f;
-            compute_->CreateRoom(cfg);
-            if (logger_) logger_->Info("Created room " + std::to_string(i));
+        // 设置 BattleRoom 工厂（MOBA 战斗模式）
+        compute_->SetRoomFactory([](const RoomConfig& cfg) -> std::unique_ptr<gs::realtime::Room> {
+            BattleRoomConfig bcfg;
+            bcfg.base = cfg;
+            bcfg.team_size = 5;
+            bcfg.minion_spawn_interval_sec = 30;
+            bcfg.checkpoint_interval_frames = 60;
+            bcfg.max_reconnect_wait_sec = 60;
+            bcfg.lockstep_timeout_ms = 200;
+
+            // 蓝方出生点（左下）
+            bcfg.blue_spawn_pts = {{10, 0, 10}, {15, 0, 10}, {10, 0, 15}, {15, 0, 15}, {12, 0, 12}};
+            // 红方出生点（右上）
+            bcfg.red_spawn_pts = {{90, 0, 90}, {85, 0, 90}, {90, 0, 85}, {85, 0, 85}, {88, 0, 88}};
+
+            return std::make_unique<BattleRoom>(bcfg);
+        });
+
+        if (battle_mode_) {
+            // MOBA 战斗模式：创建 BattleRoom
+            for (uint32_t i = 1; i <= 3; ++i) {
+                RoomConfig cfg;
+                cfg.room_id = i;
+                cfg.max_players = 10;
+                cfg.map_size_x = 100.0f;
+                cfg.map_size_z = 100.0f;
+                cfg.tick_rate_hz = 60;
+                cfg.enable_aoi = true;
+                cfg.aoi_radius = 50.0f;
+                compute_->CreateRoom(cfg);
+                if (logger_) logger_->Info("Created battle room " + std::to_string(i));
+            }
+        } else {
+            // 普通房间模式
+            for (uint32_t i = 1; i <= 5; ++i) {
+                RoomConfig cfg;
+                cfg.room_id = i;
+                cfg.max_players = 20;
+                cfg.map_size_x = 1000.0f;
+                cfg.map_size_z = 1000.0f;
+                cfg.tick_rate_hz = 60;
+                cfg.enable_aoi = true;
+                cfg.aoi_radius = 200.0f;
+                compute_->CreateRoom(cfg);
+                if (logger_) logger_->Info("Created room " + std::to_string(i));
+            }
         }
         compute_->Start();
 
@@ -219,6 +263,65 @@ private:
             default:
                 break;
         }
+
+        // MOBA 战斗消息
+        switch (pkt.header.cmd_id) {
+            case CMD_BATTLE_READY: {
+                if (pkt.payload.Size() < 20) return;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data());
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
+                auto msg = std::make_unique<BattleReadyMsg>();
+                msg->player_id = player_id;
+                compute_->PushMessage(room_id, std::move(msg));
+                break;
+            }
+            case CMD_BATTLE_MOVE: {
+                if (pkt.payload.Size() < 36) return;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data());
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
+                float move_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 12);
+                float move_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 16);
+                uint32_t input_seq = ReadU32BE(pkt.payload.Data() + 20);
+                auto msg = std::make_unique<HeroMoveInputMsg>();
+                msg->player_id = player_id;
+                msg->move_x = move_x;
+                msg->move_z = move_z;
+                msg->input_seq = input_seq;
+                compute_->PushMessage(room_id, std::move(msg));
+                break;
+            }
+            case CMD_BATTLE_CAST: {
+                if (pkt.payload.Size() < 40) return;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data());
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
+                uint8_t skill_slot = pkt.payload.Data()[12];
+                float target_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 13);
+                float target_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 17);
+                uint64_t target_eid = ReadU64BE(pkt.payload.Data() + 21);
+                uint32_t input_seq = ReadU32BE(pkt.payload.Data() + 29);
+                auto msg = std::make_unique<HeroCastSkillMsg>();
+                msg->player_id = player_id;
+                msg->skill_slot = skill_slot;
+                msg->target_pos = {target_x, 0, target_z};
+                msg->target_entity_id = target_eid;
+                msg->input_seq = input_seq;
+                compute_->PushMessage(room_id, std::move(msg));
+                break;
+            }
+            case CMD_BATTLE_RECONNECT: {
+                if (pkt.payload.Size() < 24) return;
+                uint64_t gw_conn_id = ReadU64BE(pkt.payload.Data());
+                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
+                auto msg = std::make_unique<PlayerReconnectMsg>();
+                msg->player_id = player_id;
+                msg->conn_id = gw_conn_id;
+                compute_->PushMessage(room_id, std::move(msg));
+                break;
+            }
+            default:
+                break;
+        }
     }
 
     void OnClientClose(AsyncTCPConnection* conn) {
@@ -306,6 +409,7 @@ int main(int argc, char* argv[]) {
 
     std::string log_file;
     std::string log_level = "info";
+    bool battle_mode = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -327,6 +431,8 @@ int main(int argc, char* argv[]) {
             }
         } else if (arg == "--port" && i + 1 < argc) {
             port = static_cast<uint16_t>(std::atoi(argv[++i]));
+        } else if (arg == "--battle-mode") {
+            battle_mode = true;
         }
     }
 
@@ -338,6 +444,7 @@ int main(int argc, char* argv[]) {
 
     RealtimeServer srv;
     srv.SetLogger(logger);
+    srv.SetBattleMode(battle_mode);
     if (!srv.Start(port, discovery_type, discovery_addrs)) {
         return 1;
     }

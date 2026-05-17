@@ -20,6 +20,9 @@ struct Envelope {
     MessagePtr msg;
 };
 
+// Room 工厂类型：接受 RoomConfig 返回 Room 实例
+using RoomFactory = std::function<std::unique_ptr<Room>(const RoomConfig&)>;
+
 // ComputeThread：单线程事件循环，管理多个 Room
 // - 所有 Room 逻辑都在同一线程执行，无锁
 // - 外部通过 PushMessage 投递消息（线程安全队列）
@@ -41,9 +44,15 @@ public:
     // 创建 Room（必须在 Start 前调用，Start 后调用会返回 false）
     bool CreateRoom(const RoomConfig& cfg);
 
+    // 使用自定义工厂创建 Room
+    bool CreateRoom(const RoomConfig& cfg, RoomFactory factory);
+
     // 设置广播回调（Compute Thread 产出消息 -> 外部投递到 Gateway）
     using OutputCallback = std::function<void(uint32_t room_id, const RoomSnapshot&, const std::vector<uint64_t>&)>;
     void SetOutputCallback(OutputCallback cb);
+
+    // 设置默认 Room 工厂
+    void SetRoomFactory(RoomFactory factory);
 
 private:
     void RunLoop();
@@ -63,6 +72,7 @@ private:
     std::unordered_map<uint32_t, std::unique_ptr<Room>> rooms_;
 
     OutputCallback output_cb_;
+    RoomFactory room_factory_;
 };
 
 } // namespace realtime

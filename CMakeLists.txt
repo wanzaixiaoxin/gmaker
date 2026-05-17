@@ -245,6 +245,10 @@ set(CPP_REALTIME_SOURCES
     common/cpp/realtime/compute_thread.cpp
     common/cpp/realtime/compute_pool.cpp
     common/cpp/realtime/aoi.cpp
+    common/cpp/realtime/entity.cpp
+    common/cpp/realtime/lockstep_engine.cpp
+    common/cpp/realtime/checkpoint.cpp
+    common/cpp/realtime/battle_room.cpp
 )
 
 # ==================== 网关服务 ====================

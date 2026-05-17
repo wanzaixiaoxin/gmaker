@@ -38,10 +38,21 @@ bool ComputePool::CreateRoom(const RoomConfig& cfg) {
     return PickThread(cfg.room_id).CreateRoom(cfg);
 }
 
+bool ComputePool::CreateRoom(const RoomConfig& cfg, RoomFactory factory) {
+    return PickThread(cfg.room_id).CreateRoom(cfg, std::move(factory));
+}
+
 void ComputePool::SetOutputCallback(OutputCallback cb) {
     output_cb_ = std::move(cb);
     for (auto& t : threads_) {
         t->SetOutputCallback(output_cb_);
+    }
+}
+
+void ComputePool::SetRoomFactory(RoomFactory factory) {
+    room_factory_ = std::move(factory);
+    for (auto& t : threads_) {
+        t->SetRoomFactory(room_factory_);
     }
 }
 

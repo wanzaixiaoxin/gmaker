@@ -28,18 +28,22 @@ using BroadcastCallback = std::function<void(const RoomSnapshot&, const std::vec
 class Room {
 public:
     explicit Room(const RoomConfig& cfg);
+    virtual ~Room() = default;
 
     // 消息处理入口（由 Compute Thread 调用）
-    void OnMessage(Message* msg);
+    virtual void OnMessage(Message* msg);
 
     // 帧驱动（每 16.67ms 调用一次）
-    void Tick(uint64_t now_ms);
+    virtual void Tick(uint64_t now_ms);
 
     uint32_t RoomID() const { return cfg_.room_id; }
     size_t PlayerCount() const { return players_.size(); }
     bool IsFull() const { return players_.size() >= cfg_.max_players; }
 
     void SetBroadcastCallback(BroadcastCallback cb) { broadcast_cb_ = std::move(cb); }
+
+protected:
+    BroadcastCallback broadcast_cb_;
 
 private:
     void OnPlayerEnter(PlayerEnterMsg* msg);
@@ -58,8 +62,6 @@ private:
 
     // AOI 空间索引
     std::unique_ptr<SpatialIndex> spatial_;
-
-    BroadcastCallback broadcast_cb_;
 };
 
 } // namespace realtime
