@@ -1,0 +1,25 @@
+{
+  "service": {
+    "service_type": "realtime",
+    "node_id": "realtime-1",
+    "log_level": "info",
+    "log_file": "",
+    "metrics_addr": ":9090"
+  },
+  "network": {
+    "port": 8090
+  },
+  "discovery": {
+    "type": "registry",
+    "addrs": ["127.0.0.1:2379"]
+  },
+  "battle": {
+    "mode": "moba",
+    "tick_rate_hz": 60,
+    "lockstep_timeout_ms": 200,
+    "team_size": 5,
+    "minion_spawn_interval_sec": 30,
+    "checkpoint_interval_frames": 60,
+    "max_reconnect_wait_sec": 60
+  }
+}

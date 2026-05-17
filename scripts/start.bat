@@ -13,12 +13,14 @@ if /I "%CMD%"=="biz" goto :start_biz
 if /I "%CMD%"=="chat" goto :start_chat
 if /I "%CMD%"=="login" goto :start_login
 if /I "%CMD%"=="gateway" goto :start_gateway
+if /I "%CMD%"=="realtime" goto :start_realtime
 if /I "%CMD%"=="logstats" goto :start_logstats
 if /I "%CMD%"=="testclient" goto :start_testclient
 if /I "%CMD%"=="ws_testclient" goto :start_ws_testclient
 if /I "%CMD%"=="minimal" goto :start_minimal
 if /I "%CMD%"=="full" goto :start_full
 if /I "%CMD%"=="web" goto :start_web
+if /I "%CMD%"=="moba" goto :start_moba
 if /I "%CMD%"=="all" goto :start_all
 
 echo Unknown command: %CMD%
@@ -38,17 +40,20 @@ echo   biz         Start Biz
 echo   chat        Start Chat
 echo   login       Start Login HTTP service
 echo   gateway     Start Gateway
+echo   realtime    Start Realtime (MOBA battle server)
 echo   logstats    Start LogStats
 echo   testclient   Start TestClient (heartbeat daemon, TCP)
 echo   ws_testclient Start TestClient (heartbeat daemon, WebSocket)
 echo   minimal     Start minimal link: Registry + Biz + Gateway
 echo   full        Start full link: Registry + DBProxy + Login + Biz + Chat + Gateway
 echo   web         Start full link and open web chat room
-echo   all         Start all services
+echo   moba        Start MOBA full link (Web + Realtime battle)
+echo   all         Start all services including Realtime
 echo.
 echo Examples:
 echo   scripts\start.bat registry
 echo   scripts\start.bat full
+echo   scripts\start.bat moba
 echo.
 pause
 goto :eof
@@ -65,7 +70,7 @@ goto :eof
 
 :start_biz
 echo Starting Biz ...
-start "Biz" cmd /k "bin\biz-go.exe -config conf\biz.json -redis 127.0.0.1:6379"
+start "Biz" cmd /k "bin\biz-go.exe -config conf\biz.json"
 goto :eof
 
 :start_chat
@@ -81,6 +86,11 @@ goto :eof
 :start_gateway
 echo Starting Gateway ...
 start "Gateway" cmd /k "bin\gateway-cpp.exe --config conf\gateway.json --log-file logs\gateway_%LOG_TS%.log --log-level info"
+goto :eof
+
+:start_realtime
+echo Starting Realtime (MOBA battle mode) ...
+start "Realtime" cmd /k "bin\realtime-cpp.exe --port 8090 --battle-mode --log-file logs\realtime_%LOG_TS%.log --log-level info"
 goto :eof
 
 :start_logstats
@@ -121,7 +131,7 @@ echo ==========================================
 echo   Start Full Link
 echo ==========================================
 echo.
-echo Prerequisites: MySQL on 192.168.0.85:3306, Redis on 192.168.0.85:6379
+echo Prerequisites: MySQL on 172.23.238.234:3306, Redis on 172.23.238.234:6379
 echo.
 call :start_registry
 timeout /t 2 /nobreak >nul
@@ -145,7 +155,7 @@ echo ==========================================
 echo   Start Web Chat Room
 echo ==========================================
 echo.
-echo Prerequisites: MySQL on 192.168.0.85:3306, Redis on 192.168.0.85:6379
+echo Prerequisites: MySQL on 172.23.238.234:3306, Redis on 172.23.238.234:6379
 echo.
 call :start_registry
 timeout /t 2 /nobreak >nul
@@ -167,12 +177,12 @@ start "" "web\index.html"
 echo.
 goto :eof
 
-:start_all
+:start_moba
 echo ==========================================
-echo   Start All Services
+echo   Start MOBA Full Link
 echo ==========================================
 echo.
-echo Prerequisites: MySQL on 192.168.0.85:3306, Redis on 192.168.0.85:6379
+echo Prerequisites: MySQL on 172.23.238.234:3306, Redis on 172.23.238.234:6379
 echo.
 call :start_registry
 timeout /t 2 /nobreak >nul
@@ -185,6 +195,37 @@ timeout /t 2 /nobreak >nul
 call :start_chat
 timeout /t 2 /nobreak >nul
 call :start_gateway
+timeout /t 2 /nobreak >nul
+call :start_realtime
+timeout /t 2 /nobreak >nul
+echo.
+echo MOBA full link started: Registry + DBProxy + Login + Biz + Chat + Gateway + Realtime
+echo.
+echo Opening web ...
+start "" "web\index.html"
+echo.
+goto :eof
+
+:start_all
+echo ==========================================
+echo   Start All Services
+echo ==========================================
+echo.
+echo Prerequisites: MySQL on 172.23.238.234:3306, Redis on 172.23.238.234:6379
+echo.
+call :start_registry
+timeout /t 2 /nobreak >nul
+call :start_dbproxy
+timeout /t 3 /nobreak >nul
+call :start_login
+timeout /t 2 /nobreak >nul
+call :start_biz
+timeout /t 2 /nobreak >nul
+call :start_chat
+timeout /t 2 /nobreak >nul
+call :start_gateway
+timeout /t 2 /nobreak >nul
+call :start_realtime
 timeout /t 2 /nobreak >nul
 call :start_logstats
 timeout /t 2 /nobreak >nul

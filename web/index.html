@@ -1004,6 +1004,7 @@ const PROTO_DESCRIPTOR = {
     <script src="https://cdn.jsdelivr.net/npm/lossless-json@2.0.11/lib/umd/lossless-json.js"></script>
     <script src="js/net.js"></script>
     <script src="js/chat.js"></script>
+    <script src="js/moba.js"></script>
 </head>
 <body>
 <div id="app">
@@ -1045,6 +1046,16 @@ const PROTO_DESCRIPTOR = {
                 <tbody id="roomTableBody"></tbody>
             </table>
         </div>
+        <div class="lobby-moba-entry">
+            <button class="moba-entry-btn" onclick="showPanel('mobaMatchPanel')">
+                <span class="moba-entry-icon">⚔️</span>
+                <span class="moba-entry-text">
+                    <strong>竞技对战</strong>
+                    <small>1v1 像素 MOBA</small>
+                </span>
+                <span class="moba-entry-arrow">→</span>
+            </button>
+        </div>
         <div id="lobbyMsg"></div>
     </div>
 
@@ -1071,11 +1082,125 @@ const PROTO_DESCRIPTOR = {
         <div id="roomMsg"></div>
     </div>
 
+    <!-- MOBA 匹配面板 -->
+    <div id="mobaMatchPanel" class="panel hidden">
+        <div class="moba-match-bg">
+            <div class="moba-match-content">
+                <div class="moba-match-title">⚔️ 竞技场</div>
+                <div class="moba-match-subtitle">1v1 像素 MOBA 对战</div>
+                <div class="moba-match-info">
+                    <div class="moba-match-card">
+                        <div class="moba-match-card-icon">🗡️</div>
+                        <div class="moba-match-card-title">英雄对战</div>
+                        <div class="moba-match-card-desc">选择你的英雄，摧毁敌方水晶</div>
+                    </div>
+                    <div class="moba-match-card">
+                        <div class="moba-match-card-icon">🏰</div>
+                        <div class="moba-match-card-title">推塔战略</div>
+                        <div class="moba-match-card-desc">保护己方防御塔，突破敌方防线</div>
+                    </div>
+                    <div class="moba-match-card">
+                        <div class="moba-match-card-icon">⚡</div>
+                        <div class="moba-match-card-title">技能释放</div>
+                        <div class="moba-match-card-desc">Q/W/E/R 四技能组合，主宰战场</div>
+                    </div>
+                </div>
+                <button id="btnMobaMatch" class="moba-match-btn" onclick="startMobaMatch()">
+                    <span class="moba-match-btn-text">开始匹配</span>
+                </button>
+                <div id="mobaMatchStatus" class="moba-match-status hidden">
+                    <div class="moba-match-spinner"></div>
+                    <span>正在寻找对手...</span>
+                </div>
+                <button class="moba-match-back" onclick="backToLobbyFromMoba()">← 返回大厅</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MOBA 游戏面板 -->
+    <div id="mobaGamePanel" class="panel hidden" style="padding:0;position:relative;">
+        <canvas id="mobaCanvas"></canvas>
+        <div id="mobaHud" class="moba-hud">
+            <div class="moba-hud-top">
+                <div class="moba-minimap">
+                    <canvas id="mobaMinimap" width="140" height="140"></canvas>
+                </div>
+                <div class="moba-timer" id="mobaTimer">00:00</div>
+                <div class="moba-score">
+                    <span class="moba-score-blue" id="mobaBlueKills">0</span>
+                    <span class="moba-score-vs">VS</span>
+                    <span class="moba-score-red" id="mobaRedKills">0</span>
+                </div>
+                <button class="moba-exit-btn" onclick="exitMobaGame()">✕</button>
+            </div>
+            <div class="moba-hud-bottom">
+                <div class="moba-hero-info">
+                    <div class="moba-hero-portrait" id="mobaHeroPortrait"></div>
+                    <div class="moba-hero-bars">
+                        <div class="moba-bar moba-hp-bar">
+                            <div class="moba-bar-fill" id="mobaHpFill"></div>
+                            <span class="moba-bar-text" id="mobaHpText">500/500</span>
+                        </div>
+                        <div class="moba-bar moba-mp-bar">
+                            <div class="moba-bar-fill" id="mobaMpFill"></div>
+                            <span class="moba-bar-text" id="mobaMpText">100/100</span>
+                        </div>
+                    </div>
+                    <div class="moba-hero-level" id="mobaHeroLevel">Lv.1</div>
+                </div>
+                <div class="moba-skills">
+                    <div class="moba-skill" id="mobaSkillQ" onclick="mobaCastSkill(0)">
+                        <div class="moba-skill-key">Q</div>
+                        <div class="moba-skill-name">冲锋</div>
+                        <div class="moba-skill-cd hidden" id="mobaCdQ"></div>
+                    </div>
+                    <div class="moba-skill" id="mobaSkillW" onclick="mobaCastSkill(1)">
+                        <div class="moba-skill-key">W</div>
+                        <div class="moba-skill-name">旋风</div>
+                        <div class="moba-skill-cd hidden" id="mobaCdW"></div>
+                    </div>
+                    <div class="moba-skill" id="mobaSkillE" onclick="mobaCastSkill(2)">
+                        <div class="moba-skill-key">E</div>
+                        <div class="moba-skill-name">飞弹</div>
+                        <div class="moba-skill-cd hidden" id="mobaCdE"></div>
+                    </div>
+                    <div class="moba-skill moba-skill-ult" id="mobaSkillR" onclick="mobaCastSkill(3)">
+                        <div class="moba-skill-key">R</div>
+                        <div class="moba-skill-name">陨石</div>
+                        <div class="moba-skill-cd hidden" id="mobaCdR"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="mobaKillFeed" class="moba-kill-feed"></div>
+        </div>
+        <!-- MOBA 结算弹窗 -->
+        <div id="mobaResultModal" class="moba-result-modal hidden">
+            <div class="moba-result-content">
+                <div class="moba-result-title" id="mobaResultTitle">胜利</div>
+                <div class="moba-result-stats">
+                    <div class="moba-result-stat">
+                        <span>击杀</span><span id="mobaResultKills">0</span>
+                    </div>
+                    <div class="moba-result-stat">
+                        <span>死亡</span><span id="mobaResultDeaths">0</span>
+                    </div>
+                    <div class="moba-result-stat">
+                        <span>金币</span><span id="mobaResultGold">0</span>
+                    </div>
+                    <div class="moba-result-stat">
+                        <span>时长</span><span id="mobaResultTime">00:00</span>
+                    </div>
+                </div>
+                <button class="moba-result-btn" onclick="exitMobaGame()">返回大厅</button>
+            </div>
+        </div>
+    </div>
+
     <div class="status-bar" id="statusBar">未连接</div>
 </div>
 
 <script>
-const LOGIN_HTTP = 'http://127.0.0.1:6501';
+const LOGIN_HTTP = 'http://127.0.0.1:8084';
 
 let wsClient = null;
 let chatAPI = null;
@@ -1253,7 +1378,7 @@ function returnToLogin(message) {
 }
 
 function showPanel(id) {
-    ['authPanel', 'lobbyPanel', 'roomPanel'].forEach(pid => {
+    ['authPanel', 'lobbyPanel', 'roomPanel', 'mobaMatchPanel', 'mobaGamePanel'].forEach(pid => {
         document.getElementById(pid).classList.toggle('hidden', pid !== id);
     });
 }
@@ -1376,6 +1501,83 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// ==================== MOBA 游戏相关 ====================
+let mobaGame = null;
+
+function startMobaMatch() {
+    const statusEl = document.getElementById('mobaMatchStatus');
+    const btnEl = document.getElementById('btnMobaMatch');
+    statusEl.classList.remove('hidden');
+    btnEl.classList.add('hidden');
+    
+    // 模拟匹配延迟（1v1 本地模式，1.5秒后开始）
+    setTimeout(() => {
+        statusEl.innerHTML = '<span>匹配成功！正在进入战场...</span>';
+        setTimeout(() => {
+            showPanel('mobaGamePanel');
+            initMobaGame();
+        }, 800);
+    }, 1500);
+}
+
+function initMobaGame() {
+    const canvas = document.getElementById('mobaCanvas');
+    const minimapCanvas = document.getElementById('mobaMinimap');
+    
+    // 调整 canvas 尺寸
+    const container = document.getElementById('mobaGamePanel');
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+    
+    mobaGame = new MobaGame(canvas, minimapCanvas, (result) => {
+        // 游戏结束回调
+        showMobaResult(result);
+    });
+    mobaGame.start('blue');
+}
+
+function mobaCastSkill(slot) {
+    if (mobaGame) mobaGame.castSkill(slot);
+}
+
+function showMobaResult(result) {
+    const modal = document.getElementById('mobaResultModal');
+    document.getElementById('mobaResultTitle').textContent = result.winner === 'blue' ? '🏆 胜利！' : '💀 失败';
+    document.getElementById('mobaResultTitle').className = 'moba-result-title ' + (result.winner === 'blue' ? 'victory' : 'defeat');
+    document.getElementById('mobaResultKills').textContent = result.kills || 0;
+    document.getElementById('mobaResultDeaths').textContent = result.deaths || 0;
+    document.getElementById('mobaResultGold').textContent = result.gold || 0;
+    document.getElementById('mobaResultTime').textContent = result.time || '00:00';
+    modal.classList.remove('hidden');
+}
+
+function exitMobaGame() {
+    if (mobaGame) {
+        mobaGame.destroy();
+        mobaGame = null;
+    }
+    document.getElementById('mobaResultModal').classList.add('hidden');
+    document.getElementById('mobaMatchStatus').classList.add('hidden');
+    document.getElementById('btnMobaMatch').classList.remove('hidden');
+    document.getElementById('mobaMatchStatus').innerHTML = '<div class="moba-match-spinner"></div><span>正在寻找对手...</span>';
+    showPanel('lobbyPanel');
+}
+
+function backToLobbyFromMoba() {
+    showPanel('lobbyPanel');
+}
+
+// MOBA 游戏窗口大小调整
+window.addEventListener('resize', () => {
+    if (mobaGame) {
+        const container = document.getElementById('mobaGamePanel');
+        const canvas = document.getElementById('mobaCanvas');
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        mobaGame.resize(canvas.width, canvas.height);
+    }
+});
 </script>
 </body>
 </html>

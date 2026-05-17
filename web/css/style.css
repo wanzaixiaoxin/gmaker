@@ -561,3 +561,661 @@ button:active {
 ::-webkit-scrollbar-thumb:hover {
     background: #9ca3af;
 }
+
+/* ========================================
+   MOBA 游戏样式 — 像素暗色主题
+   ======================================== */
+
+/* ================= 大厅 MOBA 入口 ================= */
+.lobby-moba-entry {
+    padding: 12px 24px;
+}
+
+.moba-entry-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #0d0d2b 0%, #1a1a3e 100%);
+    border: 2px solid #2a2a5a;
+    border-radius: 4px;
+    color: #e0e0ff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 0 #000, inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.moba-entry-btn:hover {
+    border-color: #4a4aff;
+    box-shadow: 0 2px 0 #000, 0 0 16px rgba(74,74,255,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+    transform: translateY(-1px);
+}
+
+.moba-entry-icon {
+    font-size: 1.75rem;
+    line-height: 1;
+}
+
+.moba-entry-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+
+.moba-entry-text strong {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.moba-entry-text small {
+    font-size: 0.75rem;
+    color: #8888bb;
+    margin-top: 2px;
+}
+
+.moba-entry-arrow {
+    font-size: 1.25rem;
+    color: #4a4aff;
+    font-weight: 700;
+}
+
+/* ================= MOBA 匹配面板 ================= */
+.moba-match-bg {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, #0a0a1a 0%, #1a1a3a 50%, #0d0d2b 100%);
+    border-radius: var(--radius-lg);
+    position: relative;
+    overflow: hidden;
+}
+
+.moba-match-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(255,255,255,0.01) 3px,
+        rgba(255,255,255,0.01) 4px
+    );
+    pointer-events: none;
+}
+
+.moba-match-content {
+    text-align: center;
+    z-index: 1;
+    padding: 40px 24px;
+}
+
+.moba-match-title {
+    font-size: 2rem;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 20px rgba(74,74,255,0.5), 2px 2px 0 #000;
+    margin-bottom: 6px;
+}
+
+.moba-match-subtitle {
+    font-size: 0.875rem;
+    color: #7777aa;
+    margin-bottom: 32px;
+    letter-spacing: 0.06em;
+}
+
+.moba-match-info {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 32px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.moba-match-card {
+    background: rgba(255,255,255,0.04);
+    border: 2px solid #2a2a5a;
+    border-radius: 4px;
+    padding: 20px 18px;
+    width: 180px;
+    box-shadow: 0 2px 0 #000, inset 0 1px 0 rgba(255,255,255,0.03);
+    transition: all 0.2s ease;
+}
+
+.moba-match-card:hover {
+    border-color: #4a4aff;
+    box-shadow: 0 2px 0 #000, 0 0 12px rgba(74,74,255,0.2);
+}
+
+.moba-match-card-icon {
+    font-size: 2rem;
+    margin-bottom: 10px;
+}
+
+.moba-match-card-title {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #e0e0ff;
+    margin-bottom: 6px;
+}
+
+.moba-match-card-desc {
+    font-size: 0.75rem;
+    color: #7777aa;
+    line-height: 1.4;
+}
+
+.moba-match-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 48px;
+    font-size: 1.125rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #fff;
+    background: linear-gradient(180deg, #3a3aff 0%, #2020cc 100%);
+    border: 2px solid #5555ff;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #000, 0 0 24px rgba(74,74,255,0.4);
+    transition: all 0.15s ease;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
+}
+
+.moba-match-btn:hover {
+    background: linear-gradient(180deg, #5050ff 0%, #3030dd 100%);
+    box-shadow: 0 3px 0 #000, 0 0 36px rgba(74,74,255,0.6);
+    transform: translateY(-2px);
+}
+
+.moba-match-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 #000, 0 0 16px rgba(74,74,255,0.3);
+}
+
+.moba-match-status {
+    margin-top: 16px;
+    font-size: 0.875rem;
+    color: #8888cc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.moba-match-spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid #2a2a5a;
+    border-top-color: #4a4aff;
+    border-radius: 50%;
+    animation: mobaSpin 0.8s linear infinite;
+}
+
+@keyframes mobaSpin {
+    to { transform: rotate(360deg); }
+}
+
+.moba-match-back {
+    margin-top: 20px;
+    padding: 8px 20px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #7777aa;
+    background: transparent;
+    border: 1px solid #2a2a5a;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.moba-match-back:hover {
+    color: #bbbbee;
+    border-color: #4a4a7a;
+    background: rgba(255,255,255,0.03);
+}
+
+/* ================= MOBA 游戏面板 ================= */
+#mobaGamePanel {
+    background: #000;
+    position: relative;
+}
+
+#mobaCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.moba-hud {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.moba-hud > * {
+    pointer-events: auto;
+}
+
+/* 顶部 HUD */
+.moba-hud-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 10px 14px;
+    gap: 10px;
+}
+
+.moba-minimap {
+    width: 140px;
+    height: 140px;
+    border: 2px solid #3a3a6a;
+    border-radius: 2px;
+    background: rgba(0,0,0,0.6);
+    box-shadow: 0 0 8px rgba(0,0,0,0.8), inset 0 0 4px rgba(0,0,0,0.5);
+    overflow: hidden;
+}
+
+.moba-minimap canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.moba-timer {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 16px;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #fff;
+    background: rgba(0,0,0,0.7);
+    border: 2px solid #3a3a6a;
+    border-radius: 2px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.06em;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.moba-score {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 40px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 14px;
+    background: rgba(0,0,0,0.7);
+    border: 2px solid #3a3a6a;
+    border-radius: 2px;
+    font-weight: 800;
+    font-size: 1rem;
+}
+
+.moba-score-blue {
+    color: #5599ff;
+    text-shadow: 0 0 8px rgba(85,153,255,0.5);
+}
+
+.moba-score-vs {
+    color: #666;
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+}
+
+.moba-score-red {
+    color: #ff4444;
+    text-shadow: 0 0 8px rgba(255,68,68,0.5);
+}
+
+.moba-exit-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9375rem;
+    color: #888;
+    background: rgba(0,0,0,0.6);
+    border: 2px solid #3a3a6a;
+    border-radius: 2px;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s ease;
+}
+
+.moba-exit-btn:hover {
+    color: #ff4444;
+    border-color: #ff4444;
+    background: rgba(255,68,68,0.1);
+}
+
+/* 底部 HUD */
+.moba-hud-bottom {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 10px 14px;
+    gap: 14px;
+}
+
+/* 英雄信息栏 */
+.moba-hero-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0,0,0,0.7);
+    border: 2px solid #3a3a6a;
+    border-radius: 2px;
+    padding: 8px 12px;
+}
+
+.moba-hero-portrait {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, #1a1a4a, #2a2a6a);
+    border: 2px solid #5555ff;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    box-shadow: 0 0 6px rgba(85,85,255,0.3);
+}
+
+.moba-hero-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 140px;
+}
+
+.moba-bar {
+    position: relative;
+    height: 14px;
+    background: #1a1a2a;
+    border: 1px solid #3a3a5a;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.moba-bar-fill {
+    height: 100%;
+    transition: width 0.2s ease;
+    border-radius: 2px;
+}
+
+.moba-hp-bar .moba-bar-fill {
+    background: linear-gradient(180deg, #33cc33, #22aa22);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.moba-mp-bar .moba-bar-fill {
+    background: linear-gradient(180deg, #3388ff, #2266cc);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.moba-bar-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.5625rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.6);
+    z-index: 1;
+}
+
+.moba-hero-level {
+    padding: 3px 8px;
+    font-size: 0.6875rem;
+    font-weight: 800;
+    color: #ffcc00;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid #aa8800;
+    border-radius: 2px;
+    text-shadow: 1px 1px 0 #000;
+    white-space: nowrap;
+}
+
+/* 技能栏 */
+.moba-skills {
+    display: flex;
+    gap: 6px;
+    background: rgba(0,0,0,0.7);
+    border: 2px solid #3a3a6a;
+    border-radius: 2px;
+    padding: 8px 10px;
+}
+
+.moba-skill {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #1a1a3a;
+    border: 2px solid #3a3a6a;
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.1s ease;
+    box-shadow: 0 2px 0 #000;
+}
+
+.moba-skill:hover {
+    border-color: #6a6aff;
+    background: #22224a;
+}
+
+.moba-skill:active {
+    transform: translateY(1px);
+    box-shadow: 0 0 0 #000;
+}
+
+.moba-skill-key {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
+    line-height: 1;
+}
+
+.moba-skill-name {
+    font-size: 0.5rem;
+    color: #8888bb;
+    margin-top: 2px;
+    line-height: 1;
+}
+
+.moba-skill-cd {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #fff;
+    border-radius: 1px;
+}
+
+.moba-skill-ult {
+    border-color: #aa8800;
+    background: #2a2a1a;
+    box-shadow: 0 2px 0 #000, 0 0 6px rgba(255,204,0,0.15);
+}
+
+.moba-skill-ult:hover {
+    border-color: #ffcc00;
+    background: #3a3a2a;
+}
+
+/* ================= 击杀通知 ================= */
+.moba-kill-feed {
+    position: absolute;
+    right: 14px;
+    top: 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    pointer-events: none;
+    max-width: 240px;
+}
+
+.moba-kill-item {
+    padding: 5px 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(0,0,0,0.75);
+    border: 1px solid #3a3a6a;
+    border-radius: 2px;
+    text-shadow: 1px 1px 0 #000;
+    animation: mobaKillIn 0.3s ease-out, mobaKillFade 0.5s ease 3s forwards;
+    white-space: nowrap;
+}
+
+.moba-kill-item .killer {
+    color: #5599ff;
+}
+
+.moba-kill-item .victim {
+    color: #ff4444;
+}
+
+@keyframes mobaKillIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes mobaKillFade {
+    to {
+        opacity: 0;
+    }
+}
+
+/* ================= 结算弹窗 ================= */
+.moba-result-modal {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: mobaResultIn 0.4s ease-out;
+}
+
+@keyframes mobaResultIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.moba-result-content {
+    text-align: center;
+    background: linear-gradient(160deg, #0d0d2b, #1a1a3e);
+    border: 3px solid #3a3a6a;
+    border-radius: 4px;
+    padding: 36px 48px;
+    box-shadow: 0 4px 0 #000, 0 0 40px rgba(0,0,0,0.6);
+    min-width: 280px;
+}
+
+.moba-result-title {
+    font-size: 2rem;
+    font-weight: 900;
+    margin-bottom: 24px;
+    text-shadow: 2px 2px 0 #000;
+    letter-spacing: 0.04em;
+}
+
+.moba-result-title.victory {
+    color: #ffcc00;
+    text-shadow: 0 0 20px rgba(255,204,0,0.4), 2px 2px 0 #000;
+}
+
+.moba-result-title.defeat {
+    color: #ff3333;
+    text-shadow: 0 0 20px rgba(255,51,51,0.4), 2px 2px 0 #000;
+}
+
+.moba-result-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 28px;
+}
+
+.moba-result-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid #2a2a5a;
+    border-radius: 2px;
+    font-size: 0.8125rem;
+}
+
+.moba-result-stat span:first-child {
+    color: #7777aa;
+    font-weight: 500;
+}
+
+.moba-result-stat span:last-child {
+    color: #fff;
+    font-weight: 700;
+}
+
+.moba-result-btn {
+    padding: 12px 36px;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(180deg, #3a3aff, #2020cc);
+    border: 2px solid #5555ff;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #000;
+    transition: all 0.15s ease;
+}
+
+.moba-result-btn:hover {
+    background: linear-gradient(180deg, #5050ff, #3030dd);
+    box-shadow: 0 3px 0 #000, 0 0 16px rgba(74,74,255,0.4);
+    transform: translateY(-1px);
+}
+
+.moba-result-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 #000;
+}
