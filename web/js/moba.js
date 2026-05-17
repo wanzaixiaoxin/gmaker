@@ -41,10 +41,10 @@ const TEAM_COLORS = {
 };
 
 const SKILLS = {
-    Q: { name: '冲锋', cooldown: 5, damage: 60, range: 8, cost: 0, aoeRadius: 0, type: 'dash' },
-    W: { name: '旋风斩', cooldown: 8, damage: 80, range: 6, cost: 0, aoeRadius: 5, type: 'aoe' },
-    E: { name: '能量弹', cooldown: 4, damage: 50, range: 15, cost: 0, aoeRadius: 2, type: 'projectile' },
-    R: { name: '天降正义', cooldown: 30, damage: 200, range: 20, cost: 0, aoeRadius: 6, type: 'aoe_at_point' }
+    Q: { name: '冲锋', cooldown: 5, baseDamage: 30, levelScale: 5, range: 8, cost: 0, aoeRadius: 0, type: 'dash' },
+    W: { name: '旋风斩', cooldown: 8, baseDamage: 40, levelScale: 8, range: 6, cost: 0, aoeRadius: 5, type: 'aoe' },
+    E: { name: '能量弹', cooldown: 4, baseDamage: 50, levelScale: 10, range: 15, cost: 0, aoeRadius: 2, type: 'projectile' },
+    R: { name: '天降正义', cooldown: 30, baseDamage: 100, levelScale: 15, range: 20, cost: 0, aoeRadius: 6, type: 'aoe_at_point' }
 };
 
 const SKILL_KEYS = ['Q', 'W', 'E', 'R'];
@@ -85,7 +85,7 @@ class Hero extends Entity {
         this.maxHp = 500;
         this.hp = 500;
         this.attack = 30;
-        this.speed = 3.0;
+        this.speed = 0.1; // 约 6 游戏单位/秒
         this.level = 1;
         this.exp = 0;
         this.gold = 0;
@@ -106,6 +106,12 @@ class Hero extends Entity {
         this.state = 'idle';
         this.animationFrame = 0;
         this.animationTimer = 0;
+        // 自动攻击系统
+        this.autoAttackRange = 8; // 自动攻击范围（游戏单位）
+        this.autoAttackCooldown = 1.0; // 1秒一次攻击
+        this.autoAttackTimer = 0; // 自动攻击冷却计时器
+        this.levelUpFlash = 0; // 升级闪光效果计时器
+        this.isHealing = false; // 是否在基地治疗中
     }
 
     get expToLevel() {
@@ -124,7 +130,7 @@ class Hero extends Entity {
     }
 
     getEffectiveDamage() {
-        return this.attack * (1 + this.level * 0.1);
+        return this.attack;
     }
 
     canCast(skillKey) {
@@ -135,6 +141,9 @@ class Hero extends Entity {
         if (!this.canCast(skillKey)) return false;
         const skill = SKILLS[skillKey];
         this.cooldowns[skillKey] = skill.cooldown;
+
+        // 技能伤害公式：基础伤害 + 等级 * 等级加成
+        const getSkillDmg = () => skill.baseDamage + this.level * skill.levelScale;
 
         switch (skill.type) {
             case 'dash': {
@@ -147,7 +156,7 @@ class Hero extends Entity {
                 this.state = 'dashing';
                 // 冲锋路径上造成伤害
                 const enemies = world.getEnemiesOf(this.team);
-                const dmg = skill.damage * (1 + this.level * 0.1);
+                const dmg = getSkillDmg();
                 for (const e of enemies) {
                     if (!e.alive) continue;
                     if (dist(this, e) < skill.range && dist(this, e) < 3) {
@@ -159,7 +168,7 @@ class Hero extends Entity {
             }
             case 'aoe': {
                 const enemies = world.getEnemiesOf(this.team);
-                const dmg = skill.damage * (1 + this.level * 0.1);
+                const dmg = getSkillDmg();
                 for (const e of enemies) {
                     if (!e.alive) continue;
                     if (dist(this, e) <= skill.aoeRadius) {
@@ -178,7 +187,7 @@ class Hero extends Entity {
                     this.x, this.y,
                     Math.cos(angle) * 15,
                     Math.sin(angle) * 15,
-                    skill.damage * (1 + this.level * 0.1),
+                    getSkillDmg(),
                     skill.aoeRadius,
                     this
                 );
@@ -198,7 +207,7 @@ class Hero extends Entity {
                     clamped.y = this.y + Math.sin(angle) * skill.range;
                 }
                 const enemies2 = world.getEnemiesOf(this.team);
-                const dmg2 = skill.damage * (1 + this.level * 0.1);
+                const dmg2 = getSkillDmg();
                 for (const e of enemies2) {
                     if (!e.alive) continue;
                     if (dist(clamped, e) <= skill.aoeRadius) {
@@ -235,6 +244,18 @@ class Hero extends Entity {
         }
         if (this.attackCooldown > 0) this.attackCooldown -= dt;
 
+        // 基地治疗：在己方基地附近回复生命值
+        const base = this.team === 'blue' ? BLUE_BASE : RED_BASE;
+        const distToBase = dist(this, base);
+        const healRadius = 6; // 治疗范围（游戏单位）
+        if (distToBase <= healRadius) {
+            this.isHealing = true;
+            const healRate = 20; // 每秒回复 20 HP
+            this.hp = Math.min(this.hp + healRate * dt, this.maxHp);
+        } else {
+            this.isHealing = false;
+        }
+
         // 动画
         this.animationTimer += dt;
         if (this.animationTimer > 0.15) {
@@ -258,6 +279,55 @@ class Hero extends Entity {
                 this.facing = angle;
             }
             return;
+        }
+
+        // 升级闪光效果
+        if (this.levelUpFlash > 0) this.levelUpFlash -= dt;
+
+        // 自动攻击冷却
+        if (this.autoAttackTimer > 0) this.autoAttackTimer -= dt;
+
+        // 自动攻击：当空闲且无手动攻击目标时，自动寻找附近敌人
+        if ((this.state === 'idle' || this.state === 'moving') && !this.attackTarget && this.autoAttackTimer <= 0) {
+            const enemies = world.getEnemiesOf(this.team).filter(e => e.alive);
+            let autoTarget = null;
+            // 优先级：敌方英雄 > 敌方小兵 > 敌方防御塔
+            const heroes = enemies.filter(e => e.type === 'hero' && dist(this, e) <= this.autoAttackRange);
+            const minions = enemies.filter(e => e.type === 'minion' && dist(this, e) <= this.autoAttackRange);
+            const towers = enemies.filter(e => e.type === 'tower' && dist(this, e) <= this.autoAttackRange);
+
+            if (heroes.length > 0) {
+                // 选最近的英雄
+                heroes.sort((a, b) => dist(this, a) - dist(this, b));
+                autoTarget = heroes[0];
+            } else if (minions.length > 0) {
+                minions.sort((a, b) => dist(this, a) - dist(this, b));
+                autoTarget = minions[0];
+            } else if (towers.length > 0) {
+                towers.sort((a, b) => dist(this, a) - dist(this, b));
+                autoTarget = towers[0];
+            }
+
+            if (autoTarget) {
+                const d = dist(this, autoTarget);
+                if (d <= 5) {
+                    // 在攻击范围内，直接攻击
+                    this.state = 'attacking';
+                    const dmg = this.getEffectiveDamage();
+                    autoTarget.takeDamage(dmg);
+                    this.facing = angleBetween(this, autoTarget);
+                    if (!autoTarget.alive) {
+                        world.onKill(this, autoTarget);
+                    }
+                    this.autoAttackTimer = this.autoAttackCooldown;
+                } else {
+                    // 走向目标
+                    this.attackTarget = autoTarget;
+                    this.targetX = autoTarget.x;
+                    this.targetY = autoTarget.y;
+                    this.state = 'moving';
+                }
+            }
         }
 
         // 攻击
@@ -379,7 +449,7 @@ class Minion extends Entity {
         this.maxHp = 200;
         this.hp = 200;
         this.attack = 15;
-        this.speed = 2.0;
+        this.speed = 0.07; // 小兵速度略低于英雄
         this.size = 12;
         this.attackCooldown = 0;
         this.attackTarget = null;
@@ -566,7 +636,12 @@ class GameWorld {
         if (victim.type === 'minion') {
             if (killer.type === 'hero') {
                 killer.gold += 50;
-                killer.addExp(30);
+                // 击杀小兵奖励：+1等级, +5攻击, +20最大生命
+                killer.level += 1;
+                killer.attack += 5;
+                killer.maxHp += 20;
+                killer.hp = Math.min(killer.hp + 20, killer.maxHp);
+                killer.levelUpFlash = 0.8;
             }
         } else if (victim.type === 'hero') {
             victim.deaths++;
@@ -574,7 +649,12 @@ class GameWorld {
             if (killer.type === 'hero') {
                 killer.kills++;
                 killer.gold += 200;
-                killer.addExp(150);
+                // 击杀英雄奖励：+2等级, +10攻击, +30最大生命
+                killer.level += 2;
+                killer.attack += 10;
+                killer.maxHp += 30;
+                killer.hp = Math.min(killer.hp + 30, killer.maxHp);
+                killer.levelUpFlash = 1.0;
             }
             notification = `${killer.name || TEAM_COLORS[killer.team].name} 击杀了 ${victim.name || TEAM_COLORS[victim.team].name}`;
             if (victim.team === 'blue') this.redKills++;
@@ -582,7 +662,12 @@ class GameWorld {
         } else if (victim.type === 'tower') {
             if (killer.type === 'hero') {
                 killer.gold += 100;
-                killer.addExp(100);
+                // 击杀防御塔奖励：+3等级, +15攻击, +50最大生命
+                killer.level += 3;
+                killer.attack += 15;
+                killer.maxHp += 50;
+                killer.hp = Math.min(killer.hp + 50, killer.maxHp);
+                killer.levelUpFlash = 1.2;
             }
             notification = `${TEAM_COLORS[killer.team].name} 摧毁了${TEAM_COLORS[victim.team].name}防御塔`;
         } else if (victim.type === 'crystal') {
@@ -668,37 +753,55 @@ class GameRenderer {
         this.viewRange = 30; // 可视范围（游戏单位）
 
         this.time = 0;
+        this.playerTeam = 'blue'; // 设置为玩家队伍，用于视角变换
+    }
+
+    // 世界坐标 -> 视图坐标（红方翻转）
+    _transformWorld(wx, wy) {
+        if (this.playerTeam === 'red') {
+            return { x: MAP_SIZE - wx, y: MAP_SIZE - wy };
+        }
+        return { x: wx, y: wy };
+    }
+
+    // 视图坐标 -> 世界坐标（红方反翻转）
+    _untransformWorld(tx, ty) {
+        if (this.playerTeam === 'red') {
+            return { x: MAP_SIZE - tx, y: MAP_SIZE - ty };
+        }
+        return { x: tx, y: ty };
     }
 
     worldToScreen(wx, wy) {
+        const tw = this._transformWorld(wx, wy);
         const scale = Math.min(this.canvas.width, this.canvas.height) / (this.viewRange * 2);
-        const sx = (wx - this.camX) * scale + this.canvas.width / 2;
-        const sy = -(wy - this.camY) * scale + this.canvas.height / 2; // y轴翻转
+        const sx = (tw.x - this.camX) * scale + this.canvas.width / 2;
+        const sy = -(tw.y - this.camY) * scale + this.canvas.height / 2; // y轴翻转
         return { x: sx, y: sy, scale };
     }
 
     screenToWorld(sx, sy) {
         const scale = Math.min(this.canvas.width, this.canvas.height) / (this.viewRange * 2);
-        const wx = (sx - this.canvas.width / 2) / scale + this.camX;
-        const wy = -((sy - this.canvas.height / 2) / scale) + this.camY;
-        return { x: wx, y: wy };
+        const tx = (sx - this.canvas.width / 2) / scale + this.camX;
+        const ty = -((sy - this.canvas.height / 2) / scale) + this.camY;
+        return this._untransformWorld(tx, ty);
     }
 
     resize() {
-        const parent = this.canvas.parentElement;
-        if (parent) {
-            this.canvas.width = parent.clientWidth;
-            this.canvas.height = parent.clientHeight;
-        }
+        // 全屏模式：使用实际视口尺寸
+        this.canvas.width = document.documentElement.clientWidth || window.innerWidth;
+        this.canvas.height = document.documentElement.clientHeight || window.innerHeight;
         this.ctx.imageSmoothingEnabled = false;
     }
 
     updateCamera(hero) {
         if (!hero) return;
-        const targetX = hero.alive ? hero.x : (hero.team === 'blue' ? BLUE_BASE.x : RED_BASE.x);
-        const targetY = hero.alive ? hero.y : (hero.team === 'blue' ? BLUE_BASE.y : RED_BASE.y);
-        this.camX = lerp(this.camX, targetX, 0.08);
-        this.camY = lerp(this.camY, targetY, 0.08);
+        let targetX = hero.alive ? hero.x : (hero.team === 'blue' ? BLUE_BASE.x : RED_BASE.x);
+        let targetY = hero.alive ? hero.y : (hero.team === 'blue' ? BLUE_BASE.y : RED_BASE.y);
+        // 视角变换
+        const tw = this._transformWorld(targetX, targetY);
+        this.camX = lerp(this.camX, tw.x, 0.08);
+        this.camY = lerp(this.camY, tw.y, 0.08);
     }
 
     render(world, playerTeam) {
@@ -706,6 +809,7 @@ class GameRenderer {
         const w = this.canvas.width;
         const h = this.canvas.height;
         this.time += 1 / 60;
+        this.playerTeam = playerTeam || 'blue';
 
         ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, w, h);
@@ -903,6 +1007,27 @@ class GameRenderer {
         ctx.fillStyle = '#ffff00';
         ctx.font = 'bold 9px monospace';
         ctx.fillText('Lv.' + hero.level, sp.x, sp.y - s - 16);
+
+        // 升级闪光效果
+        if (hero.levelUpFlash > 0) {
+            const alpha = Math.min(1, hero.levelUpFlash * 2);
+            ctx.fillStyle = `rgba(255,255,100,${alpha * 0.4})`;
+            ctx.fillRect(sp.x - s - 4, sp.y - s - 4, s * 2 + 8, s * 2 + 8);
+            ctx.strokeStyle = `rgba(255,255,0,${alpha})`;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(sp.x - s - 2, sp.y - s - 2, s * 2 + 4, s * 2 + 4);
+        }
+
+        // 基地治疗效果 - 绿色光晕
+        if (hero.isHealing) {
+            const healGlow = Math.sin(hero.animationTimer * 10) * 0.2 + 0.3;
+            ctx.fillStyle = `rgba(0,255,100,${healGlow})`;
+            ctx.fillRect(sp.x - s - 6, sp.y - s - 6, s * 2 + 12, s * 2 + 12);
+            // 十字治疗标记
+            ctx.fillStyle = `rgba(0,255,100,${healGlow + 0.2})`;
+            ctx.fillRect(sp.x - 1, sp.y - s - 8, 2, 6);
+            ctx.fillRect(sp.x - 3, sp.y - s - 6, 6, 2);
+        }
     }
 
     drawTower(ctx, tower, sp) {
@@ -1120,15 +1245,28 @@ class GameRenderer {
         ctx.strokeStyle = '#5a4a30';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(mmX + BLUE_BASE.x * unitSize, mmY + mmSize - BLUE_BASE.y * unitSize);
-        ctx.lineTo(mmX + RED_BASE.x * unitSize, mmY + mmSize - RED_BASE.y * unitSize);
+        let blueBaseMM = { x: mmX + BLUE_BASE.x * unitSize, y: mmY + mmSize - BLUE_BASE.y * unitSize };
+        let redBaseMM = { x: mmX + RED_BASE.x * unitSize, y: mmY + mmSize - RED_BASE.y * unitSize };
+        if (this.playerTeam === 'red') {
+            // 翻转小地图坐标
+            blueBaseMM = { x: mmX + mmSize - BLUE_BASE.x * unitSize, y: mmY + BLUE_BASE.y * unitSize };
+            redBaseMM = { x: mmX + mmSize - RED_BASE.x * unitSize, y: mmY + RED_BASE.y * unitSize };
+        }
+        ctx.moveTo(blueBaseMM.x, blueBaseMM.y);
+        ctx.lineTo(redBaseMM.x, redBaseMM.y);
         ctx.stroke();
 
         // 实体点
         for (const e of world.entities) {
             if (!e.alive) continue;
-            const ex = mmX + e.x * unitSize;
-            const ey = mmY + mmSize - e.y * unitSize;
+            let ex, ey;
+            if (this.playerTeam === 'red') {
+                ex = mmX + (MAP_SIZE - e.x) * unitSize;
+                ey = mmY + e.y * unitSize;
+            } else {
+                ex = mmX + e.x * unitSize;
+                ey = mmY + mmSize - e.y * unitSize;
+            }
 
             let dotSize = 2;
             let color = TEAM_COLORS[e.team].primary;
@@ -1658,9 +1796,14 @@ class MobaGame {
         this.renderer = null;
         this.input = null;
         this.ai = null;
+        this.networkSync = null;
+        this.isNetworkMode = false;
+        this.remoteHeroState = null;
+        this.opponentReady = false;
+        this.localReady = false;
 
         this.phaseTimer = 0;
-        this.loadingTimer = 3;
+        this.loadingTimer = 1.5;
         this.animFrame = null;
         this.lastTime = 0;
 
@@ -1671,11 +1814,23 @@ class MobaGame {
         MobaGame._idCounter = 1;
     }
 
-    start(playerTeam) {
+    start(playerTeam, networkConfig) {
         this.playerTeam = playerTeam || 'blue';
         this.running = true;
         this.phase = GamePhase.MATCHING;
-        this.phaseTimer = 2; // 匹配2秒
+        this.phaseTimer = 0.5; // VS AI 模式快速进入
+
+        if (networkConfig) {
+            this.isNetworkMode = true;
+            this.networkSync = new NetworkSync(
+                networkConfig.chatAPI,
+                networkConfig.playerID,
+                networkConfig.playerName,
+                networkConfig.battleRoomId,
+                networkConfig.isHost,
+                (type, data) => this._onRemoteData(type, data)
+            );
+        }
 
         this.world = new GameWorld();
         this.renderer = new GameRenderer(this.canvas);
@@ -1701,6 +1856,10 @@ class MobaGame {
 
     destroy() {
         this.stop();
+        if (this.networkSync) {
+            this.networkSync.destroy();
+            this.networkSync = null;
+        }
         this.world = null;
         this.renderer = null;
         this.input = null;
@@ -1793,7 +1952,7 @@ class MobaGame {
 
         if (this.phaseTimer <= 0) {
             this.phase = GamePhase.LOADING;
-            this.loadingTimer = 3;
+            this.loadingTimer = 1.5;
             this.world.init();
         }
     }
@@ -1805,7 +1964,13 @@ class MobaGame {
         if (this.loadingTimer <= 0) {
             this.phase = GamePhase.PLAYING;
             this.input.bind(this.playerTeam);
-            this.ai = new GameAI(this.world, this.playerTeam === 'blue' ? 'red' : 'blue');
+            if (!this.isNetworkMode) {
+                this.ai = new GameAI(this.world, this.playerTeam === 'blue' ? 'red' : 'blue');
+            }
+            // In network mode, send ready signal
+            if (this.networkSync) {
+                this.networkSync.sendReady();
+            }
         }
     }
 
@@ -1814,7 +1979,13 @@ class MobaGame {
         const fixedDt = 1 / 60;
 
         this.world.update(fixedDt);
-        this.ai.update(fixedDt);
+
+        if (this.isNetworkMode) {
+            // Network mode: sync hero state
+            this._syncNetworkHero(fixedDt);
+        } else {
+            this.ai.update(fixedDt);
+        }
 
         this.renderer.render(this.world, this.playerTeam);
         this.renderer.drawHUD(this.renderer.ctx, this.world, this.playerTeam, this.input);
@@ -1825,9 +1996,60 @@ class MobaGame {
         if (this.world.gameOver) {
             this.phase = GamePhase.RESULT;
             this.input.unbind();
+            if (this.networkSync) this.networkSync.destroy();
             this.canvas.addEventListener('click', this._boundClick);
             // 自动触发结算
             setTimeout(() => this._onResultClick(), 500);
+        }
+    }
+
+    // 网络同步：控制对手英雄
+    _syncNetworkHero(dt) {
+        if (!this.networkSync) return;
+
+        // 获取对手英雄
+        const opponentTeam = this.playerTeam === 'blue' ? 'red' : 'blue';
+        const opponentHero = this.world.getHero(opponentTeam);
+
+        // 应用远程英雄状态
+        if (this.remoteHeroState && opponentHero) {
+            const rs = this.remoteHeroState;
+            // 平滑插值位置
+            opponentHero.x = lerp(opponentHero.x, rs.x, 0.3);
+            opponentHero.y = lerp(opponentHero.y, rs.y, 0.3);
+            opponentHero.hp = rs.hp;
+            if (rs.mhp) opponentHero.maxHp = rs.mhp;
+            opponentHero.state = rs.st || 'idle';
+            opponentHero.facing = rs.f || opponentHero.facing;
+            if (rs.tx !== undefined) opponentHero.targetX = rs.tx;
+            if (rs.ty !== undefined) opponentHero.targetY = rs.ty;
+            if (rs.lv) opponentHero.level = rs.lv;
+            if (rs.dmg) opponentHero.attack = rs.dmg;
+            if (rs.k !== undefined) opponentHero.kills = rs.k;
+            // 处理攻击目标
+            if (rs.atk && rs.atk > 0) {
+                const target = this.world.entities.find(e => e.id === rs.atk);
+                if (target) opponentHero.attackTarget = target;
+            } else {
+                opponentHero.attackTarget = null;
+            }
+        }
+
+        // 发送本地英雄状态
+        const localHero = this.world.getHero(this.playerTeam);
+        if (localHero) {
+            this.networkSync.sendHeroState(localHero);
+        }
+    }
+
+    // 接收远程数据
+    _onRemoteData(type, data) {
+        if (type === 'heroState') {
+            this.remoteHeroState = data;
+        } else if (type === 'command') {
+            // Handle commands like skill casts, etc.
+        } else if (type === 'event') {
+            // Handle game events
         }
     }
 
@@ -1848,9 +2070,9 @@ class MobaGame {
         if (mpFill) mpFill.style.width = '100%';
         if (mpText) mpText.textContent = '100/100';
 
-        // 等级
+        // 等级和攻击力
         const lvEl = document.getElementById('mobaHeroLevel');
-        if (lvEl) lvEl.textContent = 'Lv.' + hero.level;
+        if (lvEl) lvEl.textContent = 'Lv.' + hero.level + ' ATK:' + hero.attack;
 
         // 计时器
         const elapsed = this.world.gameTime || 0;
@@ -2019,3 +2241,89 @@ MobaGame._idCounter = 1;
 
 // 注册到全局
 window.MobaGame = MobaGame;
+
+// ============================================================
+// 网络同步类 - PvP 对战通信
+// ============================================================
+class NetworkSync {
+    constructor(chatAPI, playerID, playerName, battleRoomId, isHost, onRemoteInput) {
+        this.chatAPI = chatAPI;
+        this.playerID = playerID;
+        this.playerName = playerName;
+        this.battleRoomId = battleRoomId;
+        this.isHost = isHost;
+        this.onRemoteInput = onRemoteInput;
+        this.lastSendTime = 0;
+        this.sendInterval = 100; // 10Hz
+        this.connected = true;
+    }
+
+    // Send local hero state to opponent
+    sendHeroState(hero) {
+        if (!this.connected) return;
+        const now = Date.now();
+        if (now - this.lastSendTime < this.sendInterval) return;
+        this.lastSendTime = now;
+
+        const state = {
+            t: 'hs',
+            x: Math.round(hero.x * 100) / 100,
+            y: Math.round(hero.y * 100) / 100,
+            hp: Math.round(hero.hp),
+            mhp: hero.maxHp,
+            st: hero.state,
+            tx: Math.round(hero.targetX * 100) / 100,
+            ty: Math.round(hero.targetY * 100) / 100,
+            f: Math.round(hero.facing * 100) / 100,
+            lv: hero.level || 1,
+            atk: hero.attackTarget ? hero.attackTarget.id : 0,
+            dmg: hero.attack,
+            k: hero.kills
+        };
+        this._send(JSON.stringify(state));
+    }
+
+    // Send input command to opponent
+    sendCommand(cmd) {
+        if (!this.connected) return;
+        this._send(JSON.stringify({t: 'cmd', ...cmd}));
+    }
+
+    // Send game event
+    sendEvent(eventType, data) {
+        if (!this.connected) return;
+        this._send(JSON.stringify({t: 'ev', e: eventType, d: data}));
+    }
+
+    // Send ready signal
+    sendReady() {
+        this._send(JSON.stringify({t: 'ready', pid: this.playerID}));
+    }
+
+    _send(content) {
+        this.chatAPI.sendMsg(this.battleRoomId, this.playerID, content, this.playerName).catch(() => {});
+    }
+
+    // Handle incoming message from opponent
+    handleMessage(content) {
+        try {
+            const data = JSON.parse(content);
+            if (data.t === 'hs' && this.onRemoteInput) {
+                this.onRemoteInput('heroState', data);
+            } else if (data.t === 'cmd' && this.onRemoteInput) {
+                this.onRemoteInput('command', data);
+            } else if (data.t === 'ev' && this.onRemoteInput) {
+                this.onRemoteInput('event', data);
+            } else if (data.t === 'ready' && this.onRemoteInput) {
+                this.onRemoteInput('ready', data);
+            }
+        } catch(e) {}
+    }
+
+    destroy() {
+        this.connected = false;
+        if (this.battleRoomId) {
+            this.chatAPI.leaveRoom(this.battleRoomId, this.playerID).catch(() => {});
+        }
+    }
+}

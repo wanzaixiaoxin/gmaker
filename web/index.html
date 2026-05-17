@@ -1051,7 +1051,7 @@ const PROTO_DESCRIPTOR = {
                 <span class="moba-entry-icon">⚔️</span>
                 <span class="moba-entry-text">
                     <strong>竞技对战</strong>
-                    <small>1v1 像素 MOBA</small>
+                    <small>1v1 像素 MOBA 对战</small>
                 </span>
                 <span class="moba-entry-arrow">→</span>
             </button>
@@ -1087,12 +1087,12 @@ const PROTO_DESCRIPTOR = {
         <div class="moba-match-bg">
             <div class="moba-match-content">
                 <div class="moba-match-title">⚔️ 竞技场</div>
-                <div class="moba-match-subtitle">1v1 像素 MOBA 对战</div>
+                <div class="moba-match-subtitle">1v1 像素 MOBA · 真人对战</div>
                 <div class="moba-match-info">
                     <div class="moba-match-card">
                         <div class="moba-match-card-icon">🗡️</div>
                         <div class="moba-match-card-title">英雄对战</div>
-                        <div class="moba-match-card-desc">选择你的英雄，摧毁敌方水晶</div>
+                        <div class="moba-match-card-desc">与真人对手进行 1v1 对决</div>
                     </div>
                     <div class="moba-match-card">
                         <div class="moba-match-card-icon">🏰</div>
@@ -1106,11 +1106,14 @@ const PROTO_DESCRIPTOR = {
                     </div>
                 </div>
                 <button id="btnMobaMatch" class="moba-match-btn" onclick="startMobaMatch()">
-                    <span class="moba-match-btn-text">开始匹配</span>
+                    <span class="moba-match-btn-text">⚔️ 开始匹配</span>
+                </button>
+                <button id="btnMobaCancelMatch" class="moba-match-btn moba-cancel-btn hidden" onclick="cancelMatch()">
+                    <span class="moba-match-btn-text">取消匹配</span>
                 </button>
                 <div id="mobaMatchStatus" class="moba-match-status hidden">
                     <div class="moba-match-spinner"></div>
-                    <span>正在寻找对手...</span>
+                    <span>正在加载战场...</span>
                 </div>
                 <button class="moba-match-back" onclick="backToLobbyFromMoba()">← 返回大厅</button>
             </div>
@@ -1118,7 +1121,7 @@ const PROTO_DESCRIPTOR = {
     </div>
 
     <!-- MOBA 游戏面板 -->
-    <div id="mobaGamePanel" class="panel hidden" style="padding:0;position:relative;">
+    <div id="mobaGamePanel" class="panel hidden">
         <canvas id="mobaCanvas"></canvas>
         <div id="mobaHud" class="moba-hud">
             <div class="moba-hud-top">
@@ -1132,6 +1135,7 @@ const PROTO_DESCRIPTOR = {
                     <span class="moba-score-red" id="mobaRedKills">0</span>
                 </div>
                 <button class="moba-exit-btn" onclick="exitMobaGame()">✕</button>
+                <button class="moba-end-battle-btn" onclick="endBattle()">结束战斗</button>
             </div>
             <div class="moba-hud-bottom">
                 <div class="moba-hero-info">
@@ -1386,10 +1390,37 @@ function showPanel(id) {
 async function refreshRooms() {
     try {
         const res = await chatAPI.listRooms(1, 100);
+        if (res.rooms) {
+            res.rooms.forEach(r => {
+                if (r.name && r.name.startsWith('MOBA_1V1_MATCH')) {
+                    const ct = Number(r.createdAt);
+                    const now = Date.now() / 1000;
+                }
+            });
+        }
         const tbody = document.getElementById('roomTableBody');
         tbody.innerHTML = '';
+        const now = Date.now() / 1000;
         if (res.rooms && res.rooms.length) {
+            // 只显示最近 10 分钟内创建的 MOBA 房间，且排除自己创建的
+            let mobaRooms = res.rooms.filter(r => {
+                if (!r.name || !r.name.startsWith('MOBA_1V1_MATCH')) return false;
+                if (String(r.creatorId) === String(playerID)) return false;
+                const ct = Number(r.createdAt);
+                if (!ct || (now - ct) >= 3600) return false;
+                return true;
+            });
+            // 取最新的一个
+            mobaRooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            const latestMobaRoom = mobaRooms.length > 0 ? mobaRooms[0] : null;
+
             res.rooms.forEach(r => {
+                // 跳过旧的或自己的 MOBA 房间
+                if (r.name && r.name.startsWith('MOBA_1V1_MATCH')) {
+                    if (String(r.creatorId) === String(playerID)) return; // 自己的房间不显示
+                if (!Number(r.createdAt) || (now - Number(r.createdAt)) >= 3600) return; // 超过60分钟的旧房间不显示
+                    if (latestMobaRoom && String(r.roomId) !== String(latestMobaRoom.roomId)) return; // 只显示最新的
+                }
                 const tr = document.createElement('tr');
                 const date = r.createdAt ? new Date(r.createdAt * 1000).toLocaleString() : '-';
                 tr.innerHTML = `
@@ -1400,11 +1431,21 @@ async function refreshRooms() {
                     <td></td>
                 `;
                 const btn = document.createElement('button');
-                btn.textContent = '加入';
-                btn.onclick = () => enterRoom(r.roomId, r.name);
+                if (r.name && r.name.startsWith('MOBA_1V1_MATCH')) {
+                    btn.textContent = '⚔️ 加入对战';
+                    btn.className = 'moba-join-btn';
+                    btn.onclick = () => joinMobaBattle(r.roomId, r.name);
+                } else {
+                    btn.textContent = '加入';
+                    btn.onclick = () => enterRoom(r.roomId, r.name);
+                }
                 tr.lastElementChild.appendChild(btn);
                 tbody.appendChild(tr);
             });
+            // 如果表格为空
+            if (tbody.children.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5"><div class="room-empty">暂无聊天室，创建一个吧 🎉</div></td></tr>';
+            }
         } else {
             tbody.innerHTML = '<tr><td colspan="5"><div class="room-empty">暂无聊天室，创建一个吧 🎉</div></td></tr>';
         }
@@ -1504,37 +1545,256 @@ function escapeHtml(text) {
 
 // ==================== MOBA 游戏相关 ====================
 let mobaGame = null;
+let matchRoomId = null;
+let battleRoomId = null;
+let matchPollTimer = null;
+let matchPollActive = false; // 防止 match poll 处理器在游戏中冲突
 
 function startMobaMatch() {
     const statusEl = document.getElementById('mobaMatchStatus');
     const btnEl = document.getElementById('btnMobaMatch');
+    const cancelBtnEl = document.getElementById('btnMobaCancelMatch');
     statusEl.classList.remove('hidden');
     btnEl.classList.add('hidden');
-    
-    // 模拟匹配延迟（1v1 本地模式，1.5秒后开始）
-    setTimeout(() => {
-        statusEl.innerHTML = '<span>匹配成功！正在进入战场...</span>';
-        setTimeout(() => {
-            showPanel('mobaGamePanel');
-            initMobaGame();
-        }, 800);
-    }, 1500);
+    cancelBtnEl.classList.remove('hidden');
+    statusEl.innerHTML = '<div class="moba-match-spinner"></div><span>正在寻找对手...</span>';
+
+    // 1. 创建或加入匹配房间
+    joinMatchRoom();
 }
 
-function initMobaGame() {
+function cancelMatch() {
+    // 停止轮询
+    matchPollActive = false;
+    if (matchPollTimer) {
+        clearInterval(matchPollTimer);
+        matchPollTimer = null;
+    }
+    // 离开房间
+    if (battleRoomId && chatAPI) {
+        chatAPI.leaveRoom(battleRoomId, playerID).catch(() => {});
+    }
+    battleRoomId = null;
+    matchRoomId = null;
+    // 重置 UI
+    const statusEl = document.getElementById('mobaMatchStatus');
+    const btnEl = document.getElementById('btnMobaMatch');
+    const cancelBtnEl = document.getElementById('btnMobaCancelMatch');
+    statusEl.classList.add('hidden');
+    statusEl.innerHTML = '<div class="moba-match-spinner"></div><span>正在寻找对手...</span>';
+    btnEl.classList.remove('hidden');
+    cancelBtnEl.classList.add('hidden');
+}
+
+async function joinMatchRoom() {
+    const statusEl = document.getElementById('mobaMatchStatus');
+    try {
+        // 创建一个唯一的匹配房间
+        const res = await chatAPI.createRoom('MOBA_1V1_MATCH_' + Date.now(), playerID);
+        if (res.room && res.room.roomId) {
+            battleRoomId = String(res.room.roomId);
+
+            // 创建者也需要 joinRoom，这样 Gateway 才会转发房间广播消息
+            try {
+                const joinRes = await chatAPI.joinRoom(battleRoomId, playerID);
+            } catch(e2) {
+                console.warn('[MatchRoom] creator joinRoom failed (non-fatal):', e2.message);
+            }
+
+            // 我是房主（蓝方），等待对手
+            statusEl.innerHTML = '<div class="moba-match-spinner"></div><span>已创建对战房间，等待对手加入...</span>';
+
+            // 开始轮询房间列表，看是否有人加入
+            startMatchPoll();
+        } else {
+            statusEl.innerHTML = '<span style="color:#e74c3c">创建房间失败</span>';
+            document.getElementById('btnMobaMatch').classList.remove('hidden');
+        }
+    } catch(e) {
+        statusEl.innerHTML = '<span style="color:#e74c3c">匹配失败: ' + e.message + '</span>';
+        document.getElementById('btnMobaMatch').classList.remove('hidden');
+    }
+}
+
+function startMatchPoll() {
+    matchPollActive = true;
+    // 通过 chatAPI.onNotify 监听消息来检测对手
+    // 设置一个特殊的匹配消息处理器
+    const originalOnPacket = chatAPI.ws.onPacket;
+    chatAPI.ws.onPacket = (pkt) => {
+        // 先调用原来的处理器（聊天消息）
+        if (originalOnPacket) originalOnPacket(pkt);
+
+        // 匹配完成后不再处理，避免与 battle notify 冲突
+        if (!matchPollActive) return;
+
+        // 检查是否是对战房间的消息
+        if (pkt.cmdID === Cmd.CHAT_MSG_NOTIFY) {
+            try {
+                const NotifyType = root.lookupType('chat.ChatMsgNotify');
+                const msg = NotifyType.decode(pkt.payload);
+                if (String(msg.msg.roomId) === String(battleRoomId) &&
+                    String(msg.msg.senderId) !== String(playerID)) {
+                    // 对手加入了！
+                    onOpponentFound(msg.msg.senderId, msg.msg.senderName);
+                }
+            } catch(e) { console.error('[MatchPoll] decode error', e); }
+        }
+    };
+
+    // 同时也发送一条 "等待对手" 的消息
+    chatAPI.sendMsg(battleRoomId, playerID, JSON.stringify({t:'wait', pid: playerID}), playerName).catch(()=>{});
+
+    // 轮询房间成员（作为备选检测方式）
+    matchPollTimer = setInterval(async () => {
+        try {
+            const history = await chatAPI.getHistory(battleRoomId, 10);
+            const msgCount = history && history.msgs ? history.msgs.length : 0;
+            if (msgCount > 0) {
+                // 详细打印每条消息的摘要
+            }
+            if (history.msgs) {
+                for (const m of history.msgs) {
+                    const content = m.content || '';
+                    if (content.startsWith('{')) {
+                        try {
+                            const data = JSON.parse(content);
+                            if (data.t === 'join' && String(data.pid) !== String(playerID)) {
+                                onOpponentFound(m.senderId, m.senderName);
+                                return;
+                            }
+                        } catch(e) {}
+                    }
+                }
+            }
+        } catch(e) { console.error('[MatchPoll] poll error', e); }
+    }, 2000);
+}
+
+function onOpponentFound(opponentId, opponentName) {
+    // 停用 match poll 处理器，防止与 battle notify 冲突
+    matchPollActive = false;
+    if (matchPollTimer) {
+        clearInterval(matchPollTimer);
+        matchPollTimer = null;
+    }
+
+    const statusEl = document.getElementById('mobaMatchStatus');
+    const cancelBtnEl = document.getElementById('btnMobaCancelMatch');
+    if (cancelBtnEl) cancelBtnEl.classList.add('hidden');
+    statusEl.innerHTML = '<span style="color:#2ecc71">找到对手: ' + (opponentName || opponentId) + '！正在进入战场...</span>';
+
+    setTimeout(() => {
+        showPanel('mobaGamePanel');
+        initMobaGame(true, battleRoomId);
+    }, 1000);
+}
+
+// Override chatAPI.onNotify to also handle battle messages during game
+function setupBattleNotify(battleRoomId) {
+    const originalOnPacket = chatAPI.ws.onPacket;
+    chatAPI.ws.onPacket = (pkt) => {
+        if (originalOnPacket) originalOnPacket(pkt);
+
+        if (pkt.cmdID === Cmd.CHAT_MSG_NOTIFY) {
+            try {
+                const NotifyType = root.lookupType('chat.ChatMsgNotify');
+                const msg = NotifyType.decode(pkt.payload);
+                if (String(msg.msg.roomId) === String(battleRoomId) &&
+                    String(msg.msg.senderId) !== String(playerID)) {
+                    // 这是来自对手的游戏数据
+                    if (mobaGame && mobaGame.networkSync) {
+                        mobaGame.networkSync.handleMessage(msg.msg.content);
+                    }
+                }
+            } catch(e) {}
+        }
+    };
+}
+
+function initMobaGame(isPvP, roomId) {
+    // 先销毁旧实例
+    if (mobaGame) {
+        mobaGame.destroy();
+        mobaGame = null;
+    }
+
     const canvas = document.getElementById('mobaCanvas');
     const minimapCanvas = document.getElementById('mobaMinimap');
-    
-    // 调整 canvas 尺寸
-    const container = document.getElementById('mobaGamePanel');
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
-    
+
+    // 全屏 canvas - 使用实际视口尺寸
+    const w = document.documentElement.clientWidth || window.innerWidth;
+    const h = document.documentElement.clientHeight || window.innerHeight;
+    canvas.width = w;
+    canvas.height = h;
+
+    let networkConfig = null;
+    if (isPvP && roomId) {
+        networkConfig = {
+            chatAPI: chatAPI,
+            playerID: playerID,
+            playerName: playerName,
+            battleRoomId: roomId,
+            isHost: true  // 房主 = 蓝方
+        };
+        setupBattleNotify(roomId);
+    }
+
     mobaGame = new MobaGame(canvas, minimapCanvas, (result) => {
         // 游戏结束回调
         showMobaResult(result);
     });
-    mobaGame.start('blue');
+    mobaGame.start('blue', networkConfig);
+}
+
+async function joinMobaBattle(roomId, roomName) {
+    try {
+        const joinRes = await chatAPI.joinRoom(roomId, playerID);
+        battleRoomId = String(roomId);
+        // Send join notification
+        const sendRes = await chatAPI.sendMsg(roomId, playerID, JSON.stringify({t:'join', pid: playerID}), playerName);
+
+        showPanel('mobaMatchPanel');
+        const statusEl = document.getElementById('mobaMatchStatus');
+        statusEl.classList.remove('hidden');
+        document.getElementById('btnMobaMatch').classList.add('hidden');
+        const cancelBtnEl = document.getElementById('btnMobaCancelMatch');
+        if (cancelBtnEl) cancelBtnEl.classList.add('hidden');
+        statusEl.innerHTML = '<span style="color:#2ecc71">找到对手！正在进入战场...</span>';
+
+        setTimeout(() => {
+            showPanel('mobaGamePanel');
+            // 红方（非房主）
+            initMobaGameAsClient(battleRoomId);
+        }, 1000);
+    } catch(e) {
+        alert('加入对战失败: ' + e.message);
+    }
+}
+
+function initMobaGameAsClient(roomId) {
+    if (mobaGame) { mobaGame.destroy(); mobaGame = null; }
+
+    const canvas = document.getElementById('mobaCanvas');
+    const minimapCanvas = document.getElementById('mobaMinimap');
+    const w = document.documentElement.clientWidth || window.innerWidth;
+    const h = document.documentElement.clientHeight || window.innerHeight;
+    canvas.width = w;
+    canvas.height = h;
+
+    const networkConfig = {
+        chatAPI: chatAPI,
+        playerID: playerID,
+        playerName: playerName,
+        battleRoomId: roomId,
+        isHost: false  // 非房主 = 红方
+    };
+    setupBattleNotify(roomId);
+
+    mobaGame = new MobaGame(canvas, minimapCanvas, (result) => {
+        showMobaResult(result);
+    });
+    mobaGame.start('red', networkConfig);  // 红方
 }
 
 function mobaCastSkill(slot) {
@@ -1543,8 +1803,9 @@ function mobaCastSkill(slot) {
 
 function showMobaResult(result) {
     const modal = document.getElementById('mobaResultModal');
-    document.getElementById('mobaResultTitle').textContent = result.winner === 'blue' ? '🏆 胜利！' : '💀 失败';
-    document.getElementById('mobaResultTitle').className = 'moba-result-title ' + (result.winner === 'blue' ? 'victory' : 'defeat');
+    const playerWon = result.winner === (mobaGame ? mobaGame.playerTeam : 'blue');
+    document.getElementById('mobaResultTitle').textContent = playerWon ? '🏆 胜利！' : '💀 失败';
+    document.getElementById('mobaResultTitle').className = 'moba-result-title ' + (playerWon ? 'victory' : 'defeat');
     document.getElementById('mobaResultKills').textContent = result.kills || 0;
     document.getElementById('mobaResultDeaths').textContent = result.deaths || 0;
     document.getElementById('mobaResultGold').textContent = result.gold || 0;
@@ -1553,15 +1814,55 @@ function showMobaResult(result) {
 }
 
 function exitMobaGame() {
+    matchPollActive = false;
     if (mobaGame) {
         mobaGame.destroy();
         mobaGame = null;
     }
+    if (matchPollTimer) {
+        clearInterval(matchPollTimer);
+        matchPollTimer = null;
+    }
+    battleRoomId = null;
+    matchRoomId = null;
     document.getElementById('mobaResultModal').classList.add('hidden');
     document.getElementById('mobaMatchStatus').classList.add('hidden');
     document.getElementById('btnMobaMatch').classList.remove('hidden');
+    document.getElementById('btnMobaCancelMatch').classList.add('hidden');
     document.getElementById('mobaMatchStatus').innerHTML = '<div class="moba-match-spinner"></div><span>正在寻找对手...</span>';
     showPanel('lobbyPanel');
+}
+
+function endBattle() {
+    if (!mobaGame || !mobaGame.world) return;
+    // 确定结果：根据当前世界状态
+    const world = mobaGame.world;
+    const playerHero = mobaGame.playerTeam === 'blue' ? world.blueHero : world.redHero;
+    const opponentHero = mobaGame.playerTeam === 'blue' ? world.redHero : world.blueHero;
+    // 如果对方英雄死亡或我方占优则算胜利，否则算失败
+    let winner = mobaGame.playerTeam;
+    if (playerHero && !playerHero.alive) winner = opponentHero ? opponentHero.team : 'red';
+    const elapsed = world.gameTime || 0;
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = Math.floor(elapsed % 60);
+    showMobaResult({
+        winner: winner,
+        kills: playerHero ? playerHero.kills : 0,
+        deaths: playerHero ? playerHero.deaths : 0,
+        gold: playerHero ? playerHero.gold : 0,
+        time: String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0')
+    });
+    // 销毁游戏
+    mobaGame.destroy();
+    mobaGame = null;
+    if (matchPollTimer) {
+        clearInterval(matchPollTimer);
+        matchPollTimer = null;
+    }
+    battleRoomId = null;
+    matchRoomId = null;
+    document.getElementById('btnMobaMatch').classList.remove('hidden');
+    document.getElementById('btnMobaCancelMatch').classList.add('hidden');
 }
 
 function backToLobbyFromMoba() {
@@ -1571,10 +1872,9 @@ function backToLobbyFromMoba() {
 // MOBA 游戏窗口大小调整
 window.addEventListener('resize', () => {
     if (mobaGame) {
-        const container = document.getElementById('mobaGamePanel');
         const canvas = document.getElementById('mobaCanvas');
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
+        canvas.width = document.documentElement.clientWidth || window.innerWidth;
+        canvas.height = document.documentElement.clientHeight || window.innerHeight;
         mobaGame.resize(canvas.width, canvas.height);
     }
 });

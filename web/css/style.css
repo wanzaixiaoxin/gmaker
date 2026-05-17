@@ -80,6 +80,25 @@ body {
     overflow: hidden;
 }
 
+/* MOBA 游戏面板全屏 */
+#mobaGamePanel.panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    max-width: none;
+    max-height: none;
+    width: 100vw;
+    height: 100vh;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
 .hidden {
     display: none !important;
 }
@@ -790,6 +809,9 @@ button:active {
 
 #mobaCanvas {
     display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
 }
@@ -804,6 +826,12 @@ button:active {
 }
 
 .moba-hud > * {
+    pointer-events: none;
+}
+
+/* 只有按钮和可交互元素才能接收鼠标事件 */
+.moba-hud button,
+.moba-hud .moba-skill {
     pointer-events: auto;
 }
 
@@ -902,6 +930,35 @@ button:active {
     color: #ff4444;
     border-color: #ff4444;
     background: rgba(255,68,68,0.1);
+}
+
+.moba-end-battle-btn {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 0.8125rem;
+    font-weight: bold;
+    color: #ffaa44;
+    background: rgba(0,0,0,0.6);
+    border: 2px solid #6a5a2a;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.moba-end-battle-btn:hover {
+    color: #ff6644;
+    border-color: #ff6644;
+    background: rgba(255,102,68,0.15);
+}
+
+.moba-cancel-btn {
+    background: linear-gradient(135deg, #8a3030, #6a2020) !important;
+    border-color: #aa4444 !important;
+}
+
+.moba-cancel-btn:hover {
+    background: linear-gradient(135deg, #aa4040, #8a3030) !important;
+    border-color: #cc5555 !important;
 }
 
 /* 底部 HUD */
