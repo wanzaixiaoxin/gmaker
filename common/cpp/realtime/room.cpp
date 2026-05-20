@@ -25,6 +25,9 @@ void Room::OnMessage(Message* msg) {
         case MsgType::PlayerAction:
             OnPlayerAction(static_cast<PlayerActionMsg*>(msg));
             break;
+        case MsgType::RoomBroadcast:
+            OnRoomBroadcast(static_cast<RoomBroadcastMsg*>(msg));
+            break;
         case MsgType::RoomTick:
             Tick(static_cast<RoomTickMsg*>(msg)->now_ms);
             break;
@@ -89,6 +92,24 @@ void Room::OnPlayerAction(PlayerActionMsg* msg) {
     if (it == players_.end()) return;
     it->second.anim_state = msg->action_id;
     // TODO: 技能命中判定、伤害计算等
+}
+
+void Room::OnRoomBroadcast(RoomBroadcastMsg* msg) {
+    if (!msg || !broadcast_cb_) return;
+
+    std::vector<uint64_t> conn_ids;
+    conn_ids.reserve(player_to_conn_.size());
+    for (const auto& [_, conn_id] : player_to_conn_) {
+        conn_ids.push_back(conn_id);
+    }
+    if (conn_ids.empty()) return;
+
+    RoomSnapshot snapshot;
+    snapshot.room_id = cfg_.room_id;
+    snapshot.frame_seq = frame_seq_;
+    snapshot.timestamp_ms = last_tick_ms_;
+    snapshot.raw_payload = msg->payload;
+    broadcast_cb_(snapshot, conn_ids);
 }
 
 void Room::BroadcastSnapshot() {

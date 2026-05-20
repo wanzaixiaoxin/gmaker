@@ -1529,6 +1529,7 @@ class GameInput {
         this.mouseScreenY = 0;
         this.keys = {};
         this.onSkillCast = null;
+        this.onMoveCommand = null;
 
         this._boundMouseMove = this._onMouseMove.bind(this);
         this._boundMouseDown = this._onMouseDown.bind(this);
@@ -1594,6 +1595,7 @@ class GameInput {
             }
 
             hero.castSkill(key, this.world, targetPos);
+            if (this.onSkillCast) this.onSkillCast(SKILL_KEYS.indexOf(key), targetPos);
         }
 
         if (key === ' ') {
@@ -1643,6 +1645,7 @@ class GameInput {
         hero.targetY = clamp(wp.y, 1, MAP_SIZE - 1);
         hero.attackTarget = null;
         hero.state = 'moving';
+        if (this.onMoveCommand) this.onMoveCommand(hero.targetX, hero.targetY);
     }
 }
 
@@ -1823,7 +1826,7 @@ class MobaGame {
         if (networkConfig) {
             this.isNetworkMode = true;
             this.networkSync = new NetworkSync(
-                networkConfig.chatAPI,
+                networkConfig.realtimeAPI || networkConfig.chatAPI,
                 networkConfig.playerID,
                 networkConfig.playerName,
                 networkConfig.battleRoomId,
@@ -1836,6 +1839,12 @@ class MobaGame {
         this.renderer = new GameRenderer(this.canvas);
         this.renderer.resize();
         this.input = new GameInput(this.canvas, this.renderer, this.world);
+        this.input.onMoveCommand = (x, y) => {
+            if (this.networkSync) this.networkSync.sendCommand({ kind: 'move', x, y });
+        };
+        this.input.onSkillCast = (slot, targetPos) => {
+            if (this.networkSync) this.networkSync.sendCommand({ kind: 'skill', slot, target: targetPos });
+        };
 
         window.addEventListener('resize', this._boundResize);
 
@@ -1909,6 +1918,9 @@ class MobaGame {
         const skillDef = SKILLS[key];
         if (skillDef && skillDef.type === 'dash') targetPos = null;
         hero.castSkill(key, this.world, targetPos);
+        if (this.networkSync) {
+            this.networkSync.sendCommand({ kind: 'skill', slot, target: targetPos });
+        }
     }
 
     // 外部接口：调整大小
@@ -2047,9 +2059,26 @@ class MobaGame {
         if (type === 'heroState') {
             this.remoteHeroState = data;
         } else if (type === 'command') {
-            // Handle commands like skill casts, etc.
+            this._applyRemoteCommand(data);
         } else if (type === 'event') {
             // Handle game events
+        }
+    }
+
+    _applyRemoteCommand(data) {
+        if (!data || !this.world) return;
+        const opponentTeam = this.playerTeam === 'blue' ? 'red' : 'blue';
+        const hero = this.world.getHero(opponentTeam);
+        if (!hero || !hero.alive) return;
+
+        if (data.kind === 'move') {
+            hero.targetX = clamp(Number(data.x) || hero.x, 1, MAP_SIZE - 1);
+            hero.targetY = clamp(Number(data.y) || hero.y, 1, MAP_SIZE - 1);
+            hero.attackTarget = null;
+            hero.state = 'moving';
+        } else if (data.kind === 'skill') {
+            const key = SKILL_KEYS[data.slot];
+            if (key) hero.castSkill(key, this.world, data.target || null);
         }
     }
 
@@ -2246,8 +2275,8 @@ window.MobaGame = MobaGame;
 // 网络同步类 - PvP 对战通信
 // ============================================================
 class NetworkSync {
-    constructor(chatAPI, playerID, playerName, battleRoomId, isHost, onRemoteInput) {
-        this.chatAPI = chatAPI;
+    constructor(realtimeAPI, playerID, playerName, battleRoomId, isHost, onRemoteInput) {
+        this.realtimeAPI = realtimeAPI;
         this.playerID = playerID;
         this.playerName = playerName;
         this.battleRoomId = battleRoomId;
@@ -2301,7 +2330,8 @@ class NetworkSync {
     }
 
     _send(content) {
-        this.chatAPI.sendMsg(this.battleRoomId, this.playerID, content, this.playerName).catch(() => {});
+        if (!this.realtimeAPI || !this.realtimeAPI.sendInput) return;
+        this.realtimeAPI.sendInput(this.battleRoomId, { senderId: this.playerID, content });
     }
 
     // Handle incoming message from opponent
@@ -2322,8 +2352,8 @@ class NetworkSync {
 
     destroy() {
         this.connected = false;
-        if (this.battleRoomId) {
-            this.chatAPI.leaveRoom(this.battleRoomId, this.playerID).catch(() => {});
+        if (this.battleRoomId && this.realtimeAPI && this.realtimeAPI.leaveRoom) {
+            this.realtimeAPI.leaveRoom(this.battleRoomId, this.playerID).catch(() => {});
         }
     }
 }

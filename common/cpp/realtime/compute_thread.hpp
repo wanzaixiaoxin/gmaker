@@ -68,7 +68,9 @@ private:
     std::condition_variable msg_cv_;
     std::queue<Envelope> msg_queue_;
 
-    // Room 管理（Start 前由外部线程写入，Start 后仅由 RunLoop 读取）
+    std::mutex room_mtx_;
+
+    // Room 管理
     std::unordered_map<uint32_t, std::unique_ptr<Room>> rooms_;
 
     OutputCallback output_cb_;

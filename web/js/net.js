@@ -119,6 +119,7 @@ class WSClient {
         this.pending = new Map();
         this.crypto = new Crypto();
         this.onPacket = null;
+        this.packetHandlers = new Set();
         this.onClose = null;
         this.onKick = null;
         this.connected = false;
@@ -174,8 +175,15 @@ class WSClient {
                     if (pkt.seqID !== 0 && this.pending.has(pkt.seqID)) {
                         this.pending.get(pkt.seqID)(pkt, null);
                         this.pending.delete(pkt.seqID);
-                    } else if (this.onPacket) {
-                        this.onPacket(pkt);
+                    } else {
+                        if (this.onPacket) this.onPacket(pkt);
+                        for (const handler of Array.from(this.packetHandlers)) {
+                            try {
+                                handler(pkt);
+                            } catch (e) {
+                                console.error('packet handler error', e);
+                            }
+                        }
                     }
                 } catch (e) {
                     console.error('decrypt error', e);
@@ -191,6 +199,12 @@ class WSClient {
                 reject(new Error('websocket error'));
             };
         });
+    }
+
+    addPacketHandler(handler) {
+        if (typeof handler !== 'function') return () => {};
+        this.packetHandlers.add(handler);
+        return () => this.packetHandlers.delete(handler);
     }
 
     async doHandshake() {
@@ -270,6 +284,13 @@ class WSClient {
         });
     }
 
+    async send(cmdID, payload, flags = Flag.RPC_FF) {
+        if (!this.connected) throw new Error('not connected');
+        const encrypted = await this.crypto.encrypt(payload);
+        const pkt = PacketCodec.encode(cmdID, 0, flags, encrypted);
+        this.ws.send(pkt);
+    }
+
     close() {
         if (this.ws) {
             this.ws.close();
@@ -314,4 +335,20 @@ const Cmd = {
     CHAT_CLOSE_ROOM_RES: 0x0003000C,
     CHAT_LIST_ROOM_REQ: 0x0003000D,
     CHAT_LIST_ROOM_RES: 0x0003000E,
+    MATCH_REQ: 0x00050000,
+    MATCH_RES: 0x00050001,
+    MATCH_CANCEL_REQ: 0x00050002,
+    MATCH_CANCEL_RES: 0x00050003,
+    MATCH_STATUS_REQ: 0x00050004,
+    MATCH_STATUS_RES: 0x00050005,
+    RT_ROOM_ENTER_REQ: 0x00020000,
+    RT_ROOM_ENTER_RES: 0x00020001,
+    RT_ROOM_LEAVE_REQ: 0x00020002,
+    RT_ROOM_LEAVE_RES: 0x00020003,
+    RT_STATE_SYNC: 0x00020005,
+    RT_INPUT: 0x00020022,
+    RT_BATTLE_READY: 0x00020030,
+    RT_BATTLE_MOVE: 0x00020031,
+    RT_BATTLE_CAST: 0x00020032,
+    RT_BATTLE_RECONNECT: 0x00020033,
 };

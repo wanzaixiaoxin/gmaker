@@ -87,6 +87,11 @@ void BattleRoom::OnMessage(Message* msg) {
             }
             break;
         }
+        case MsgType::RoomBroadcast: {
+            auto* raw = static_cast<RoomBroadcastMsg*>(msg);
+            if (raw) BroadcastToAll(raw->payload);
+            break;
+        }
         case MsgType::RoomTick:
             // Tick 由 ComputeThread::TickRooms 驱动，不走消息
             break;
@@ -719,7 +724,6 @@ HeroEntity* BattleRoom::GetPlayerHero(uint64_t player_id) const {
 }
 
 void BattleRoom::BroadcastToAll(const std::vector<uint8_t>& data) {
-    (void)data;
     // 使用基类的 broadcast_cb_ 发送
     if (!broadcast_cb_) return;
 
@@ -736,12 +740,11 @@ void BattleRoom::BroadcastToAll(const std::vector<uint8_t>& data) {
     snap.room_id = RoomID();
     snap.frame_seq = lockstep_.CurrentFrame();
     snap.timestamp_ms = last_tick_ms_;
+    snap.raw_payload = data;
     broadcast_cb_(snap, conn_ids);
 }
 
 void BattleRoom::BroadcastToTeam(TeamSide team, const std::vector<uint8_t>& data) {
-    (void)team;
-    (void)data;
     // 同上，筛选同一队伍的连接
     if (!broadcast_cb_) return;
 
@@ -755,6 +758,7 @@ void BattleRoom::BroadcastToTeam(TeamSide team, const std::vector<uint8_t>& data
 
     RoomSnapshot snap;
     snap.room_id = RoomID();
+    snap.raw_payload = data;
     broadcast_cb_(snap, conn_ids);
 }
 

@@ -12267,6 +12267,11 @@ $root.protocol = (function() {
      * @property {number} CMD_RT_ROOM_LEAVE_RES=131075 CMD_RT_ROOM_LEAVE_RES value
      * @property {number} CMD_RT_FRAME_SYNC=131076 CMD_RT_FRAME_SYNC value
      * @property {number} CMD_RT_STATE_SYNC=131077 CMD_RT_STATE_SYNC value
+     * @property {number} CMD_RT_INPUT=131106 CMD_RT_INPUT value
+     * @property {number} CMD_RT_BATTLE_READY=131120 CMD_RT_BATTLE_READY value
+     * @property {number} CMD_RT_BATTLE_MOVE=131121 CMD_RT_BATTLE_MOVE value
+     * @property {number} CMD_RT_BATTLE_CAST=131122 CMD_RT_BATTLE_CAST value
+     * @property {number} CMD_RT_BATTLE_RECONNECT=131123 CMD_RT_BATTLE_RECONNECT value
      */
     protocol.CmdRealtime = (function() {
         var valuesById = {}, values = Object.create(valuesById);
@@ -12277,6 +12282,11 @@ $root.protocol = (function() {
         values[valuesById[131075] = "CMD_RT_ROOM_LEAVE_RES"] = 131075;
         values[valuesById[131076] = "CMD_RT_FRAME_SYNC"] = 131076;
         values[valuesById[131077] = "CMD_RT_STATE_SYNC"] = 131077;
+        values[valuesById[131106] = "CMD_RT_INPUT"] = 131106;
+        values[valuesById[131120] = "CMD_RT_BATTLE_READY"] = 131120;
+        values[valuesById[131121] = "CMD_RT_BATTLE_MOVE"] = 131121;
+        values[valuesById[131122] = "CMD_RT_BATTLE_CAST"] = 131122;
+        values[valuesById[131123] = "CMD_RT_BATTLE_RECONNECT"] = 131123;
         return values;
     })();
 

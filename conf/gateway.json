@@ -27,7 +27,7 @@
     "addrs": ["127.0.0.1:2379"]
   },
   "upstream": {
-    "services": ["biz", "chat", "login"]
+    "services": ["biz", "chat", "login", "match", "realtime"]
   },
   "coalescer_interval_ms": 16,
   "security": {

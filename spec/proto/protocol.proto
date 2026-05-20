@@ -176,6 +176,11 @@ enum CmdRealtime {
     CMD_RT_ROOM_LEAVE_RES = 0x00020003;
     CMD_RT_FRAME_SYNC     = 0x00020004;
     CMD_RT_STATE_SYNC     = 0x00020005;
+    CMD_RT_INPUT          = 0x00020022;
+    CMD_RT_BATTLE_READY   = 0x00020030;
+    CMD_RT_BATTLE_MOVE    = 0x00020031;
+    CMD_RT_BATTLE_CAST    = 0x00020032;
+    CMD_RT_BATTLE_RECONNECT = 0x00020033;
 }
 
 // ============================================================

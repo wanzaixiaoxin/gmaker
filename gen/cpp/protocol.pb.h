@@ -554,6 +554,11 @@ enum CmdRealtime : int {
   CMD_RT_ROOM_LEAVE_RES = 131075,
   CMD_RT_FRAME_SYNC = 131076,
   CMD_RT_STATE_SYNC = 131077,
+  CMD_RT_INPUT = 131106,
+  CMD_RT_BATTLE_READY = 131120,
+  CMD_RT_BATTLE_MOVE = 131121,
+  CMD_RT_BATTLE_CAST = 131122,
+  CMD_RT_BATTLE_RECONNECT = 131123,
   CmdRealtime_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   CmdRealtime_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -564,11 +569,11 @@ extern const uint32_t CmdRealtime_internal_data_[];
 inline constexpr CmdRealtime CmdRealtime_MIN =
     static_cast<CmdRealtime>(0);
 inline constexpr CmdRealtime CmdRealtime_MAX =
-    static_cast<CmdRealtime>(131077);
+    static_cast<CmdRealtime>(131123);
 [[nodiscard]] inline bool CmdRealtime_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, CmdRealtime_internal_data_);
 }
-inline constexpr int CmdRealtime_ARRAYSIZE = 131077 + 1;
+inline constexpr int CmdRealtime_ARRAYSIZE = 131123 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 CmdRealtime_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(CmdRealtime) {

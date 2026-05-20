@@ -297,19 +297,23 @@ const char descriptor_table_protodef_protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "CH_REQ\020\200\200\024\022\023\n\rCMD_MATCH_RES\020\201\200\024\022\032\n\024CMD_M"
     "ATCH_CANCEL_REQ\020\202\200\024\022\032\n\024CMD_MATCH_CANCEL_"
     "RES\020\203\200\024\022\032\n\024CMD_MATCH_STATUS_REQ\020\204\200\024\022\032\n\024C"
-    "MD_MATCH_STATUS_RES\020\205\200\024*\307\001\n\013CmdRealtime\022"
+    "MD_MATCH_STATUS_RES\020\205\200\024*\311\002\n\013CmdRealtime\022"
     "\022\n\016CMD_RT_UNKNOWN\020\000\022\033\n\025CMD_RT_ROOM_ENTER"
     "_REQ\020\200\200\010\022\033\n\025CMD_RT_ROOM_ENTER_RES\020\201\200\010\022\033\n"
     "\025CMD_RT_ROOM_LEAVE_REQ\020\202\200\010\022\033\n\025CMD_RT_ROO"
     "M_LEAVE_RES\020\203\200\010\022\027\n\021CMD_RT_FRAME_SYNC\020\204\200\010"
-    "\022\027\n\021CMD_RT_STATE_SYNC\020\205\200\010B)Z\'github.com/"
-    "gmaker/luffa/gen/go/protocolb\006proto3"
+    "\022\027\n\021CMD_RT_STATE_SYNC\020\205\200\010\022\022\n\014CMD_RT_INPU"
+    "T\020\242\200\010\022\031\n\023CMD_RT_BATTLE_READY\020\260\200\010\022\030\n\022CMD_"
+    "RT_BATTLE_MOVE\020\261\200\010\022\030\n\022CMD_RT_BATTLE_CAST"
+    "\020\262\200\010\022\035\n\027CMD_RT_BATTLE_RECONNECT\020\263\200\010B)Z\'g"
+    "ithub.com/gmaker/luffa/gen/go/protocolb\006"
+    "proto3"
 };
 static ::absl::once_flag descriptor_table_protocol_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_protocol_2eproto = {
     false,
     false,
-    2756,
+    2886,
     descriptor_table_protodef_protocol_2eproto,
     "protocol.proto",
     &descriptor_table_protocol_2eproto_once,
@@ -399,7 +403,7 @@ CmdRealtime_descriptor() {
   return file_level_enum_descriptors_protocol_2eproto[10];
 }
 PROTOBUF_CONSTINIT const uint32_t CmdRealtime_internal_data_[] = {
-    65536u, 393216u, 131075u, 131073u, 131077u, 131072u, 131074u, 131076u, };
+    65536u, 720896u, 131120u, 131075u, 131122u, 131073u, 131077u, 131121u, 131123u, 131072u, 131074u, 131076u, 131106u, };
 // ===================================================================
 
 class PlayerBindReq::_Internal {

@@ -50,6 +50,7 @@ private:
     void OnPlayerLeave(PlayerLeaveMsg* msg);
     void OnPlayerMove(PlayerMoveMsg* msg);
     void OnPlayerAction(PlayerActionMsg* msg);
+    void OnRoomBroadcast(RoomBroadcastMsg* msg);
 
     void BroadcastSnapshot();
 

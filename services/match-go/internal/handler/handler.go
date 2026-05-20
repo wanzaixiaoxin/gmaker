@@ -10,8 +10,8 @@ import (
 	"github.com/gmaker/luffa/services/match-go/internal/model"
 	"github.com/gmaker/luffa/services/match-go/internal/service"
 
-	matchpb "github.com/gmaker/luffa/gen/go/match"
 	commonpb "github.com/gmaker/luffa/gen/go/common"
+	matchpb "github.com/gmaker/luffa/gen/go/match"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -86,7 +86,7 @@ func handleMatchReq(conn *net.TCPConn, pkt *net.Packet, svc *service.MatchServic
 		TeamSize: teamSize,
 	}
 
-	if err := svc.Enqueue(ticket); err != nil {
+	if err := svc.Enqueue(ticket, gwConnID, conn); err != nil {
 		code := uint32(1)
 		if me, ok := err.(*engine.MatchError); ok {
 			code = uint32(me.Code)

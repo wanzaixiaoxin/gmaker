@@ -678,6 +678,53 @@ const PROTO_DESCRIPTOR = {
         }
       }
     },
+    "match": {
+      "options": {
+        "go_package": "github.com/gmaker/luffa/gen/go/match"
+      },
+      "nested": {
+        "MatchReq": {
+          "fields": {
+            "playerId": { "type": "uint64", "id": 1 },
+            "mmr": { "type": "int32", "id": 2 },
+            "mode": { "type": "int32", "id": 3 },
+            "teamSize": { "type": "int32", "id": 4 }
+          }
+        },
+        "MatchRes": {
+          "fields": {
+            "result": { "type": "common.Result", "id": 1 },
+            "matchId": { "type": "uint64", "id": 2 },
+            "roomId": { "type": "uint64", "id": 3 },
+            "teamA": { "rule": "repeated", "type": "uint64", "id": 4 },
+            "teamB": { "rule": "repeated", "type": "uint64", "id": 5 }
+          }
+        },
+        "MatchCancelReq": {
+          "fields": {
+            "playerId": { "type": "uint64", "id": 1 }
+          }
+        },
+        "MatchCancelRes": {
+          "fields": {
+            "result": { "type": "common.Result", "id": 1 }
+          }
+        },
+        "MatchStatusReq": {
+          "fields": {
+            "playerId": { "type": "uint64", "id": 1 }
+          }
+        },
+        "MatchStatusRes": {
+          "fields": {
+            "result": { "type": "common.Result", "id": 1 },
+            "state": { "type": "string", "id": 2 },
+            "waitMs": { "type": "int32", "id": 3 },
+            "queueLen": { "type": "int32", "id": 4 }
+          }
+        }
+      }
+    },
     "protocol": {
       "options": {
         "go_package": "github.com/gmaker/luffa/gen/go/protocol"
@@ -694,6 +741,7 @@ const PROTO_DESCRIPTOR = {
             "SERVICE_LOGIN": 12,
             "SERVICE_LOGSTATS": 13,
             "SERVICE_REALTIME": 20,
+            "SERVICE_MATCH": 21,
             "SERVICE_BOT": 30
           }
         },
@@ -800,6 +848,17 @@ const PROTO_DESCRIPTOR = {
             "CMD_LOGSTATS_BASE": 262144
           }
         },
+        "CmdMatch": {
+          "values": {
+            "CMD_MATCH_UNKNOWN": 0,
+            "CMD_MATCH_REQ": 327680,
+            "CMD_MATCH_RES": 327681,
+            "CMD_MATCH_CANCEL_REQ": 327682,
+            "CMD_MATCH_CANCEL_RES": 327683,
+            "CMD_MATCH_STATUS_REQ": 327684,
+            "CMD_MATCH_STATUS_RES": 327685
+          }
+        },
         "CmdRealtime": {
           "values": {
             "CMD_RT_UNKNOWN": 0,
@@ -808,7 +867,12 @@ const PROTO_DESCRIPTOR = {
             "CMD_RT_ROOM_LEAVE_REQ": 131074,
             "CMD_RT_ROOM_LEAVE_RES": 131075,
             "CMD_RT_FRAME_SYNC": 131076,
-            "CMD_RT_STATE_SYNC": 131077
+            "CMD_RT_STATE_SYNC": 131077,
+            "CMD_RT_INPUT": 131106,
+            "CMD_RT_BATTLE_READY": 131120,
+            "CMD_RT_BATTLE_MOVE": 131121,
+            "CMD_RT_BATTLE_CAST": 131122,
+            "CMD_RT_BATTLE_RECONNECT": 131123
           }
         },
         "CmdRange": {
@@ -840,6 +904,10 @@ const PROTO_DESCRIPTOR = {
             "realtime": {
               "type": "CmdRange",
               "id": 4
+            },
+            "match": {
+              "type": "CmdRange",
+              "id": 5
             }
           }
         }
@@ -1208,6 +1276,8 @@ const LOGIN_HTTP = 'http://127.0.0.1:8084';
 
 let wsClient = null;
 let chatAPI = null;
+let matchAPI = null;
+let realtimeAPI = null;
 let playerID = 0;
 let playerName = '';
 let token = '';
@@ -1305,6 +1375,8 @@ async function doAuth() {
         wsClient = new WSClient(wsUrl);
         await wsClient.connect();
         chatAPI = new ChatAPI(wsClient, root);
+        matchAPI = new MatchAPI(wsClient, root);
+        realtimeAPI = new RealtimeAPI(wsClient);
 
         setStatus('已连接 | 玩家ID: ' + playerID);
         showMsg('authMsg', '', false);
@@ -1371,6 +1443,8 @@ function returnToLogin(message) {
     if (wsClient) wsClient.close();
     wsClient = null;
     chatAPI = null;
+    matchAPI = null;
+    realtimeAPI = null;
     playerID = 0;
     playerName = '';
     token = '';
@@ -1545,12 +1619,17 @@ function escapeHtml(text) {
 
 // ==================== MOBA 游戏相关 ====================
 let mobaGame = null;
-let matchRoomId = null;
 let battleRoomId = null;
 let matchPollTimer = null;
-let matchPollActive = false; // 防止 match poll 处理器在游戏中冲突
+let matchPollActive = false;
+let activeMatchId = null;
+let activeMatchInfo = null;
 
-function startMobaMatch() {
+async function startMobaMatch() {
+    if (!matchAPI) {
+        showMsg('lobbyMsg', '请先登录并连接 Gateway', true);
+        return;
+    }
     const statusEl = document.getElementById('mobaMatchStatus');
     const btnEl = document.getElementById('btnMobaMatch');
     const cancelBtnEl = document.getElementById('btnMobaCancelMatch');
@@ -1559,24 +1638,40 @@ function startMobaMatch() {
     cancelBtnEl.classList.remove('hidden');
     statusEl.innerHTML = '<div class="moba-match-spinner"></div><span>正在寻找对手...</span>';
 
-    // 1. 创建或加入匹配房间
-    joinMatchRoom();
+    matchPollActive = true;
+    installMobaPacketRouter();
+    try {
+        const res = await matchAPI.enqueue(playerID, 1000, 3, 1);
+        if (!res.result || !res.result.ok) throw new Error(res.result ? res.result.msg : '入队失败');
+        if (res.roomId && Number(res.roomId) > 0) {
+            onMobaMatched(res);
+        } else {
+            statusEl.innerHTML = '<div class="moba-match-spinner"></div><span>已进入匹配队列，等待对手...</span>';
+            startMatchStatusPoll();
+        }
+    } catch(e) {
+        matchPollActive = false;
+        statusEl.innerHTML = '<span style="color:#e74c3c">匹配失败: ' + e.message + '</span>';
+        btnEl.classList.remove('hidden');
+        cancelBtnEl.classList.add('hidden');
+    }
 }
 
-function cancelMatch() {
-    // 停止轮询
+async function cancelMatch() {
     matchPollActive = false;
     if (matchPollTimer) {
         clearInterval(matchPollTimer);
         matchPollTimer = null;
     }
-    // 离开房间
-    if (battleRoomId && chatAPI) {
-        chatAPI.leaveRoom(battleRoomId, playerID).catch(() => {});
+    if (!battleRoomId && matchAPI) {
+        try { await matchAPI.cancel(playerID); } catch(e) {}
+    }
+    if (battleRoomId && realtimeAPI) {
+        realtimeAPI.leaveRoom(battleRoomId, playerID).catch(() => {});
     }
     battleRoomId = null;
-    matchRoomId = null;
-    // 重置 UI
+    activeMatchId = null;
+    activeMatchInfo = null;
     const statusEl = document.getElementById('mobaMatchStatus');
     const btnEl = document.getElementById('btnMobaMatch');
     const cancelBtnEl = document.getElementById('btnMobaCancelMatch');
@@ -1586,133 +1681,81 @@ function cancelMatch() {
     cancelBtnEl.classList.add('hidden');
 }
 
-async function joinMatchRoom() {
-    const statusEl = document.getElementById('mobaMatchStatus');
-    try {
-        // 创建一个唯一的匹配房间
-        const res = await chatAPI.createRoom('MOBA_1V1_MATCH_' + Date.now(), playerID);
-        if (res.room && res.room.roomId) {
-            battleRoomId = String(res.room.roomId);
-
-            // 创建者也需要 joinRoom，这样 Gateway 才会转发房间广播消息
-            try {
-                const joinRes = await chatAPI.joinRoom(battleRoomId, playerID);
-            } catch(e2) {
-                console.warn('[MatchRoom] creator joinRoom failed (non-fatal):', e2.message);
-            }
-
-            // 我是房主（蓝方），等待对手
-            statusEl.innerHTML = '<div class="moba-match-spinner"></div><span>已创建对战房间，等待对手加入...</span>';
-
-            // 开始轮询房间列表，看是否有人加入
-            startMatchPoll();
-        } else {
-            statusEl.innerHTML = '<span style="color:#e74c3c">创建房间失败</span>';
-            document.getElementById('btnMobaMatch').classList.remove('hidden');
-        }
-    } catch(e) {
-        statusEl.innerHTML = '<span style="color:#e74c3c">匹配失败: ' + e.message + '</span>';
-        document.getElementById('btnMobaMatch').classList.remove('hidden');
-    }
-}
-
-function startMatchPoll() {
-    matchPollActive = true;
-    // 通过 chatAPI.onNotify 监听消息来检测对手
-    // 设置一个特殊的匹配消息处理器
-    const originalOnPacket = chatAPI.ws.onPacket;
-    chatAPI.ws.onPacket = (pkt) => {
-        // 先调用原来的处理器（聊天消息）
-        if (originalOnPacket) originalOnPacket(pkt);
-
-        // 匹配完成后不再处理，避免与 battle notify 冲突
-        if (!matchPollActive) return;
-
-        // 检查是否是对战房间的消息
-        if (pkt.cmdID === Cmd.CHAT_MSG_NOTIFY) {
-            try {
-                const NotifyType = root.lookupType('chat.ChatMsgNotify');
-                const msg = NotifyType.decode(pkt.payload);
-                if (String(msg.msg.roomId) === String(battleRoomId) &&
-                    String(msg.msg.senderId) !== String(playerID)) {
-                    // 对手加入了！
-                    onOpponentFound(msg.msg.senderId, msg.msg.senderName);
-                }
-            } catch(e) { console.error('[MatchPoll] decode error', e); }
-        }
-    };
-
-    // 同时也发送一条 "等待对手" 的消息
-    chatAPI.sendMsg(battleRoomId, playerID, JSON.stringify({t:'wait', pid: playerID}), playerName).catch(()=>{});
-
-    // 轮询房间成员（作为备选检测方式）
+function startMatchStatusPoll() {
+    if (matchPollTimer) clearInterval(matchPollTimer);
     matchPollTimer = setInterval(async () => {
+        if (!matchPollActive || !matchAPI) return;
         try {
-            const history = await chatAPI.getHistory(battleRoomId, 10);
-            const msgCount = history && history.msgs ? history.msgs.length : 0;
-            if (msgCount > 0) {
-                // 详细打印每条消息的摘要
-            }
-            if (history.msgs) {
-                for (const m of history.msgs) {
-                    const content = m.content || '';
-                    if (content.startsWith('{')) {
-                        try {
-                            const data = JSON.parse(content);
-                            if (data.t === 'join' && String(data.pid) !== String(playerID)) {
-                                onOpponentFound(m.senderId, m.senderName);
-                                return;
-                            }
-                        } catch(e) {}
-                    }
-                }
-            }
-        } catch(e) { console.error('[MatchPoll] poll error', e); }
-    }, 2000);
+            const res = await matchAPI.status(playerID);
+            const waitSec = res.waitMs ? Math.floor(Number(res.waitMs) / 1000) : 0;
+            const queueLen = res.queueLen || 0;
+            const statusEl = document.getElementById('mobaMatchStatus');
+            statusEl.innerHTML = '<div class="moba-match-spinner"></div><span>匹配中 ' + waitSec + 's · 队列 ' + queueLen + '</span>';
+        } catch(e) {}
+    }, 1000);
 }
 
-function onOpponentFound(opponentId, opponentName) {
-    // 停用 match poll 处理器，防止与 battle notify 冲突
+function onMobaMatched(matchRes) {
+    if (!matchRes || !matchRes.roomId) return;
     matchPollActive = false;
     if (matchPollTimer) {
         clearInterval(matchPollTimer);
         matchPollTimer = null;
     }
-
+    activeMatchInfo = matchRes;
+    activeMatchId = matchRes.matchId;
+    battleRoomId = String(matchRes.roomId);
     const statusEl = document.getElementById('mobaMatchStatus');
     const cancelBtnEl = document.getElementById('btnMobaCancelMatch');
     if (cancelBtnEl) cancelBtnEl.classList.add('hidden');
-    statusEl.innerHTML = '<span style="color:#2ecc71">找到对手: ' + (opponentName || opponentId) + '！正在进入战场...</span>';
+    statusEl.innerHTML = '<span style="color:#2ecc71">找到对手！正在进入战场...</span>';
 
     setTimeout(() => {
         showPanel('mobaGamePanel');
-        initMobaGame(true, battleRoomId);
+        const isBlue = (matchRes.teamA || []).map(String).includes(String(playerID));
+        initMobaGame(true, battleRoomId, isBlue ? 'blue' : 'red');
     }, 1000);
 }
 
-// Override chatAPI.onNotify to also handle battle messages during game
-function setupBattleNotify(battleRoomId) {
-    const originalOnPacket = chatAPI.ws.onPacket;
-    chatAPI.ws.onPacket = (pkt) => {
-        if (originalOnPacket) originalOnPacket(pkt);
-
-        if (pkt.cmdID === Cmd.CHAT_MSG_NOTIFY) {
+function installMobaPacketRouter() {
+    if (!wsClient || wsClient._mobaRouterInstalled) return;
+    const handler = (pkt) => {
+        if (pkt.cmdID === Cmd.MATCH_RES) {
+            if (!matchPollActive && battleRoomId) return;
             try {
-                const NotifyType = root.lookupType('chat.ChatMsgNotify');
-                const msg = NotifyType.decode(pkt.payload);
-                if (String(msg.msg.roomId) === String(battleRoomId) &&
-                    String(msg.msg.senderId) !== String(playerID)) {
-                    // 这是来自对手的游戏数据
-                    if (mobaGame && mobaGame.networkSync) {
-                        mobaGame.networkSync.handleMessage(msg.msg.content);
-                    }
-                }
+                const MatchRes = root.lookupType('match.MatchRes');
+                const res = MatchRes.decode(pkt.payload);
+                if (res.result && res.result.ok && res.roomId) onMobaMatched(res);
+            } catch(e) {}
+        } else if (pkt.cmdID === Cmd.RT_STATE_SYNC) {
+            try {
+                const text = new TextDecoder().decode(pkt.payload);
+                const data = JSON.parse(text);
+                if (data.senderId && String(data.senderId) === String(playerID)) return;
+                if (mobaGame && mobaGame.networkSync) mobaGame.networkSync.handleMessage(data.content || text);
             } catch(e) {}
         }
     };
+    if (wsClient.addPacketHandler) {
+        wsClient.addPacketHandler(handler);
+    } else {
+        const originalOnPacket = wsClient.onPacket;
+        wsClient.onPacket = (pkt) => {
+            if (originalOnPacket) originalOnPacket(pkt);
+            handler(pkt);
+        };
+    }
+    wsClient._mobaRouterInstalled = true;
 }
 
-function initMobaGame(isPvP, roomId) {
+async function enterRealtimeRoom(roomId, team) {
+    const spawn = team === 'blue' ? { x: 10, y: 90 } : { x: 90, y: 10 };
+    if (realtimeAPI) {
+        try { await realtimeAPI.enterRoom(roomId, playerID, spawn.x, spawn.y); } catch(e) {}
+    }
+}
+
+function initMobaGame(isPvP, roomId, team = 'blue') {
     // 先销毁旧实例
     if (mobaGame) {
         mobaGame.destroy();
@@ -1731,45 +1774,33 @@ function initMobaGame(isPvP, roomId) {
     let networkConfig = null;
     if (isPvP && roomId) {
         networkConfig = {
-            chatAPI: chatAPI,
+            realtimeAPI: realtimeAPI,
             playerID: playerID,
             playerName: playerName,
             battleRoomId: roomId,
-            isHost: true  // 房主 = 蓝方
+            isHost: team === 'blue'
         };
-        setupBattleNotify(roomId);
+        installMobaPacketRouter();
+        enterRealtimeRoom(roomId, team);
     }
 
     mobaGame = new MobaGame(canvas, minimapCanvas, (result) => {
         // 游戏结束回调
         showMobaResult(result);
     });
-    mobaGame.start('blue', networkConfig);
+    mobaGame.start(team, networkConfig);
 }
 
 async function joinMobaBattle(roomId, roomName) {
-    try {
-        const joinRes = await chatAPI.joinRoom(roomId, playerID);
-        battleRoomId = String(roomId);
-        // Send join notification
-        const sendRes = await chatAPI.sendMsg(roomId, playerID, JSON.stringify({t:'join', pid: playerID}), playerName);
-
-        showPanel('mobaMatchPanel');
-        const statusEl = document.getElementById('mobaMatchStatus');
-        statusEl.classList.remove('hidden');
-        document.getElementById('btnMobaMatch').classList.add('hidden');
-        const cancelBtnEl = document.getElementById('btnMobaCancelMatch');
-        if (cancelBtnEl) cancelBtnEl.classList.add('hidden');
-        statusEl.innerHTML = '<span style="color:#2ecc71">找到对手！正在进入战场...</span>';
-
-        setTimeout(() => {
-            showPanel('mobaGamePanel');
-            // 红方（非房主）
-            initMobaGameAsClient(battleRoomId);
-        }, 1000);
-    } catch(e) {
-        alert('加入对战失败: ' + e.message);
-    }
+    void roomId;
+    void roomName;
+    showPanel('mobaMatchPanel');
+    document.getElementById('mobaMatchStatus').classList.remove('hidden');
+    document.getElementById('mobaMatchStatus').innerHTML = '<div class="moba-match-spinner"></div><span>正在加入匹配队列...</span>';
+    document.getElementById('btnMobaMatch').classList.add('hidden');
+    const cancelBtnEl = document.getElementById('btnMobaCancelMatch');
+    if (cancelBtnEl) cancelBtnEl.classList.remove('hidden');
+    await startMobaMatch();
 }
 
 function initMobaGameAsClient(roomId) {
@@ -1783,13 +1814,14 @@ function initMobaGameAsClient(roomId) {
     canvas.height = h;
 
     const networkConfig = {
-        chatAPI: chatAPI,
+        realtimeAPI: realtimeAPI,
         playerID: playerID,
         playerName: playerName,
         battleRoomId: roomId,
         isHost: false  // 非房主 = 红方
     };
-    setupBattleNotify(roomId);
+    installMobaPacketRouter();
+    enterRealtimeRoom(roomId, 'red');
 
     mobaGame = new MobaGame(canvas, minimapCanvas, (result) => {
         showMobaResult(result);
@@ -1824,7 +1856,8 @@ function exitMobaGame() {
         matchPollTimer = null;
     }
     battleRoomId = null;
-    matchRoomId = null;
+    activeMatchId = null;
+    activeMatchInfo = null;
     document.getElementById('mobaResultModal').classList.add('hidden');
     document.getElementById('mobaMatchStatus').classList.add('hidden');
     document.getElementById('btnMobaMatch').classList.remove('hidden');
@@ -1860,7 +1893,8 @@ function endBattle() {
         matchPollTimer = null;
     }
     battleRoomId = null;
-    matchRoomId = null;
+    activeMatchId = null;
+    activeMatchInfo = null;
     document.getElementById('btnMobaMatch').classList.remove('hidden');
     document.getElementById('btnMobaCancelMatch').classList.add('hidden');
 }

@@ -691,6 +691,53 @@
         }
       }
     },
+    "match": {
+      "options": {
+        "go_package": "github.com/gmaker/luffa/gen/go/match"
+      },
+      "nested": {
+        "MatchReq": {
+          "fields": {
+            "playerId": { "type": "uint64", "id": 1 },
+            "mmr": { "type": "int32", "id": 2 },
+            "mode": { "type": "int32", "id": 3 },
+            "teamSize": { "type": "int32", "id": 4 }
+          }
+        },
+        "MatchRes": {
+          "fields": {
+            "result": { "type": "common.Result", "id": 1 },
+            "matchId": { "type": "uint64", "id": 2 },
+            "roomId": { "type": "uint64", "id": 3 },
+            "teamA": { "rule": "repeated", "type": "uint64", "id": 4 },
+            "teamB": { "rule": "repeated", "type": "uint64", "id": 5 }
+          }
+        },
+        "MatchCancelReq": {
+          "fields": {
+            "playerId": { "type": "uint64", "id": 1 }
+          }
+        },
+        "MatchCancelRes": {
+          "fields": {
+            "result": { "type": "common.Result", "id": 1 }
+          }
+        },
+        "MatchStatusReq": {
+          "fields": {
+            "playerId": { "type": "uint64", "id": 1 }
+          }
+        },
+        "MatchStatusRes": {
+          "fields": {
+            "result": { "type": "common.Result", "id": 1 },
+            "state": { "type": "string", "id": 2 },
+            "waitMs": { "type": "int32", "id": 3 },
+            "queueLen": { "type": "int32", "id": 4 }
+          }
+        }
+      }
+    },
     "protocol": {
       "options": {
         "go_package": "github.com/gmaker/luffa/gen/go/protocol"
@@ -707,6 +754,7 @@
             "SERVICE_LOGIN": 12,
             "SERVICE_LOGSTATS": 13,
             "SERVICE_REALTIME": 20,
+            "SERVICE_MATCH": 21,
             "SERVICE_BOT": 30
           }
         },
@@ -796,6 +844,17 @@
             "CMD_LOGSTATS_BASE": 262144
           }
         },
+        "CmdMatch": {
+          "values": {
+            "CMD_MATCH_UNKNOWN": 0,
+            "CMD_MATCH_REQ": 327680,
+            "CMD_MATCH_RES": 327681,
+            "CMD_MATCH_CANCEL_REQ": 327682,
+            "CMD_MATCH_CANCEL_RES": 327683,
+            "CMD_MATCH_STATUS_REQ": 327684,
+            "CMD_MATCH_STATUS_RES": 327685
+          }
+        },
         "CmdRealtime": {
           "values": {
             "CMD_RT_UNKNOWN": 0,
@@ -804,7 +863,12 @@
             "CMD_RT_ROOM_LEAVE_REQ": 131074,
             "CMD_RT_ROOM_LEAVE_RES": 131075,
             "CMD_RT_FRAME_SYNC": 131076,
-            "CMD_RT_STATE_SYNC": 131077
+            "CMD_RT_STATE_SYNC": 131077,
+            "CMD_RT_INPUT": 131106,
+            "CMD_RT_BATTLE_READY": 131120,
+            "CMD_RT_BATTLE_MOVE": 131121,
+            "CMD_RT_BATTLE_CAST": 131122,
+            "CMD_RT_BATTLE_RECONNECT": 131123
           }
         },
         "CmdRange": {
@@ -836,6 +900,10 @@
             "realtime": {
               "type": "CmdRange",
               "id": 4
+            },
+            "match": {
+              "type": "CmdRange",
+              "id": 5
             }
           }
         }

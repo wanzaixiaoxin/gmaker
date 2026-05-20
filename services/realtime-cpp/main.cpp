@@ -27,13 +27,14 @@ constexpr uint32_t CMD_REALTIME_ENTER  = protocol::CMD_RT_ROOM_ENTER_REQ;
 constexpr uint32_t CMD_REALTIME_LEAVE  = protocol::CMD_RT_ROOM_LEAVE_REQ;
 constexpr uint32_t CMD_REALTIME_MOVE   = 0x00020020; // 预留：玩家移动（proto 待补充）
 constexpr uint32_t CMD_REALTIME_ACTION = 0x00020021; // 预留：玩家动作（proto 待补充）
+constexpr uint32_t CMD_REALTIME_INPUT  = 0x00020022; // 客户端轻量状态同步
 constexpr uint32_t CMD_REALTIME_SYNC   = protocol::CMD_RT_STATE_SYNC;
 
 // MOBA 战斗命令
-constexpr uint32_t CMD_BATTLE_READY     = 0x00030001; // 加载完成
-constexpr uint32_t CMD_BATTLE_MOVE      = 0x00030002; // 英雄移动输入
-constexpr uint32_t CMD_BATTLE_CAST      = 0x00030003; // 释放技能
-constexpr uint32_t CMD_BATTLE_RECONNECT = 0x00030004; // 重连
+constexpr uint32_t CMD_BATTLE_READY     = 0x00020030; // 加载完成
+constexpr uint32_t CMD_BATTLE_MOVE      = 0x00020031; // 英雄移动输入
+constexpr uint32_t CMD_BATTLE_CAST      = 0x00020032; // 释放技能
+constexpr uint32_t CMD_BATTLE_RECONNECT = 0x00020033; // 重连
 
 // RealtimeServer 实时服
 // Gateway 主动连接到 Realtime，Realtime 通过已有连接回推 Snapshot
@@ -42,7 +43,6 @@ struct RealtimeServer {
     void SetBattleMode(bool enabled) { battle_mode_ = enabled; }
 
 private:
-    std::atomic<uint32_t> next_dynamic_room_id_{100}; // 动态房间 ID 从 100 开始
     bool battle_mode_ = false; // MOBA 战斗模式
 
 public:
@@ -184,7 +184,10 @@ private:
     }
 
     void OnClientPacket(AsyncTCPConnection* conn, Packet& pkt) {
-        (void)conn;
+        if (pkt.payload.Size() >= 8) {
+            BindClientRoute(ReadU64BE(pkt.payload.Data()), conn);
+        }
+
         // Gateway -> Realtime：解析客户端消息，投递到 Compute Thread
         switch (pkt.header.cmd_id) {
             case CMD_REALTIME_ENTER: {
@@ -195,19 +198,22 @@ private:
                 float spawn_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
                 float spawn_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 24);
 
-                // room_id=0 表示动态创建房间（匹配服分配）
+                // 客户端按匹配服下发的 room_id 进入，缺失时由实时服分配兜底房间。
                 if (room_id == 0) {
-                    room_id = next_dynamic_room_id_.fetch_add(1);
+                    room_id = 1;
+                }
+                {
                     RoomConfig cfg;
                     cfg.room_id = room_id;
-                    cfg.max_players = 20;
-                    cfg.map_size_x = 1000.0f;
-                    cfg.map_size_z = 1000.0f;
+                    cfg.max_players = battle_mode_ ? 10 : 20;
+                    cfg.map_size_x = battle_mode_ ? 100.0f : 1000.0f;
+                    cfg.map_size_z = battle_mode_ ? 100.0f : 1000.0f;
                     cfg.tick_rate_hz = 60;
                     cfg.enable_aoi = true;
-                    cfg.aoi_radius = 200.0f;
-                    compute_->CreateRoom(cfg);
-                    if (logger_) logger_->Info("Dynamic room created: " + std::to_string(room_id));
+                    cfg.aoi_radius = battle_mode_ ? 50.0f : 200.0f;
+                    if (compute_->CreateRoom(cfg) && logger_) {
+                        logger_->Info("Dynamic room created: " + std::to_string(room_id));
+                    }
                 }
 
                 auto msg = std::make_unique<PlayerEnterMsg>();
@@ -245,7 +251,7 @@ private:
                 break;
             }
             case CMD_REALTIME_ACTION: {
-                if (pkt.payload.Size() < 28) return;
+                if (pkt.payload.Size() < 32) return;
                 uint64_t gw_conn_id = ReadU64BE(pkt.payload.Data());
                 (void)gw_conn_id;
                 uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
@@ -260,6 +266,14 @@ private:
                 compute_->PushMessage(room_id, std::move(msg));
                 break;
             }
+            case CMD_REALTIME_INPUT: {
+                if (pkt.payload.Size() < 12) return;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
+                auto msg = std::make_unique<RoomBroadcastMsg>();
+                msg->payload.assign(pkt.payload.Data() + 12, pkt.payload.Data() + pkt.payload.Size());
+                compute_->PushMessage(room_id, std::move(msg));
+                break;
+            }
             default:
                 break;
         }
@@ -268,20 +282,20 @@ private:
         switch (pkt.header.cmd_id) {
             case CMD_BATTLE_READY: {
                 if (pkt.payload.Size() < 20) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.Data());
-                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
+                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
                 auto msg = std::make_unique<BattleReadyMsg>();
                 msg->player_id = player_id;
                 compute_->PushMessage(room_id, std::move(msg));
                 break;
             }
             case CMD_BATTLE_MOVE: {
-                if (pkt.payload.Size() < 36) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.Data());
-                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
-                float move_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 12);
-                float move_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 16);
-                uint32_t input_seq = ReadU32BE(pkt.payload.Data() + 20);
+                if (pkt.payload.Size() < 32) return;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
+                float move_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
+                float move_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 24);
+                uint32_t input_seq = ReadU32BE(pkt.payload.Data() + 28);
                 auto msg = std::make_unique<HeroMoveInputMsg>();
                 msg->player_id = player_id;
                 msg->move_x = move_x;
@@ -291,14 +305,14 @@ private:
                 break;
             }
             case CMD_BATTLE_CAST: {
-                if (pkt.payload.Size() < 40) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.Data());
-                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 4);
-                uint8_t skill_slot = pkt.payload.Data()[12];
-                float target_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 13);
-                float target_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 17);
-                uint64_t target_eid = ReadU64BE(pkt.payload.Data() + 21);
-                uint32_t input_seq = ReadU32BE(pkt.payload.Data() + 29);
+                if (pkt.payload.Size() < 41) return;
+                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
+                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
+                uint8_t skill_slot = pkt.payload.Data()[20];
+                float target_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 21);
+                float target_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 25);
+                uint64_t target_eid = ReadU64BE(pkt.payload.Data() + 29);
+                uint32_t input_seq = ReadU32BE(pkt.payload.Data() + 37);
                 auto msg = std::make_unique<HeroCastSkillMsg>();
                 msg->player_id = player_id;
                 msg->skill_slot = skill_slot;
@@ -327,6 +341,19 @@ private:
     void OnClientClose(AsyncTCPConnection* conn) {
         std::lock_guard<std::mutex> lk(conn_mtx_);
         conns_.erase(conn->ID());
+        for (auto it = client_routes_.begin(); it != client_routes_.end(); ) {
+            if (it->second == conn) {
+                it = client_routes_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    void BindClientRoute(uint64_t client_conn_id, AsyncTCPConnection* gateway_conn) {
+        if (client_conn_id == 0 || gateway_conn == nullptr) return;
+        std::lock_guard<std::mutex> lk(conn_mtx_);
+        client_routes_[client_conn_id] = gateway_conn;
     }
 
     // Room 广播：将 Snapshot 编码为 Packet，通过 Gateway 已有连接发送
@@ -336,7 +363,6 @@ private:
         // [frame_seq: 4 BE][timestamp: 8 BE][player_count: 4 BE]
         // 每个玩家: [player_id: 8 BE][x: 4][y: 4][z: 4][yaw: 4][hp: 4][anim: 4]
         std::vector<uint8_t> payload;
-        payload.reserve(16 + snap.players.size() * 32);
         auto append_u32 = [&payload](uint32_t v) {
             payload.resize(payload.size() + 4);
             WriteU32BE(&payload[payload.size() - 4], v);
@@ -345,21 +371,26 @@ private:
             payload.resize(payload.size() + 8);
             WriteU64BE(&payload[payload.size() - 8], v);
         };
-        append_u32(snap.frame_seq);
-        append_u64(snap.timestamp_ms);
-        append_u32(static_cast<uint32_t>(snap.players.size()));
-        for (const auto& p : snap.players) {
-            append_u64(p.player_id);
-            auto append_f = [&payload](float v) {
-                const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&v);
-                payload.insert(payload.end(), bytes, bytes + 4);
-            };
-            append_f(p.pos.x);
-            append_f(p.pos.y);
-            append_f(p.pos.z);
-            append_f(p.yaw);
-            append_u32(p.hp);
-            append_u32(p.anim_state);
+        if (!snap.raw_payload.empty()) {
+            payload = snap.raw_payload;
+        } else {
+            payload.reserve(16 + snap.players.size() * 32);
+            append_u32(snap.frame_seq);
+            append_u64(snap.timestamp_ms);
+            append_u32(static_cast<uint32_t>(snap.players.size()));
+            for (const auto& p : snap.players) {
+                append_u64(p.player_id);
+                auto append_f = [&payload](float v) {
+                    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&v);
+                    payload.insert(payload.end(), bytes, bytes + 4);
+                };
+                append_f(p.pos.x);
+                append_f(p.pos.y);
+                append_f(p.pos.z);
+                append_f(p.yaw);
+                append_u32(p.hp);
+                append_u32(p.anim_state);
+            }
         }
 
         if (target_conns.empty()) return;
@@ -370,17 +401,24 @@ private:
         std::lock_guard<std::mutex> lk(conn_mtx_);
 
         Packet pkt;
-        pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(payload.size());
+        pkt.header.length = HEADER_SIZE + static_cast<uint32_t>(payload.size() + 8);
         pkt.header.magic = MAGIC_VALUE;
         pkt.header.cmd_id = CMD_REALTIME_SYNC;
         pkt.header.seq_id = 0;
-        pkt.header.flags = static_cast<uint32_t>(Flag::ROOM_BCAST);
-        pkt.payload = Buffer::FromVector(payload);
+        pkt.header.flags = static_cast<uint32_t>(Flag::RPC_RES);
 
         for (uint64_t conn_id : target_set) {
-            auto it = conns_.find(conn_id);
-            if (it != conns_.end()) {
+            auto it = client_routes_.find(conn_id);
+            if (it != client_routes_.end() && it->second != nullptr) {
+                std::vector<uint8_t> routed_payload;
+                routed_payload.reserve(8 + payload.size());
+                routed_payload.resize(8);
+                WriteU64BE(routed_payload.data(), conn_id);
+                routed_payload.insert(routed_payload.end(), payload.begin(), payload.end());
+                pkt.payload = Buffer::FromVector(std::move(routed_payload));
                 it->second->SendPacket(pkt);
+            } else if (logger_) {
+                logger_->Warn("No gateway route for realtime client conn " + std::to_string(conn_id));
             }
         }
     }
@@ -392,6 +430,7 @@ private:
 
     std::mutex conn_mtx_;
     std::unordered_map<uint64_t, AsyncTCPConnection*> conns_;
+    std::unordered_map<uint64_t, AsyncTCPConnection*> client_routes_;
 
     // 心跳线程
     std::thread heartbeat_thread_;

@@ -39,10 +39,7 @@ void ComputeThread::PushMessage(uint32_t room_id, MessagePtr msg) {
 }
 
 bool ComputeThread::CreateRoom(const RoomConfig& cfg) {
-    if (started_.load()) {
-        std::cerr << "CreateRoom called after Start, room_id=" << cfg.room_id << std::endl;
-        return false;
-    }
+    std::lock_guard<std::mutex> lk(room_mtx_);
     if (rooms_.find(cfg.room_id) != rooms_.end()) {
         return false;
     }
@@ -64,10 +61,7 @@ bool ComputeThread::CreateRoom(const RoomConfig& cfg) {
 }
 
 bool ComputeThread::CreateRoom(const RoomConfig& cfg, RoomFactory factory) {
-    if (started_.load()) {
-        std::cerr << "CreateRoom called after Start, room_id=" << cfg.room_id << std::endl;
-        return false;
-    }
+    std::lock_guard<std::mutex> lk(room_mtx_);
     if (rooms_.find(cfg.room_id) != rooms_.end()) {
         return false;
     }
@@ -89,6 +83,7 @@ void ComputeThread::SetOutputCallback(OutputCallback cb) {
 }
 
 void ComputeThread::SetRoomFactory(RoomFactory factory) {
+    std::lock_guard<std::mutex> lk(room_mtx_);
     room_factory_ = std::move(factory);
 }
 
@@ -118,15 +113,19 @@ void ComputeThread::ProcessMessages() {
     }
     while (!local.empty()) {
         auto& env = local.front();
-        auto it = rooms_.find(env.room_id);
-        if (it != rooms_.end()) {
-            it->second->OnMessage(env.msg.get());
+        {
+            std::lock_guard<std::mutex> lk(room_mtx_);
+            auto it = rooms_.find(env.room_id);
+            if (it != rooms_.end()) {
+                it->second->OnMessage(env.msg.get());
+            }
         }
         local.pop();
     }
 }
 
 void ComputeThread::TickRooms(uint64_t now_ms) {
+    std::lock_guard<std::mutex> lk(room_mtx_);
     for (auto& [_, room] : rooms_) {
         room->Tick(now_ms);
     }

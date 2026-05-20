@@ -9,9 +9,12 @@ import (
 
 	"github.com/gmaker/luffa/common/go/logger"
 	"github.com/gmaker/luffa/common/go/net"
+	commonpb "github.com/gmaker/luffa/gen/go/common"
+	matchpb "github.com/gmaker/luffa/gen/go/match"
 	"github.com/gmaker/luffa/services/match-go/internal/engine"
 	"github.com/gmaker/luffa/services/match-go/internal/model"
 	"github.com/gmaker/luffa/services/match-go/internal/store"
+	"google.golang.org/protobuf/proto"
 )
 
 // ============================================================
@@ -19,17 +22,17 @@ import (
 // ============================================================
 
 type MatchService struct {
-	mem     *store.MemoryStore
-	redis   *store.RedisStore
-	pool    *engine.BucketPool
-	eng     *engine.Engine
-	gate    *engine.AdmissionGate
-	log     *logger.Logger
+	mem   *store.MemoryStore
+	redis *store.RedisStore
+	pool  *engine.BucketPool
+	eng   *engine.Engine
+	gate  *engine.AdmissionGate
+	log   *logger.Logger
 
 	// 匹配引擎 tick 控制
-	running  atomic.Bool
-	stopCh   chan struct{}
-	wg       sync.WaitGroup
+	running atomic.Bool
+	stopCh  chan struct{}
+	wg      sync.WaitGroup
 
 	// 结算层回调
 	realtimePool *net.UpstreamPool // Realtime 上游连接池（用于创建房间）
@@ -37,6 +40,14 @@ type MatchService struct {
 
 	// etcd 选举
 	isLeader atomic.Bool
+
+	routeMu sync.RWMutex
+	routes  map[uint64]clientRoute
+}
+
+type clientRoute struct {
+	gatewayConnID uint64
+	upstreamConn  *net.TCPConn
 }
 
 func NewMatchService(
@@ -49,14 +60,15 @@ func NewMatchService(
 	gate := engine.NewAdmissionGate(model.MaxQueueSize)
 
 	return &MatchService{
-		mem:     mem,
-		redis:   redis,
-		pool:    pool,
-		eng:     eng,
-		gate:    gate,
-		log:     log,
-		stopCh:  make(chan struct{}),
+		mem:      mem,
+		redis:    redis,
+		pool:     pool,
+		eng:      eng,
+		gate:     gate,
+		log:      log,
+		stopCh:   make(chan struct{}),
 		notifyCh: make(chan *model.Match, 256),
+		routes:   make(map[uint64]clientRoute),
 	}
 }
 
@@ -92,7 +104,7 @@ func (s *MatchService) IsLeader() bool {
 // ============================================================
 
 // Enqueue 入队（准入门 + 入桶）
-func (s *MatchService) Enqueue(t *model.Ticket) error {
+func (s *MatchService) Enqueue(t *model.Ticket, gatewayConnID uint64, upstreamConn *net.TCPConn) error {
 	// 准入检查
 	queueLen := s.mem.CountQueuing()
 	if err := s.gate.Accept(queueLen); err != nil {
@@ -113,6 +125,7 @@ func (s *MatchService) Enqueue(t *model.Ticket) error {
 
 	// 写入内存
 	s.mem.PutTicket(t)
+	s.bindRoute(t.UID, gatewayConnID, upstreamConn)
 
 	// 入桶
 	s.pool.Enqueue(t)
@@ -142,6 +155,7 @@ func (s *MatchService) Dequeue(uid uint64) error {
 
 	// 清理内存
 	s.mem.DeleteTicket(uid)
+	s.deleteRoute(uid)
 
 	s.log.Infof("[MatchService] dequeue: uid=%d", uid)
 	return nil
@@ -340,6 +354,7 @@ func (s *MatchService) driveForward(m *model.Match) {
 			s.redis.SaveMatchRecord(m)
 
 		case model.MatchNotifying:
+			s.notifyPlayers(m)
 			// 异步归档
 			go s.redis.ArchiveMatch(m)
 			// 标记完成
@@ -357,9 +372,9 @@ func (s *MatchService) driveForward(m *model.Match) {
 
 // createRoom 请求 Realtime 创建房间
 func (s *MatchService) createRoom(m *model.Match) (uint64, error) {
-	if s.realtimePool == nil {
+	if s.realtimePool == nil || s.realtimePool.HealthyCount() == 0 {
 		// Realtime 不可用时用时间戳生成假 roomID（降级）
-		return uint64(time.Now().UnixNano()), nil
+		s.log.Warnf("[Settlement] realtime upstream unavailable, assigning room id locally: match=%d", m.ID)
 	}
 
 	// 发送 RoomEnterReq 到 Realtime（room_id=0 表示动态创建）
@@ -430,8 +445,72 @@ func (s *MatchService) Recover() error {
 func (s *MatchService) BuildMatchResponse(match *model.Match) ([]byte, error) {
 	// payload 格式：8字节 gateway_conn_id + protobuf
 	// gateway_conn_id 由 handler 层填充
-	_ = match
-	return nil, nil
+	res := &matchpb.MatchRes{
+		Result:  &commonpb.Result{Ok: true, Code: 0, Msg: "matched"},
+		MatchId: match.ID,
+		RoomId:  match.RoomID,
+		TeamA:   match.TeamA,
+		TeamB:   match.TeamB,
+	}
+	return proto.Marshal(res)
+}
+
+func (s *MatchService) bindRoute(uid uint64, gatewayConnID uint64, upstreamConn *net.TCPConn) {
+	if gatewayConnID == 0 || upstreamConn == nil {
+		return
+	}
+	s.routeMu.Lock()
+	s.routes[uid] = clientRoute{gatewayConnID: gatewayConnID, upstreamConn: upstreamConn}
+	s.routeMu.Unlock()
+}
+
+func (s *MatchService) deleteRoute(uid uint64) {
+	s.routeMu.Lock()
+	delete(s.routes, uid)
+	s.routeMu.Unlock()
+}
+
+func (s *MatchService) getRoute(uid uint64) (clientRoute, bool) {
+	s.routeMu.RLock()
+	route, ok := s.routes[uid]
+	s.routeMu.RUnlock()
+	return route, ok
+}
+
+func (s *MatchService) notifyPlayers(match *model.Match) {
+	payload, err := s.BuildMatchResponse(match)
+	if err != nil {
+		s.log.Errorf("[Settlement] build match response failed: %v", err)
+		return
+	}
+	for _, uid := range match.AllUIDs() {
+		route, ok := s.getRoute(uid)
+		if !ok {
+			s.log.Warnf("[Settlement] missing gateway route for uid=%d match=%d", uid, match.ID)
+			continue
+		}
+		s.sendMatchPayload(route.upstreamConn, 0, cmdMatchRes, payload, route.gatewayConnID)
+	}
+}
+
+func (s *MatchService) sendMatchPayload(conn *net.TCPConn, seqID uint32, cmdID uint32, data []byte, gatewayConnID uint64) {
+	if conn == nil {
+		return
+	}
+	payload := make([]byte, 8+len(data))
+	binary.BigEndian.PutUint64(payload, gatewayConnID)
+	copy(payload[8:], data)
+	pkt := &net.Packet{
+		Header: net.Header{
+			Magic:  net.MagicValue,
+			CmdID:  cmdID,
+			SeqID:  seqID,
+			Flags:  uint32(net.FlagRPCRes),
+			Length: uint32(net.HeaderSize + len(payload)),
+		},
+		Payload: payload,
+	}
+	conn.SendPacket(pkt)
 }
 
 // ============================================================
@@ -446,5 +525,4 @@ func uidsFromTickets(tickets []*model.Ticket) []uint64 {
 	return ids
 }
 
-// unused import guard
-var _ = binary.BigEndian.Uint64
+const cmdMatchRes uint32 = 0x00050001

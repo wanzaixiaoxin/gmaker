@@ -15,6 +15,7 @@ enum class MsgType : uint8_t {
     PlayerLeave,      // 玩家离开房间
     PlayerMove,       // 玩家移动
     PlayerAction,     // 玩家动作/技能
+    RoomBroadcast,    // 房间原始广播
     SyncState,        // 状态同步广播（Compute Thread -> Gateway）
     AsyncIOComplete,  // 异步 IO 完成回调
     RoomTick,         // 房间帧 tick（内部驱动）
@@ -41,6 +42,7 @@ struct RoomSnapshot {
     uint32_t frame_seq = 0;
     uint64_t timestamp_ms = 0;
     std::vector<PlayerState> players;
+    std::vector<uint8_t> raw_payload;
 };
 
 // 消息基类（多态消息，投递到 Compute Thread）
@@ -82,6 +84,12 @@ public:
     uint64_t player_id = 0;
     uint32_t action_id = 0;
     Vec3 target_pos;
+};
+
+class RoomBroadcastMsg : public Message {
+public:
+    MsgType Type() const override { return MsgType::RoomBroadcast; }
+    std::vector<uint8_t> payload;
 };
 
 // SyncStateMsg（Compute Thread -> Gateway，需要广播）

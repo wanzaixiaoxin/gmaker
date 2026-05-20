@@ -933,6 +933,9 @@ void Gateway::OnUpstreamPacket(IConnection* conn, Packet& pkt) {
         } else {
             if (logger_) logger_->Warn("Room broadcast: room=" + std::to_string(room_id) + " not found in room_members_");
         }
+        if (targets.empty()) {
+            return;
+        }
     } else {
         targets.push_back(conn_id);
         if (logger_) logger_->Info("Unicast to conn=" + std::to_string(conn_id));
