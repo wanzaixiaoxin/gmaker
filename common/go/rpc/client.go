@@ -38,7 +38,11 @@ type Client struct {
 
 // NewClient 创建单连接 RPC 客户端（向后兼容）
 func NewClient(conn *net.TCPConn) *Client {
-	return &Client{sender: conn}
+	var sender net.PacketSender
+	if conn != nil {
+		sender = conn
+	}
+	return &Client{sender: sender}
 }
 
 // NewClientWithPool 创建基于连接池的 RPC 客户端

@@ -265,24 +265,20 @@ func TestTCPConnSendOnClosed(t *testing.T) {
 }
 
 // ============================================================
-// 回归测试：conn.Close() 死锁 bug
+// 回归测试：conn.Close() 不再死锁
 //
-// 当前实现中，readLoop/writeLoop 的 defer 顺序为：
+// 历史缺陷（已修复）：readLoop/writeLoop 的 defer 顺序为
 //   defer c.wg.Done()   // 先注册
 //   defer c.Close()     // 后注册
-// return 时 LIFO 先执行 Close()，而 Close() 内 wg.Wait() 等待 wg.Done()。
-// Close() 持有 closeOnce 锁期间，goroutine 内的 Close() 阻塞在 Once 锁上，
-// 永远到不了 wg.Done() → 外部 Close() 的 wg.Wait() 永久阻塞 → 死锁。
+// return 时 LIFO 先执行 Close()，而 Close() 内 wg.Wait() 等待 wg.Done()，
+// 与 closeOnce 锁形成自死锁。
 //
-// 这是 P0 级 bug，任何连接断开都可能让进程挂死。
-// 标记 Skip 直至修复，但保留作为回归用例。
+// 修复后：goroutine 内部调用 shutdown()（不含 wg.Wait()），
+// 仅外部首个 Close() 调用者等待 wg + 触发回调。
+// 本用例确保 Close() 在 2s 内返回（修复前会永久挂死）。
 // ============================================================
 
 func TestConnCloseDeadlock(t *testing.T) {
-	t.Skip("KNOWN P0 BUG: conn.Close() 与 readLoop/writeLoop 的 defer Close() + wg.Wait() 形成自死锁。" +
-		"修复方案：goroutine 内部不调 Close()，或将 defer Close() 移到 defer c.wg.Done() 之前注册，" +
-		"或 Close() 不等待 wg（改用 onClose 回调驱动清理）。")
-
 	serverConn, clientRaw := dialAndWrap(t, nil, nil)
 	defer clientRaw.Close()
 
@@ -295,9 +291,18 @@ func TestConnCloseDeadlock(t *testing.T) {
 	case <-done:
 		// fixed
 	case <-time.After(2 * time.Second):
-		t.Fatal("conn.Close() deadlocked — wg.Wait() waits for wg.Done() that never runs " +
-			"because the goroutine's defer Close() blocks on closeOnce first")
+		t.Fatal("conn.Close() deadlocked — wg.Wait() waits for wg.Done() that never runs")
 	}
+}
+
+// 多次调用 Close() 必须幂等，不 panic、不死锁
+func TestConnCloseIdempotent(t *testing.T) {
+	serverConn, clientRaw := dialAndWrap(t, nil, nil)
+	defer clientRaw.Close()
+
+	serverConn.Close()
+	serverConn.Close() // 重复调用应安全
+	serverConn.Close()
 }
 
 // ============================================================
@@ -355,4 +360,71 @@ func TestUpstreamPoolAllNodesIsCopy(t *testing.T) {
 	if again[0] == nil {
 		t.Fatal("AllNodes did not return a copy; internal state mutated")
 	}
+}
+
+// ============================================================
+// server.go MaxConn：CAS 上限控制
+// 验证 (1) 超出上限的连接被拒绝 (2) 连接关闭后计数器正确回零，
+// 不出现负数漂移（修复引入的边界 bug）。
+// 注意：因 conn.Close 现已正确工作（不再死锁），此处可走完整生命周期。
+// ============================================================
+
+func TestServerMaxConnLimit(t *testing.T) {
+	addr := pickFreeAddr(t)
+	var (
+		mu       sync.Mutex
+		accepted []uint64
+	)
+	srv := NewTCPServer(ServerConfig{
+		MaxConn: 2,
+		Addr:    addr,
+		OnConnect: func(c *TCPConn) {
+			mu.Lock()
+			accepted = append(accepted, c.ID())
+			mu.Unlock()
+		},
+	})
+	if err := srv.Start(); err != nil {
+		t.Fatalf("server start: %v", err)
+	}
+
+	// 连 5 个客户端，只有 2 个应被接受
+	var clients []*TCPClient
+	for i := 0; i < 5; i++ {
+		c := NewTCPClient(addr, nil, nil)
+		if err := c.Connect(); err != nil {
+			t.Fatalf("connect %d: %v", i, err)
+		}
+		clients = append(clients, c)
+		// 每个连接发一个包触发 OnData 注册（handleConn 中 OnConnect 在注册后触发）
+	}
+
+	// 等待服务端处理完所有 Accept
+	time.Sleep(150 * time.Millisecond)
+
+	mu.Lock()
+	n := len(accepted)
+	mu.Unlock()
+	if n > 2 {
+		t.Fatalf("MaxConn=2 but server accepted %d connections", n)
+	}
+
+	// 关闭所有客户端，计数器应回零（验证无负数漂移）
+	for _, c := range clients {
+		c.Close()
+	}
+	time.Sleep(150 * time.Millisecond)
+
+	if got := srv.connCount.Load(); got != 0 {
+		t.Fatalf("connCount after all closed = %d, want 0 (counter drift bug)", got)
+	}
+
+	// 计数器归零后，应能再次接受新连接
+	c := NewTCPClient(addr, nil, nil)
+	if err := c.Connect(); err != nil {
+		t.Fatalf("reconnect after close: %v", err)
+	}
+	c.Close()
+
+	srv.Stop()
 }

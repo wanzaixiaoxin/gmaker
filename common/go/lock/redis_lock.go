@@ -56,6 +56,9 @@ func (l *Lease) Extend(ctx context.Context, ttl time.Duration) error {
 	if l.value == "" {
 		return fmt.Errorf("lock not held")
 	}
+	if ttl <= 0 {
+		return fmt.Errorf("invalid ttl: must be positive")
+	}
 	ok, err := redis.NewScript(`
 		if redis.call("get", KEYS[1]) == ARGV[1] then
 			return redis.call("pexpire", KEYS[1], ARGV[2])

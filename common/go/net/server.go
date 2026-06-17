@@ -3,6 +3,7 @@ package net
 import (
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,6 +34,7 @@ type TCPServer struct {
 	config      ServerConfig
 	listener    net.Listener
 	conns       sync.Map // uint64 -> *TCPConn
+	connCount   atomic.Int64
 	closed      int32
 	wg          sync.WaitGroup
 	middlewares []Middleware
@@ -96,16 +98,10 @@ func (s *TCPServer) acceptLoop() {
 			return
 		}
 		// 连接数上限检查
-		if s.config.MaxConn > 0 {
-			count := 0
-			s.conns.Range(func(_, _ interface{}) bool {
-				count++
-				return true
-			})
-			if count >= s.config.MaxConn {
-				conn.Close()
-				continue
-			}
+		// 连接数 O(1) 预检；精确的 CAS 上限控制在 handleConn 完成
+		if s.config.MaxConn > 0 && int(s.connCount.Load()) >= s.config.MaxConn {
+			conn.Close()
+			continue
 		}
 		s.wg.Add(1)
 		go s.handleConn(conn)
@@ -129,8 +125,27 @@ func (s *TCPServer) handleConn(raw net.Conn) {
 		}
 	}
 
+	// CAS 严格控制上限：成功占位后才创建会被计数器跟踪的连接。
+	// 若占位失败（达到上限），直接关闭 raw 连接并返回，不触发 onClose，
+	// 避免错误地递减从未递增的计数器（否则计数器变负，MaxConn 永久失效）。
+	if s.config.MaxConn > 0 {
+		for {
+			cur := s.connCount.Load()
+			if int(cur) >= s.config.MaxConn {
+				raw.Close()
+				return
+			}
+			if s.connCount.CompareAndSwap(cur, cur+1) {
+				break
+			}
+		}
+	}
+
 	onClose := func(c *TCPConn) {
 		s.conns.Delete(c.ID())
+		if s.config.MaxConn > 0 {
+			s.connCount.Add(-1)
+		}
 		if s.config.OnClose != nil {
 			s.config.OnClose(c)
 		}

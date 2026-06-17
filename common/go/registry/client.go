@@ -27,6 +27,8 @@ type Client struct {
 	seqID   uint32
 	seqMu   sync.Mutex
 	pending sync.Map // seq_id -> chan *net.Packet
+	closing chan struct{}
+	closeOnce sync.Once
 
 	onEvent    func(*pb.NodeEvent)
 	watchTypes sync.Map // service_type -> struct{}{}
@@ -35,7 +37,9 @@ type Client struct {
 // NewClient 创建 Registry 客户端
 // addrs: Registry 节点地址列表，如 ["127.0.0.1:2379", "127.0.0.1:2380"]
 func NewClient(addrs []string) *Client {
-	c := &Client{}
+	c := &Client{
+		closing: make(chan struct{}),
+	}
 	c.pool = net.NewUpstreamPool(c.handlePacket)
 	c.pool.SetOnNodeEvent(func(addr string, healthy bool) {
 		if healthy {
@@ -58,13 +62,14 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-// Close 断开连接
+// Close 断开连接。
+// 不再关闭 pending channel（会导致 call() 收到 nil packet 并解引用 panic），
+// 改为关闭 closing 信号：正在等待的 call() 会立即返回 errClosing。
 func (c *Client) Close() {
-	c.pool.Stop()
-	c.pending.Range(func(key, value interface{}) bool {
-		close(value.(chan *net.Packet))
-		return true
+	c.closeOnce.Do(func() {
+		close(c.closing)
 	})
+	c.pool.Stop()
 }
 
 // Register 注册节点
@@ -190,6 +195,12 @@ func (c *Client) sendWatch(serviceType string) error {
 
 // call 同步 RPC 调用（Req-Res 配对）
 func (c *Client) call(ctx context.Context, cmdID uint32, payload []byte) (*net.Packet, error) {
+	select {
+	case <-c.closing:
+		return nil, fmt.Errorf("registry client is closing")
+	default:
+	}
+
 	seq := c.nextSeqID()
 	ch := make(chan *net.Packet, 1)
 	c.pending.Store(seq, ch)
@@ -216,6 +227,8 @@ func (c *Client) call(ctx context.Context, cmdID uint32, payload []byte) (*net.P
 	select {
 	case res := <-ch:
 		return res, nil
+	case <-c.closing:
+		return nil, fmt.Errorf("registry client is closing")
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

@@ -16,6 +16,7 @@ type RegistryImpl struct {
 	client        *registry.Client
 	heartbeatStop chan struct{}
 	heartbeatWG   sync.WaitGroup
+	deregisterOnce sync.Once
 	nodeID        string
 }
 
@@ -72,9 +73,10 @@ func (r *RegistryImpl) Register(ctx context.Context, node NodeInfo) error {
 
 // Deregister 注销节点并停止心跳
 func (r *RegistryImpl) Deregister(ctx context.Context, nodeID string) error {
-	close(r.heartbeatStop)
+	r.deregisterOnce.Do(func() {
+		close(r.heartbeatStop)
+	})
 	r.heartbeatWG.Wait()
-	// 自研 Registry 目前无显式注销接口，依赖心跳超时自动清理
 	return nil
 }
 

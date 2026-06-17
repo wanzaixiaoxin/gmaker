@@ -171,19 +171,16 @@ func TestCallSendFailure(t *testing.T) {
 	}
 }
 
-// NewClient(nil) 触发 typed-nil 接口陷阱：
-// `c.sender = conn`（conn 为 *TCPConn(nil)）后，c.sender 是非 nil 接口，
-// 导致 Call() 的 `c.sender == nil` 防御失效，进而 c.sender.SendPacket 在 nil receiver 上 panic。
-// 这是 rpc 包的 P0 缺陷（Go typed-nil interface pitfall）。
-// 此处记录为已知问题，断言当前行为会 panic；修复后应改为期望 err 返回。
-func TestCallNilSenderPanics_KnownBug(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic due to typed-nil sender (known bug), got none")
-		}
-	}()
-	c := NewClient(nil) // conn == nil，但 sender 字段为非 nil 接口
-	_, _ = c.Call(context.Background(), 0x1, []byte("x"))
+// NewClient(nil) 历史缺陷（已修复）：typed-nil 接口陷阱。
+// 修复前 `c.sender = conn`（*TCPConn(nil)）使 c.sender 为非 nil 接口，
+// Call 的 `c.sender == nil` 防御失效，SendPacket 在 nil receiver 上 panic。
+// 修复后 NewClient 在 conn==nil 时显式置 sender 为 nil 接口，Call 返回 error。
+func TestCallNilSenderReturnsError(t *testing.T) {
+	c := NewClient(nil)
+	_, err := c.Call(context.Background(), 0x1, []byte("x"))
+	if err == nil {
+		t.Fatal("expected error for nil sender, got nil")
+	}
 }
 
 // ============================================================
@@ -243,15 +240,13 @@ func TestFireForgetSendsAndDoesNotBlock(t *testing.T) {
 	}
 }
 
-// FireForget 同样受 typed-nil sender 陷阱影响（见 TestCallNilSenderPanics_KnownBug）
-func TestFireForgetNilSenderPanics_KnownBug(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic due to typed-nil sender (known bug), got none")
-		}
-	}()
+// FireForget 历史缺陷（已修复）：同 typed-nil sender 陷阱。
+// 修复后 nil sender 时返回 error 而非 panic。
+func TestFireForgetNilSenderReturnsError(t *testing.T) {
 	c := NewClient(nil)
-	_ = c.FireForget(0x1, []byte("x"))
+	if err := c.FireForget(0x1, []byte("x")); err == nil {
+		t.Fatal("expected error for nil sender, got nil")
+	}
 }
 
 // ============================================================

@@ -2,6 +2,7 @@ package net
 
 import (
 	"bufio"
+	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -112,24 +113,39 @@ func (c *TCPConn) SendPacket(p *Packet) bool {
 	return c.Send(encPkt.Encode())
 }
 
-// Close 优雅关闭连接。可被多次调用，也可被 readLoop/writeLoop 安全调用。
-func (c *TCPConn) Close() {
+// shutdown 关闭底层连接、关闭 closeCh 并触发 onClose 回调（仅一次），
+// 但不等待 goroutine 退出。readLoop/writeLoop 的 defer 安全调用它：
+// 它们需要触发关闭与清理回调，但不能等待 wg.Done()（否则与
+// 外部 Close 的 wg.Wait() 自死锁）。回调在 closeOnce 内执行，
+// 因此无论由谁触发关闭，onClose 都恰好执行一次。
+func (c *TCPConn) shutdown() {
 	c.closeOnce.Do(func() {
 		atomic.StoreInt32(&c.closed, 1)
 		close(c.closeCh)
 		if c.raw != nil {
 			c.raw.Close()
 		}
-		c.wg.Wait()
 		if c.onClose != nil {
 			c.onClose(c)
 		}
 	})
 }
 
+// Close 优雅关闭连接：触发关闭（含 onClose 回调），并等待所有
+// goroutine 退出。可被多次调用。外部调用者等待 readLoop/writeLoop 退出。
+func (c *TCPConn) Close() {
+	c.shutdown()
+	c.wg.Wait()
+}
+
 func (c *TCPConn) readLoop() {
 	defer c.wg.Done()
-	defer c.Close()
+	defer c.shutdown()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("readLoop panic recovered on conn %d: %v", c.id, r)
+		}
+	}()
 	for {
 		select {
 		case <-c.closeCh:
@@ -178,10 +194,16 @@ func (c *TCPConn) readLoop() {
 
 func (c *TCPConn) writeLoop() {
 	defer c.wg.Done()
-	defer c.Close()
+	defer c.shutdown()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("writeLoop panic recovered on conn %d: %v", c.id, r)
+		}
+	}()
 	for {
 		select {
 		case data := <-c.writeCh:
+			c.raw.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			if _, err := c.raw.Write(data); err != nil {
 				return
 			}
@@ -190,6 +212,7 @@ func (c *TCPConn) writeLoop() {
 			for {
 				select {
 				case data := <-c.writeCh:
+					c.raw.SetWriteDeadline(time.Now().Add(5 * time.Second))
 					c.raw.Write(data)
 				default:
 					return
