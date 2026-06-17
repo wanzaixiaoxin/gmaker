@@ -25,6 +25,9 @@
 # Fortran module files
 *.mod
 *.smod
+# 但保留 Go 的 go.mod / go.sum（*.mod 会误伤 go.mod）
+!go.mod
+!go.sum
 
 # Compiled Static libraries
 *.lai

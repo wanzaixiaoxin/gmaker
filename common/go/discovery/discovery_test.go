@@ -71,10 +71,10 @@ func TestOnNodeEventJoinAndLeave(t *testing.T) {
 	}
 }
 
-// 审计 P0 #6：Host 为空的事件（etcd Delete 事件 Host:Port 为零值）
-// 当前实现直接 return，导致该节点无法从池中移除 —— 死节点残留。
-// 此测试记录该已知缺陷。
-func TestOnNodeEventLeaveWithEmptyHost_KnownGap(t *testing.T) {
+// 审计 P0 #6（已修复）：Host 为空的 LEAVE 事件（etcd Delete 事件 Host:Port 为零值）。
+// 修复前：Host=="" 时直接 return，死节点残留。
+// 修复后：JOIN/UPDATE 时记录 nodeID->addr 映射，LEAVE 时按 NodeID 回退定位并移除。
+func TestOnNodeEventLeaveWithEmptyHost(t *testing.T) {
 	m := NewUpstreamManager(noopSD{})
 	pool := m.AddInterest("biz", nil)
 
@@ -87,18 +87,53 @@ func TestOnNodeEventLeaveWithEmptyHost_KnownGap(t *testing.T) {
 		t.Fatalf("after JOIN, TotalCount=%d want 1", pool.TotalCount())
 	}
 
-	// 模拟 etcd Delete 事件：Host 为空（已知缺陷）
+	// 模拟 etcd Delete 事件：Host 为空，但 NodeID 可用
 	m.onNodeEvent(NodeEvent{
 		Type: NodeEventLeave,
 		Node: NodeInfo{ServiceType: "biz", NodeID: "n1", Host: "", Port: 0},
 	})
 
-	// 当前实现因 Host=="" 而 return，节点仍残留 —— 这是缺陷的表现
+	// 修复后死节点应被按 NodeID 移除
 	if pool.TotalCount() != 0 {
-		t.Logf("KNOWN P0 #6: LEAVE event with empty Host was ignored; dead node n1 still in pool (TotalCount=%d). "+
-			"Fix: onNodeEvent should fall back to removing by NodeID when Host is empty.", pool.TotalCount())
-		// 这是已知缺陷，不判 FAIL，仅记录；真正修复后应改为：
-		// if pool.TotalCount() != 0 { t.Fatalf("dead node not removed by NodeID") }
+		t.Fatalf("after LEAVE with empty Host, dead node n1 still in pool (TotalCount=%d), "+
+			"expected removed by NodeID fallback", pool.TotalCount())
+	}
+
+	// nodeID->addr 映射应已清理
+	m.mu.RLock()
+	_, stillMapped := m.nodeAddrs["biz/n1"]
+	m.mu.RUnlock()
+	if stillMapped {
+		t.Fatal("nodeAddrs mapping not cleaned after LEAVE")
+	}
+}
+
+// Host 为空的 JOIN/UPDATE 事件（无地址）应被忽略，不 panic
+func TestOnNodeEventJoinWithEmptyHostIgnored(t *testing.T) {
+	m := NewUpstreamManager(noopSD{})
+	pool := m.AddInterest("biz", nil)
+
+	m.onNodeEvent(NodeEvent{
+		Type: NodeEventJoin,
+		Node: NodeInfo{ServiceType: "biz", NodeID: "n1", Host: "", Port: 0},
+	})
+	if pool.TotalCount() != 0 {
+		t.Fatalf("JOIN with empty Host should be ignored, TotalCount=%d", pool.TotalCount())
+	}
+}
+
+// 未记录过的节点收到 Host 空 LEAVE 事件，应安全忽略（不 panic）
+func TestOnNodeEventLeaveEmptyHostUnknownNode(t *testing.T) {
+	m := NewUpstreamManager(noopSD{})
+	pool := m.AddInterest("biz", nil)
+
+	// 从未 JOIN 过 n2，却收到它的 Host 空 LEAVE —— 应安全无操作
+	m.onNodeEvent(NodeEvent{
+		Type: NodeEventLeave,
+		Node: NodeInfo{ServiceType: "biz", NodeID: "n2", Host: "", Port: 0},
+	})
+	if pool.TotalCount() != 0 {
+		t.Fatalf("unexpected node in pool: TotalCount=%d", pool.TotalCount())
 	}
 }
 

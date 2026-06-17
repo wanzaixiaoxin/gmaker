@@ -16,6 +16,10 @@ type UpstreamManager struct {
 	sd        ServiceDiscovery
 	pools     map[string]*net.UpstreamPool // service_type -> pool
 	interests map[string]func(*net.TCPConn, *net.Packet)
+	// nodeAddrs 记录 nodeID -> addr 的映射。
+	// 当 etcd Delete 事件携带的 Host 为空时，据此回退定位要移除的节点地址，
+	// 避免死节点残留在连接池中（审计 P0 #6）。
+	nodeAddrs map[string]string
 	mu        sync.RWMutex
 }
 
@@ -25,6 +29,7 @@ func NewUpstreamManager(sd ServiceDiscovery) *UpstreamManager {
 		sd:        sd,
 		pools:     make(map[string]*net.UpstreamPool),
 		interests: make(map[string]func(*net.TCPConn, *net.Packet)),
+		nodeAddrs: make(map[string]string),
 	}
 }
 
@@ -71,6 +76,7 @@ func (m *UpstreamManager) Start() error {
 			for _, node := range nodes {
 				addr := fmt.Sprintf("%s:%d", node.Host, node.Port)
 				pool.AddNode(addr)
+				m.nodeAddrs[svc+"/"+node.NodeID] = addr
 				logger.Infof("[UpstreamManager] Snapshot add node: %s/%s @ %s", svc, node.NodeID, addr)
 			}
 		}
@@ -124,12 +130,39 @@ func (m *UpstreamManager) GetPool(serviceType string) *net.UpstreamPool {
 	return m.pools[serviceType]
 }
 
-// onNodeEvent 处理 ServiceDiscovery 推送的增量事件
+// onNodeEvent 处理 ServiceDiscovery 推送的增量事件。
+// 注意：etcd 的 Delete 事件通常不携带 value，Host/Port 为零值。
+// 此时 LEAVE 事件需通过 nodeID 回退查 addr，否则死节点会残留在连接池中（审计 P0 #6）。
 func (m *UpstreamManager) onNodeEvent(ev NodeEvent) {
+	svcType := ev.Node.ServiceType
+	nodeKey := svcType + "/" + ev.Node.NodeID
+
+	// Host 为空时：JOIN/UPDATE 无法处理（没有地址），但 LEAVE 可回退定位。
 	if ev.Node.Host == "" {
+		if ev.Type != NodeEventLeave {
+			return
+		}
+		m.mu.Lock()
+		addr, ok := m.nodeAddrs[nodeKey]
+		m.mu.Unlock()
+		if !ok {
+			// 未记录过该节点地址，无法移除（可能是 Watch 启动前已存在的历史节点）
+			return
+		}
+		m.mu.RLock()
+		pool, ok := m.pools[svcType]
+		m.mu.RUnlock()
+		if !ok {
+			return
+		}
+		logger.Infof("[UpstreamManager] Node LEAVE (by NodeID): %s @ %s", nodeKey, addr)
+		pool.RemoveNode(addr)
+		m.mu.Lock()
+		delete(m.nodeAddrs, nodeKey)
+		m.mu.Unlock()
 		return
 	}
-	svcType := ev.Node.ServiceType
+
 	addr := fmt.Sprintf("%s:%d", ev.Node.Host, ev.Node.Port)
 
 	m.mu.RLock()
@@ -143,8 +176,15 @@ func (m *UpstreamManager) onNodeEvent(ev NodeEvent) {
 	case NodeEventJoin, NodeEventUpdate:
 		logger.Infof("[UpstreamManager] Node JOIN/UPDATE: %s/%s @ %s", svcType, ev.Node.NodeID, addr)
 		pool.AddNode(addr)
+		// 记录 nodeID -> addr 映射，供后续 Host 为空的 LEAVE 事件回退定位
+		m.mu.Lock()
+		m.nodeAddrs[nodeKey] = addr
+		m.mu.Unlock()
 	case NodeEventLeave:
 		logger.Infof("[UpstreamManager] Node LEAVE: %s/%s @ %s", svcType, ev.Node.NodeID, addr)
 		pool.RemoveNode(addr)
+		m.mu.Lock()
+		delete(m.nodeAddrs, nodeKey)
+		m.mu.Unlock()
 	}
 }
