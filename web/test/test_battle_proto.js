@@ -1,9 +1,10 @@
 // Node 往返自测：验证 battle_proto.js 的 protobuf 编解码。
-// 直接从 spec/proto/battle.proto 加载 schema（单一真相源），
-// 避免重复维护 PROTO_DESCRIPTOR JSON。
+// 使用自动生成的 proto_descriptor.js（与前端 index.html 一致），
+// 确保 .proto → descriptor 生成链 + battle_proto 门面端到端正确。
 // 运行：node web/test/test_battle_proto.js
 
 const path = require('path');
+const fs = require('fs');
 const protobuf = require('protobufjs');
 const Long = require('long');
 
@@ -23,8 +24,13 @@ function approx(name, got, want, eps = 0.001) {
 }
 
 async function main() {
-    // 从 .proto 加载 Root（与浏览器从 PROTO_DESCRIPTOR 等价，但保证 schema 一致）
-    const root = await protobuf.load(path.join(__dirname, '..', '..', 'spec', 'proto', 'battle.proto'));
+    // 加载自动生成的 descriptor（与 index.html 一致：window.PROTO_DESCRIPTOR）
+    const descriptorPath = path.join(__dirname, '..', 'js', 'proto_descriptor.js');
+    const descriptorSrc = fs.readFileSync(descriptorPath, 'utf8')
+        .replace('window.PROTO_DESCRIPTOR = ', 'globalThis.PROTO_DESCRIPTOR = ');
+    eval(descriptorSrc);
+    if (!globalThis.PROTO_DESCRIPTOR) throw new Error('PROTO_DESCRIPTOR 未加载');
+    const root = protobuf.Root.fromJSON(globalThis.PROTO_DESCRIPTOR);
 
     // 加载 battle_proto.js 并注入 root
     const BP = require(path.join(__dirname, '..', 'js', 'battle_proto.js'));

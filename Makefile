@@ -21,6 +21,8 @@ proto:
 		--go-grpc_out=. --go-grpc_opt=module=github.com/gmaker/luffa \
 		--cpp_out=$(GEN_CPP_DIR) \
 		$(PROTO_DIR)/*.proto
+	@echo "Generating frontend descriptor..."
+	@node scripts/gen-proto-json.js
 	@echo "Protobuf generation done."
 
 # ==================== 构建 ====================

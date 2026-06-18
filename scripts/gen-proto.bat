@@ -121,6 +121,15 @@ for %%f in (gen\cpp\*.pb.cc) do (
     echo     %%f
 )
 
+REM 前端 protobuf descriptor（从 .proto 自动生成，消除手写 PROTO_DESCRIPTOR 漂移）
+echo Generating frontend descriptor...
+node scripts\gen-proto-json.js
+if %errorlevel% neq 0 (
+    echo WARNING: Frontend descriptor generation failed ^(protobufjs 未安装？npm install protobufjs long^)
+) else (
+    echo   web\js\proto_descriptor.js
+)
+
 echo.
 echo ========================================
 echo  Protobuf generation done.
