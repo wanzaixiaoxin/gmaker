@@ -18,6 +18,7 @@
 #include "metrics/metrics.hpp"
 #include "logger/logger.hpp"
 #include "protocol.pb.h"
+#include "battle.pb.h"
 
 using namespace gs::net;
 using namespace gs::net::async;
@@ -281,56 +282,50 @@ private:
         // MOBA 战斗消息
         switch (pkt.header.cmd_id) {
             case CMD_BATTLE_READY: {
-                if (pkt.payload.Size() < 20) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
-                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
+                // payload: [8 conn_id][protobuf BattleReadyReq]
+                if (pkt.payload.Size() < 8) return;
+                uint64_t gw_conn_id = ReadU64BE(pkt.payload.Data());
+                battle::BattleReadyReq req;
+                if (!req.ParseFromArray(pkt.payload.Data() + 8, pkt.payload.Size() - 8)) return;
                 auto msg = std::make_unique<BattleReadyMsg>();
-                msg->player_id = player_id;
-                compute_->PushMessage(room_id, std::move(msg));
+                msg->player_id = req.player_id();
+                compute_->PushMessage(req.room_id(), std::move(msg));
                 break;
             }
             case CMD_BATTLE_MOVE: {
-                if (pkt.payload.Size() < 32) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
-                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
-                float move_x = ReadF32BE(pkt.payload.Data() + 20);
-                float move_z = ReadF32BE(pkt.payload.Data() + 24);
-                uint32_t input_seq = ReadU32BE(pkt.payload.Data() + 28);
+                if (pkt.payload.Size() < 8) return;
+                battle::HeroMoveInput req;
+                if (!req.ParseFromArray(pkt.payload.Data() + 8, pkt.payload.Size() - 8)) return;
                 auto msg = std::make_unique<HeroMoveInputMsg>();
-                msg->player_id = player_id;
-                msg->move_x = move_x;
-                msg->move_z = move_z;
-                msg->input_seq = input_seq;
-                compute_->PushMessage(room_id, std::move(msg));
+                msg->player_id = req.player_id();
+                msg->move_x = req.move_x();
+                msg->move_z = req.move_z();
+                msg->input_seq = req.input_seq();
+                compute_->PushMessage(req.room_id(), std::move(msg));
                 break;
             }
             case CMD_BATTLE_CAST: {
-                if (pkt.payload.Size() < 41) return;
-                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
-                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
-                uint8_t skill_slot = pkt.payload.Data()[20];
-                float target_x = ReadF32BE(pkt.payload.Data() + 21);
-                float target_z = ReadF32BE(pkt.payload.Data() + 25);
-                uint64_t target_eid = ReadU64BE(pkt.payload.Data() + 29);
-                uint32_t input_seq = ReadU32BE(pkt.payload.Data() + 37);
+                if (pkt.payload.Size() < 8) return;
+                battle::HeroCastSkill req;
+                if (!req.ParseFromArray(pkt.payload.Data() + 8, pkt.payload.Size() - 8)) return;
                 auto msg = std::make_unique<HeroCastSkillMsg>();
-                msg->player_id = player_id;
-                msg->skill_slot = skill_slot;
-                msg->target_pos = {target_x, 0, target_z};
-                msg->target_entity_id = target_eid;
-                msg->input_seq = input_seq;
-                compute_->PushMessage(room_id, std::move(msg));
+                msg->player_id = req.player_id();
+                msg->skill_slot = static_cast<uint8_t>(req.skill_slot());
+                msg->target_pos = {req.target_x(), 0, req.target_z()};
+                msg->target_entity_id = req.target_entity_id();
+                msg->input_seq = req.input_seq();
+                compute_->PushMessage(req.room_id(), std::move(msg));
                 break;
             }
             case CMD_BATTLE_RECONNECT: {
-                if (pkt.payload.Size() < 24) return;
+                if (pkt.payload.Size() < 8) return;
                 uint64_t gw_conn_id = ReadU64BE(pkt.payload.Data());
-                uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
-                uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
+                battle::BattleReconnectReq req;
+                if (!req.ParseFromArray(pkt.payload.Data() + 8, pkt.payload.Size() - 8)) return;
                 auto msg = std::make_unique<PlayerReconnectMsg>();
-                msg->player_id = player_id;
+                msg->player_id = req.player_id();
                 msg->conn_id = gw_conn_id;
-                compute_->PushMessage(room_id, std::move(msg));
+                compute_->PushMessage(req.room_id(), std::move(msg));
                 break;
             }
             default:

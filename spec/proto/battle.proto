@@ -1,0 +1,151 @@
+syntax = "proto3";
+package battle;
+option go_package = "github.com/gmaker/luffa/gen/go/battle";
+
+// ============================================================
+// MOBA 战斗协议
+// 命令号见 protocol.proto CmdRealtime（0x00020030 - 0x00020033 等）
+// 上行：HeroMoveInput / HeroCastSkill / BattleReadyReq / RoomEnterReq / RoomLeaveReq
+// 下行：BattleDownstream（oneof 包裹 Start/End/State，共用 CMD_RT_STATE_SYNC 0x00020005）
+// ============================================================
+
+// ---- 枚举（与 battle_types.hpp 严格对齐）----
+
+enum EntityType {
+    ENTITY_INVALID    = 0;
+    ENTITY_HERO       = 1;
+    ENTITY_MINION     = 2;
+    ENTITY_TOWER      = 3;
+    ENTITY_PROJECTILE = 4;
+    ENTITY_BASE       = 5;
+}
+
+enum TeamSide {
+    TEAM_NONE = 0;
+    TEAM_BLUE = 1;
+    TEAM_RED  = 2;
+}
+
+enum EntityState {
+    ENTITY_STATE_IDLE      = 0;
+    ENTITY_STATE_MOVING    = 1;
+    ENTITY_STATE_ATTACKING = 2;
+    ENTITY_STATE_CASTING   = 3;
+    ENTITY_STATE_DEAD      = 4;
+}
+
+enum BattleState {
+    BATTLE_STATE_WAITING   = 0;
+    BATTLE_STATE_LOADING   = 1;
+    BATTLE_STATE_COUNTDOWN = 2;
+    BATTLE_STATE_FIGHTING  = 3;
+    BATTLE_STATE_PAUSED    = 4;
+    BATTLE_STATE_FINISHED  = 5;
+}
+
+// ============================================================
+// 上行：客户端 -> Gateway -> Realtime
+// 注意：Gateway 会前置 8 字节 conn_id，Realtime 解析时从 +8 开始 ParseFromArray
+// ============================================================
+
+// 进入房间（CMD_RT_ROOM_ENTER_REQ 0x00020000）
+message RoomEnterReq {
+    uint32 room_id   = 1;
+    uint64 player_id = 2;
+    float  spawn_x   = 3;
+    float  spawn_z   = 4;
+}
+
+// 离开房间（CMD_RT_ROOM_LEAVE_REQ 0x00020002）
+message RoomLeaveReq {
+    uint32 room_id   = 1;
+    uint64 player_id = 2;
+}
+
+// 加载完成（CMD_RT_BATTLE_READY 0x00020030）
+message BattleReadyReq {
+    uint32 room_id   = 1;
+    uint64 player_id = 2;
+}
+
+// 英雄移动输入（CMD_RT_BATTLE_MOVE 0x00020031）
+message HeroMoveInput {
+    uint32 room_id   = 1;
+    uint64 player_id = 2;
+    float  move_x    = 3;  // 归一化方向 X (-1~1)
+    float  move_z    = 4;  // 归一化方向 Z (-1~1)
+    uint32 input_seq = 5;  // 输入序列号
+}
+
+// 释放技能（CMD_RT_BATTLE_CAST 0x00020032）
+message HeroCastSkill {
+    uint32 room_id        = 1;
+    uint64 player_id      = 2;
+    uint32 skill_slot     = 3;  // 技能槽位
+    float  target_x       = 4;
+    float  target_z       = 5;
+    uint64 target_entity_id = 6;
+    uint32 input_seq      = 7;
+}
+
+// 重连（CMD_RT_BATTLE_RECONNECT 0x00020033）
+message BattleReconnectReq {
+    uint32 room_id   = 1;
+    uint64 player_id = 2;
+}
+
+// ============================================================
+// 下行：Realtime -> Gateway -> 客户端
+// 共用 CMD_RT_STATE_SYNC (0x00020005)，由 oneof 区分，客户端据此分支
+// ============================================================
+
+// 实体状态快照（BattleStateSync 内嵌）
+message EntitySync {
+    uint64      entity_id = 1;
+    EntityType  type      = 2;
+    TeamSide    team      = 3;
+    float       x         = 4;
+    float       y         = 5;
+    float       z         = 6;
+    float       yaw       = 7;
+    uint32      hp        = 8;
+    uint32      max_hp    = 9;
+    EntityState state     = 10;
+    // 以下仅 Hero 有效（非 Hero 时默认 0）
+    uint32      kills     = 11;
+    uint32      deaths    = 12;
+    uint32      gold      = 13;
+}
+
+// 战斗开始
+message BattleStart {
+    uint32          room_id       = 1;
+    uint32          countdown_sec = 2;
+    repeated uint64 blue_players  = 3;
+    repeated uint64 red_players   = 4;
+}
+
+// 战斗结束
+message BattleEnd {
+    TeamSide winner       = 1;
+    uint32   duration_sec = 2;
+    uint32   blue_kills   = 3;
+    uint32   red_kills    = 4;
+}
+
+// 状态同步（每 tick 下发）
+message BattleStateSync {
+    uint32      frame         = 1;
+    uint64      timestamp_ms  = 2;
+    BattleState battle_state  = 3;
+    repeated EntitySync entities = 4;
+}
+
+// 下行统一包裹：oneof 区分三类消息
+message BattleDownstream {
+    oneof msg {
+        BattleStart    start  = 1;
+        BattleEnd      end    = 2;
+        BattleStateSync state = 3;
+    }
+}

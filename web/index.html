@@ -1057,6 +1057,135 @@ const PROTO_DESCRIPTOR = {
           }
         }
       }
+    },
+    "battle": {
+      "options": {
+        "go_package": "github.com/gmaker/luffa/gen/go/battle"
+      },
+      "nested": {
+        "EntityType": {
+          "values": {
+            "ENTITY_INVALID": 0, "ENTITY_HERO": 1, "ENTITY_MINION": 2,
+            "ENTITY_TOWER": 3, "ENTITY_PROJECTILE": 4, "ENTITY_BASE": 5
+          }
+        },
+        "TeamSide": {
+          "values": { "TEAM_NONE": 0, "TEAM_BLUE": 1, "TEAM_RED": 2 }
+        },
+        "EntityState": {
+          "values": {
+            "ENTITY_STATE_IDLE": 0, "ENTITY_STATE_MOVING": 1,
+            "ENTITY_STATE_ATTACKING": 2, "ENTITY_STATE_CASTING": 3,
+            "ENTITY_STATE_DEAD": 4
+          }
+        },
+        "BattleState": {
+          "values": {
+            "BATTLE_STATE_WAITING": 0, "BATTLE_STATE_LOADING": 1,
+            "BATTLE_STATE_COUNTDOWN": 2, "BATTLE_STATE_FIGHTING": 3,
+            "BATTLE_STATE_PAUSED": 4, "BATTLE_STATE_FINISHED": 5
+          }
+        },
+        "RoomEnterReq": {
+          "fields": {
+            "roomId": { "type": "uint32", "id": 1 },
+            "playerId": { "type": "uint64", "id": 2 },
+            "spawnX": { "type": "float", "id": 3 },
+            "spawnZ": { "type": "float", "id": 4 }
+          }
+        },
+        "RoomLeaveReq": {
+          "fields": {
+            "roomId": { "type": "uint32", "id": 1 },
+            "playerId": { "type": "uint64", "id": 2 }
+          }
+        },
+        "BattleReadyReq": {
+          "fields": {
+            "roomId": { "type": "uint32", "id": 1 },
+            "playerId": { "type": "uint64", "id": 2 }
+          }
+        },
+        "HeroMoveInput": {
+          "fields": {
+            "roomId": { "type": "uint32", "id": 1 },
+            "playerId": { "type": "uint64", "id": 2 },
+            "moveX": { "type": "float", "id": 3 },
+            "moveZ": { "type": "float", "id": 4 },
+            "inputSeq": { "type": "uint32", "id": 5 }
+          }
+        },
+        "HeroCastSkill": {
+          "fields": {
+            "roomId": { "type": "uint32", "id": 1 },
+            "playerId": { "type": "uint64", "id": 2 },
+            "skillSlot": { "type": "uint32", "id": 3 },
+            "targetX": { "type": "float", "id": 4 },
+            "targetZ": { "type": "float", "id": 5 },
+            "targetEntityId": { "type": "uint64", "id": 6 },
+            "inputSeq": { "type": "uint32", "id": 7 }
+          }
+        },
+        "BattleReconnectReq": {
+          "fields": {
+            "roomId": { "type": "uint32", "id": 1 },
+            "playerId": { "type": "uint64", "id": 2 }
+          }
+        },
+        "EntitySync": {
+          "fields": {
+            "entityId": { "type": "uint64", "id": 1 },
+            "type": { "type": "EntityType", "id": 2 },
+            "team": { "type": "TeamSide", "id": 3 },
+            "x": { "type": "float", "id": 4 },
+            "y": { "type": "float", "id": 5 },
+            "z": { "type": "float", "id": 6 },
+            "yaw": { "type": "float", "id": 7 },
+            "hp": { "type": "uint32", "id": 8 },
+            "maxHp": { "type": "uint32", "id": 9 },
+            "state": { "type": "EntityState", "id": 10 },
+            "kills": { "type": "uint32", "id": 11 },
+            "deaths": { "type": "uint32", "id": 12 },
+            "gold": { "type": "uint32", "id": 13 }
+          }
+        },
+        "BattleStart": {
+          "fields": {
+            "roomId": { "type": "uint32", "id": 1 },
+            "countdownSec": { "type": "uint32", "id": 2 },
+            "bluePlayers": { "rule": "repeated", "type": "uint64", "id": 3 },
+            "redPlayers": { "rule": "repeated", "type": "uint64", "id": 4 }
+          }
+        },
+        "BattleEnd": {
+          "fields": {
+            "winner": { "type": "TeamSide", "id": 1 },
+            "durationSec": { "type": "uint32", "id": 2 },
+            "blueKills": { "type": "uint32", "id": 3 },
+            "redKills": { "type": "uint32", "id": 4 }
+          }
+        },
+        "BattleStateSync": {
+          "fields": {
+            "frame": { "type": "uint32", "id": 1 },
+            "timestampMs": { "type": "uint64", "id": 2 },
+            "battleState": { "type": "BattleState", "id": 3 },
+            "entities": { "rule": "repeated", "type": "EntitySync", "id": 4 }
+          }
+        },
+        "BattleDownstream": {
+          "oneofs": {
+            "msg": {
+              "oneof": { "start": 1, "end": 2, "state": 3 }
+            }
+          },
+          "fields": {
+            "start": { "type": "BattleStart", "id": 1 },
+            "end": { "type": "BattleEnd", "id": 2 },
+            "state": { "type": "BattleStateSync", "id": 3 }
+          }
+        }
+      }
     }
   }
 };
@@ -1289,6 +1418,8 @@ let root = null;
 // 加载 protobuf descriptor
 try {
     root = protobuf.Root.fromJSON(PROTO_DESCRIPTOR);
+    window.root = root;           // 供 net.js / battle_proto.js 等跨脚本访问
+    if (window.BattleProto) BattleProto.init(root);  // 注入战斗协议 schema
     setStatus('Protobuf 加载完成，请登录');
 } catch (e) {
     setStatus('Protobuf 加载失败: ' + e.message);

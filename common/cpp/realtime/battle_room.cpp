@@ -1,4 +1,5 @@
 #include "battle_room.hpp"
+#include "battle.pb.h"
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -765,25 +766,46 @@ void BattleRoom::BroadcastToTeam(TeamSide team, const std::vector<uint8_t>& data
 // ──────────────────────────────────────────────
 // 序列化
 // ──────────────────────────────────────────────
+// ──────────────────────────────────────────────
+// 序列化（protobuf）
+// 三类下行消息用 BattleDownstream oneof 包裹，客户端据此分支解码，
+// 取代原先手写的首字节 msg-type 区分符。
+// ──────────────────────────────────────────────
+
+// gs::realtime 枚举 -> ::battle proto 枚举映射
+static ::battle::EntityType ToProtoEntityType(EntityType t) {
+    return static_cast<::battle::EntityType>(t);
+}
+static ::battle::TeamSide ToProtoTeam(TeamSide t) {
+    return static_cast<::battle::TeamSide>(t);
+}
+static ::battle::EntityState ToProtoEntityState(EntityState s) {
+    return static_cast<::battle::EntityState>(s);
+}
+static ::battle::BattleState ToProtoBattleState(BattleState s) {
+    return static_cast<::battle::BattleState>(s);
+}
+
 std::vector<uint8_t> BattleRoom::SerializeBattleStart() const {
-    std::vector<uint8_t> buf;
-    // 首字节 msg-type：与 BattleEnd/StateSync 共用 cmd 0x00020005，客户端据此区分。
-    AppendU8(buf, static_cast<uint8_t>(BattleMsgType::BattleStart));
-    AppendU32(buf, RoomID());
-    AppendU32(buf, countdown_remaining_sec_);
-    AppendU32(buf, static_cast<uint32_t>(blue_players_.size()));
-    for (auto pid : blue_players_) AppendU64(buf, pid);
-    AppendU32(buf, static_cast<uint32_t>(red_players_.size()));
-    for (auto pid : red_players_) AppendU64(buf, pid);
+    battle::BattleDownstream ds;
+    auto* start = ds.mutable_start();
+    start->set_room_id(RoomID());
+    start->set_countdown_sec(countdown_remaining_sec_);
+    for (auto pid : blue_players_) start->add_blue_players(pid);
+    for (auto pid : red_players_)  start->add_red_players(pid);
+
+    std::vector<uint8_t> buf(ds.ByteSizeLong());
+    if (!ds.SerializeToArray(buf.data(), static_cast<int>(buf.size()))) {
+        buf.clear(); // 序列化失败返回空，BroadcastToAll 会跳过空 payload
+    }
     return buf;
 }
 
 std::vector<uint8_t> BattleRoom::SerializeBattleEnd(TeamSide winner) const {
-    std::vector<uint8_t> buf;
-    // 首字节 msg-type：BattleEnd
-    AppendU8(buf, static_cast<uint8_t>(BattleMsgType::BattleEnd));
-    AppendU8(buf, static_cast<uint8_t>(winner));
-    AppendU32(buf, static_cast<uint32_t>(battle_duration_ms_ / 1000));
+    battle::BattleDownstream ds;
+    auto* end = ds.mutable_end();
+    end->set_winner(ToProtoTeam(winner));
+    end->set_duration_sec(static_cast<uint32_t>(battle_duration_ms_ / 1000));
 
     uint32_t blue_kills = 0, red_kills = 0;
     auto heroes = entity_mgr_.GetByType(EntityType::Hero);
@@ -792,44 +814,47 @@ std::vector<uint8_t> BattleRoom::SerializeBattleEnd(TeamSide winner) const {
         if (hero->Team() == TeamSide::Blue) blue_kills += hero->Kills();
         else red_kills += hero->Kills();
     }
-    AppendU32(buf, blue_kills);
-    AppendU32(buf, red_kills);
+    end->set_blue_kills(blue_kills);
+    end->set_red_kills(red_kills);
+
+    std::vector<uint8_t> buf(ds.ByteSizeLong());
+    if (!ds.SerializeToArray(buf.data(), static_cast<int>(buf.size()))) {
+        buf.clear(); // 序列化失败返回空，BroadcastToAll 会跳过空 payload
+    }
     return buf;
 }
 
 std::vector<uint8_t> BattleRoom::SerializeBattleStateSync() const {
-    std::vector<uint8_t> buf;
-    // 首字节 msg-type：BattleStateSync
-    AppendU8(buf, static_cast<uint8_t>(BattleMsgType::BattleStateSync));
-    AppendU32(buf, lockstep_.CurrentFrame());
-    AppendU64(buf, last_tick_ms_);
-    AppendU8(buf, static_cast<uint8_t>(battle_state_));
-
-    // 实体数量
-    uint32_t count = 0;
-    entity_mgr_.ForEach([&](const IEntity*) { ++count; });
-    AppendU32(buf, count);
+    battle::BattleDownstream ds;
+    auto* state = ds.mutable_state();
+    state->set_frame(lockstep_.CurrentFrame());
+    state->set_timestamp_ms(last_tick_ms_);
+    state->set_battle_state(ToProtoBattleState(battle_state_));
 
     entity_mgr_.ForEach([&](const IEntity* ent) {
-        AppendU64(buf, ent->EntityId());
-        AppendU8(buf, static_cast<uint8_t>(ent->Type()));
-        AppendU8(buf, static_cast<uint8_t>(ent->Team()));
-        AppendF32(buf, ent->Pos().x);
-        AppendF32(buf, ent->Pos().y);
-        AppendF32(buf, ent->Pos().z);
-        AppendF32(buf, ent->Yaw());
-        AppendU32(buf, static_cast<uint32_t>(ent->HP()));
-        AppendU32(buf, static_cast<uint32_t>(ent->MaxHP()));
-        AppendU8(buf, static_cast<uint8_t>(ent->State()));
-
+        auto* e = state->add_entities();
+        e->set_entity_id(ent->EntityId());
+        e->set_type(ToProtoEntityType(ent->Type()));
+        e->set_team(ToProtoTeam(ent->Team()));
+        e->set_x(ent->Pos().x);
+        e->set_y(ent->Pos().y);
+        e->set_z(ent->Pos().z);
+        e->set_yaw(ent->Yaw());
+        e->set_hp(static_cast<uint32_t>(ent->HP()));
+        e->set_max_hp(static_cast<uint32_t>(ent->MaxHP()));
+        e->set_state(ToProtoEntityState(ent->State()));
         if (ent->Type() == EntityType::Hero) {
             auto* hero = static_cast<const HeroEntity*>(ent);
-            AppendU32(buf, hero->Kills());
-            AppendU32(buf, hero->Deaths());
-            AppendU32(buf, hero->Gold());
+            e->set_kills(hero->Kills());
+            e->set_deaths(hero->Deaths());
+            e->set_gold(hero->Gold());
         }
     });
 
+    std::vector<uint8_t> buf(ds.ByteSizeLong());
+    if (!ds.SerializeToArray(buf.data(), static_cast<int>(buf.size()))) {
+        buf.clear(); // 序列化失败返回空，BroadcastToAll 会跳过空 payload
+    }
     return buf;
 }
 

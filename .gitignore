@@ -55,3 +55,8 @@ bin/
 3rd/libuv/
 3rd/rapidjson/
 deploy/
+
+# Node.js（仅前端协议自测用 dev 依赖，非生产构建）
+node_modules/
+package.json
+package-lock.json

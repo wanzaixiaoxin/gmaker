@@ -199,6 +199,7 @@ set(CPP_PROTO_SOURCES
     gen/cpp/registry.pb.cc
     gen/cpp/protocol.pb.cc
     gen/cpp/config.pb.cc
+    gen/cpp/battle.pb.cc
 )
 
 set(CPP_REGISTRY_SOURCES

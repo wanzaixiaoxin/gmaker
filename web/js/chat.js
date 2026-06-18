@@ -164,10 +164,7 @@ class RealtimeAPI {
     }
 
     async leaveRoom(roomId, playerId) {
-        const payload = new Uint8Array(12);
-        const dv = new DataView(payload.buffer);
-        dv.setUint32(0, Number(roomId), false);
-        dv.setBigUint64(4, BigInt(playerId), false);
+        const payload = BattleProto.encodeRoomLeave(roomId, playerId);
         return await this.ws.call(Cmd.RT_ROOM_LEAVE_REQ, payload, 3000);
     }
 
