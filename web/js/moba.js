@@ -1840,10 +1840,14 @@ class MobaGame {
         this.renderer.resize();
         this.input = new GameInput(this.canvas, this.renderer, this.world);
         this.input.onMoveCommand = (x, y) => {
-            if (this.networkSync) this.networkSync.sendCommand({ kind: 'move', x, y });
+            // 本地立即设置英雄移动目标，sendHeroMove 会据此推导方向并上行
+            if (this.world && this.world.localHero) {
+                this.world.localHero.targetX = x;
+                this.world.localHero.targetY = y;
+            }
         };
         this.input.onSkillCast = (slot, targetPos) => {
-            if (this.networkSync) this.networkSync.sendCommand({ kind: 'skill', slot, target: targetPos });
+            if (this.networkSync) this.networkSync.sendCastSkill(slot, targetPos.x, targetPos.y, 0);
         };
 
         window.addEventListener('resize', this._boundResize);
@@ -1918,8 +1922,8 @@ class MobaGame {
         const skillDef = SKILLS[key];
         if (skillDef && skillDef.type === 'dash') targetPos = null;
         hero.castSkill(key, this.world, targetPos);
-        if (this.networkSync) {
-            this.networkSync.sendCommand({ kind: 'skill', slot, target: targetPos });
+        if (this.networkSync && targetPos) {
+            this.networkSync.sendCastSkill(slot, targetPos.x, targetPos.y, 0);
         }
     }
 
@@ -2015,43 +2019,59 @@ class MobaGame {
         }
     }
 
-    // 网络同步：控制对手英雄
+    // 网络同步：上行本地英雄移动输入（二进制）。
+    // 对手实体的状态由 onStateSnapshot 直接覆盖 world，不再走 remoteHeroState。
     _syncNetworkHero(dt) {
         if (!this.networkSync) return;
-
-        // 获取对手英雄
-        const opponentTeam = this.playerTeam === 'blue' ? 'red' : 'blue';
-        const opponentHero = this.world.getHero(opponentTeam);
-
-        // 应用远程英雄状态
-        if (this.remoteHeroState && opponentHero) {
-            const rs = this.remoteHeroState;
-            // 平滑插值位置
-            opponentHero.x = lerp(opponentHero.x, rs.x, 0.3);
-            opponentHero.y = lerp(opponentHero.y, rs.y, 0.3);
-            opponentHero.hp = rs.hp;
-            if (rs.mhp) opponentHero.maxHp = rs.mhp;
-            opponentHero.state = rs.st || 'idle';
-            opponentHero.facing = rs.f || opponentHero.facing;
-            if (rs.tx !== undefined) opponentHero.targetX = rs.tx;
-            if (rs.ty !== undefined) opponentHero.targetY = rs.ty;
-            if (rs.lv) opponentHero.level = rs.lv;
-            if (rs.dmg) opponentHero.attack = rs.dmg;
-            if (rs.k !== undefined) opponentHero.kills = rs.k;
-            // 处理攻击目标
-            if (rs.atk && rs.atk > 0) {
-                const target = this.world.entities.find(e => e.id === rs.atk);
-                if (target) opponentHero.attackTarget = target;
-            } else {
-                opponentHero.attackTarget = null;
-            }
-        }
-
-        // 发送本地英雄状态
         const localHero = this.world.getHero(this.playerTeam);
         if (localHero) {
-            this.networkSync.sendHeroState(localHero);
+            this.networkSync.sendHeroMove(localHero);
         }
+    }
+
+    // ===== 下行二进制快照回调（由 index.html router 调用）=====
+
+    // 应用 server 权威状态快照：用快照实体覆盖 world 实体的权威字段
+    onStateSnapshot(snap) {
+        if (!this.world || !this.running) return;
+        for (const ent of snap.entities) {
+            // 按 entity_id 定位 world 实体（id 在创建时由 server 分配，需保证一致）
+            const we = this.world.entities.find(e => String(e.id) === String(ent.eid));
+            if (!we) continue;
+            // 位置插值（避免抖动），hp/state 强同步
+            we.x = lerp(we.x, ent.x, 0.4);
+            we.y = lerp(we.y, ent.y, 0.4);
+            we.hp = ent.hp;
+            we.maxHp = ent.maxHp;
+            // EntityState 枚举 → 字符串（与渲染层一致）
+            const stateNames = ['idle', 'moving', 'attacking', 'casting', 'dead'];
+            we.state = stateNames[ent.state] || 'idle';
+            we.facing = ent.yaw;
+            if (ent.type === 1 /* Hero */ && we.kills !== undefined) {
+                we.kills = ent.kills;
+                we.deaths = ent.deaths;
+                we.gold = ent.gold;
+            }
+            if (ent.hp <= 0) we.alive = false;
+        }
+        this.lastSnapshotFrame = snap.frame;
+    }
+
+    onBattleStart(msg) {
+        // 倒计时结束，进入战斗
+        if (this.phase === GamePhase.LOADING) {
+            this.phase = GamePhase.PLAYING;
+            this.phaseTimer = 0;
+        }
+    }
+
+    onBattleEnd(msg) {
+        // winner: 1=Blue, 2=Red
+        const myTeamWon = (msg.winner === 1 && this.playerTeam === 'blue') ||
+                          (msg.winner === 2 && this.playerTeam === 'red');
+        this.phase = GamePhase.RESULT;
+        this.phaseTimer = 0;
+        this.result = myTeamWon ? 'victory' : 'defeat';
     }
 
     // 接收远程数据
@@ -2287,67 +2307,39 @@ class NetworkSync {
         this.connected = true;
     }
 
-    // Send local hero state to opponent
-    sendHeroState(hero) {
+    // 上行：英雄移动输入（二进制 RT_BATTLE_MOVE）。10Hz 节流。
+    // hero 的当前移动方向由 facing/targetX/Y 推导。
+    sendHeroMove(hero) {
         if (!this.connected) return;
         const now = Date.now();
         if (now - this.lastSendTime < this.sendInterval) return;
         this.lastSendTime = now;
 
-        const state = {
-            t: 'hs',
-            x: Math.round(hero.x * 100) / 100,
-            y: Math.round(hero.y * 100) / 100,
-            hp: Math.round(hero.hp),
-            mhp: hero.maxHp,
-            st: hero.state,
-            tx: Math.round(hero.targetX * 100) / 100,
-            ty: Math.round(hero.targetY * 100) / 100,
-            f: Math.round(hero.facing * 100) / 100,
-            lv: hero.level || 1,
-            atk: hero.attackTarget ? hero.attackTarget.id : 0,
-            dmg: hero.attack,
-            k: hero.kills
-        };
-        this._send(JSON.stringify(state));
+        if (!this.realtimeAPI || !this.realtimeAPI.sendBattleMove) return;
+        // 由目标点推导归一化方向向量（与 server ProcessHeroInput 一致：方向 * 步长）
+        let mx = 0, mz = 0;
+        if (hero.targetX !== undefined && hero.targetY !== undefined) {
+            const dx = hero.targetX - hero.x;
+            const dy = hero.targetY - hero.y;
+            const len = Math.hypot(dx, dy);
+            if (len > 0.01) { mx = dx / len; mz = dy / len; }
+        }
+        this.inputSeq = (this.inputSeq || 0) + 1;
+        this.realtimeAPI.sendBattleMove(this.battleRoomId, this.playerID, mx, mz, this.inputSeq);
     }
 
-    // Send input command to opponent
-    sendCommand(cmd) {
+    // 上行：释放技能（二进制 RT_BATTLE_CAST）
+    sendCastSkill(skillSlot, targetX, targetY, targetEid = 0) {
         if (!this.connected) return;
-        this._send(JSON.stringify({t: 'cmd', ...cmd}));
+        if (!this.realtimeAPI || !this.realtimeAPI.sendBattleCast) return;
+        this.inputSeq = (this.inputSeq || 0) + 1;
+        this.realtimeAPI.sendBattleCast(this.battleRoomId, this.playerID, skillSlot, targetX, targetY, targetEid, this.inputSeq);
     }
 
-    // Send game event
-    sendEvent(eventType, data) {
-        if (!this.connected) return;
-        this._send(JSON.stringify({t: 'ev', e: eventType, d: data}));
-    }
-
-    // Send ready signal
+    // 上行：加载完成（二进制 RT_BATTLE_READY）
     sendReady() {
-        this._send(JSON.stringify({t: 'ready', pid: this.playerID}));
-    }
-
-    _send(content) {
-        if (!this.realtimeAPI || !this.realtimeAPI.sendInput) return;
-        this.realtimeAPI.sendInput(this.battleRoomId, { senderId: this.playerID, content });
-    }
-
-    // Handle incoming message from opponent
-    handleMessage(content) {
-        try {
-            const data = JSON.parse(content);
-            if (data.t === 'hs' && this.onRemoteInput) {
-                this.onRemoteInput('heroState', data);
-            } else if (data.t === 'cmd' && this.onRemoteInput) {
-                this.onRemoteInput('command', data);
-            } else if (data.t === 'ev' && this.onRemoteInput) {
-                this.onRemoteInput('event', data);
-            } else if (data.t === 'ready' && this.onRemoteInput) {
-                this.onRemoteInput('ready', data);
-            }
-        } catch(e) {}
+        if (!this.realtimeAPI || !this.realtimeAPI.sendBattleReady) return;
+        this.realtimeAPI.sendBattleReady(this.battleRoomId, this.playerID);
     }
 
     destroy() {

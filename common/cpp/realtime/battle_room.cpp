@@ -767,6 +767,8 @@ void BattleRoom::BroadcastToTeam(TeamSide team, const std::vector<uint8_t>& data
 // ──────────────────────────────────────────────
 std::vector<uint8_t> BattleRoom::SerializeBattleStart() const {
     std::vector<uint8_t> buf;
+    // 首字节 msg-type：与 BattleEnd/StateSync 共用 cmd 0x00020005，客户端据此区分。
+    AppendU8(buf, static_cast<uint8_t>(BattleMsgType::BattleStart));
     AppendU32(buf, RoomID());
     AppendU32(buf, countdown_remaining_sec_);
     AppendU32(buf, static_cast<uint32_t>(blue_players_.size()));
@@ -778,6 +780,8 @@ std::vector<uint8_t> BattleRoom::SerializeBattleStart() const {
 
 std::vector<uint8_t> BattleRoom::SerializeBattleEnd(TeamSide winner) const {
     std::vector<uint8_t> buf;
+    // 首字节 msg-type：BattleEnd
+    AppendU8(buf, static_cast<uint8_t>(BattleMsgType::BattleEnd));
     AppendU8(buf, static_cast<uint8_t>(winner));
     AppendU32(buf, static_cast<uint32_t>(battle_duration_ms_ / 1000));
 
@@ -795,6 +799,8 @@ std::vector<uint8_t> BattleRoom::SerializeBattleEnd(TeamSide winner) const {
 
 std::vector<uint8_t> BattleRoom::SerializeBattleStateSync() const {
     std::vector<uint8_t> buf;
+    // 首字节 msg-type：BattleStateSync
+    AppendU8(buf, static_cast<uint8_t>(BattleMsgType::BattleStateSync));
     AppendU32(buf, lockstep_.CurrentFrame());
     AppendU64(buf, last_tick_ms_);
     AppendU8(buf, static_cast<uint8_t>(battle_state_));

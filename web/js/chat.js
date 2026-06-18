@@ -158,12 +158,8 @@ class RealtimeAPI {
     }
 
     async enterRoom(roomId, playerId, spawnX = 0, spawnY = 0) {
-        const payload = new Uint8Array(20);
-        const dv = new DataView(payload.buffer);
-        dv.setUint32(0, Number(roomId), false);
-        dv.setBigUint64(4, BigInt(playerId), false);
-        dv.setFloat32(12, spawnX, true);
-        dv.setFloat32(16, spawnY, true);
+        // spawn float 现用大端，与 server ReadF32BE 对齐（原 LE 是巧合通）
+        const payload = BattleProto.encodeRoomEnter(roomId, playerId, spawnX, spawnY);
         return await this.ws.call(Cmd.RT_ROOM_ENTER_REQ, payload, 5000);
     }
 
@@ -175,13 +171,23 @@ class RealtimeAPI {
         return await this.ws.call(Cmd.RT_ROOM_LEAVE_REQ, payload, 3000);
     }
 
-    sendInput(roomId, data) {
-        const text = JSON.stringify(data);
-        const bytes = new TextEncoder().encode(text);
-        const payload = new Uint8Array(4 + bytes.length);
-        const dv = new DataView(payload.buffer);
-        dv.setUint32(0, Number(roomId), false);
-        payload.set(bytes, 4);
-        return this.ws.send(Cmd.RT_INPUT, payload).catch(() => null);
+    // ===== MOBA 二进制战斗输入（替代旧的 JSON sendInput）=====
+
+    // 玩家加载完成（RT_BATTLE_READY）
+    sendBattleReady(roomId, playerId) {
+        const payload = BattleProto.encodeBattleReady(roomId, playerId);
+        return this.ws.send(Cmd.RT_BATTLE_READY, payload).catch(() => null);
+    }
+
+    // 英雄移动输入（RT_BATTLE_MOVE）：moveX/moveZ 为方向向量
+    sendBattleMove(roomId, playerId, moveX, moveZ, inputSeq) {
+        const payload = BattleProto.encodeBattleMove(roomId, playerId, moveX, moveZ, inputSeq);
+        return this.ws.send(Cmd.RT_BATTLE_MOVE, payload).catch(() => null);
+    }
+
+    // 释放技能（RT_BATTLE_CAST）
+    sendBattleCast(roomId, playerId, skillSlot, targetX, targetZ, targetEid, inputSeq) {
+        const payload = BattleProto.encodeBattleCast(roomId, playerId, skillSlot, targetX, targetZ, targetEid, inputSeq);
+        return this.ws.send(Cmd.RT_BATTLE_CAST, payload).catch(() => null);
     }
 }

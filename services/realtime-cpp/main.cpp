@@ -195,8 +195,8 @@ private:
                 uint64_t gw_conn_id = ReadU64BE(pkt.payload.Data());
                 uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
                 uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
-                float spawn_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
-                float spawn_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 24);
+                float spawn_x = ReadF32BE(pkt.payload.Data() + 20);
+                float spawn_z = ReadF32BE(pkt.payload.Data() + 24);
 
                 // 客户端按匹配服下发的 room_id 进入，缺失时由实时服分配兜底房间。
                 if (room_id == 0) {
@@ -240,9 +240,9 @@ private:
                 (void)gw_conn_id;
                 uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
                 uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
-                float x = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
-                float z = *reinterpret_cast<const float*>(pkt.payload.Data() + 24);
-                float yaw = *reinterpret_cast<const float*>(pkt.payload.Data() + 28);
+                float x = ReadF32BE(pkt.payload.Data() + 20);
+                float z = ReadF32BE(pkt.payload.Data() + 24);
+                float yaw = ReadF32BE(pkt.payload.Data() + 28);
                 auto msg = std::make_unique<PlayerMoveMsg>();
                 msg->player_id = player_id;
                 msg->target_pos = {x, 0, z};
@@ -257,8 +257,8 @@ private:
                 uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
                 uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
                 uint32_t action_id = ReadU32BE(pkt.payload.Data() + 20);
-                float x = *reinterpret_cast<const float*>(pkt.payload.Data() + 24);
-                float z = *reinterpret_cast<const float*>(pkt.payload.Data() + 28);
+                float x = ReadF32BE(pkt.payload.Data() + 24);
+                float z = ReadF32BE(pkt.payload.Data() + 28);
                 auto msg = std::make_unique<PlayerActionMsg>();
                 msg->player_id = player_id;
                 msg->action_id = action_id;
@@ -293,8 +293,8 @@ private:
                 if (pkt.payload.Size() < 32) return;
                 uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
                 uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
-                float move_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 20);
-                float move_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 24);
+                float move_x = ReadF32BE(pkt.payload.Data() + 20);
+                float move_z = ReadF32BE(pkt.payload.Data() + 24);
                 uint32_t input_seq = ReadU32BE(pkt.payload.Data() + 28);
                 auto msg = std::make_unique<HeroMoveInputMsg>();
                 msg->player_id = player_id;
@@ -309,8 +309,8 @@ private:
                 uint32_t room_id = ReadU32BE(pkt.payload.Data() + 8);
                 uint64_t player_id = ReadU64BE(pkt.payload.Data() + 12);
                 uint8_t skill_slot = pkt.payload.Data()[20];
-                float target_x = *reinterpret_cast<const float*>(pkt.payload.Data() + 21);
-                float target_z = *reinterpret_cast<const float*>(pkt.payload.Data() + 25);
+                float target_x = ReadF32BE(pkt.payload.Data() + 21);
+                float target_z = ReadF32BE(pkt.payload.Data() + 25);
                 uint64_t target_eid = ReadU64BE(pkt.payload.Data() + 29);
                 uint32_t input_seq = ReadU32BE(pkt.payload.Data() + 37);
                 auto msg = std::make_unique<HeroCastSkillMsg>();

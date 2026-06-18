@@ -1070,8 +1070,9 @@ const PROTO_DESCRIPTOR = {
     }
 </script>
     <script src="https://cdn.jsdelivr.net/npm/lossless-json@2.0.11/lib/umd/lossless-json.js"></script>
-    <script src="js/net.js"></script>
-    <script src="js/chat.js"></script>
+<script src="js/net.js"></script>
+<script src="js/battle_proto.js"></script>
+<script src="js/chat.js"></script>
     <script src="js/moba.js"></script>
 </head>
 <body>
@@ -1728,12 +1729,22 @@ function installMobaPacketRouter() {
                 if (res.result && res.result.ok && res.roomId) onMobaMatched(res);
             } catch(e) {}
         } else if (pkt.cmdID === Cmd.RT_STATE_SYNC) {
+            // 下行二进制：BattleStart/BattleEnd/StateSync 共用此 cmd，
+            // payload 首字节 msg-type 区分，由 battle_proto.decodeDownstream 分发。
             try {
-                const text = new TextDecoder().decode(pkt.payload);
-                const data = JSON.parse(text);
-                if (data.senderId && String(data.senderId) === String(playerID)) return;
-                if (mobaGame && mobaGame.networkSync) mobaGame.networkSync.handleMessage(data.content || text);
-            } catch(e) {}
+                const msg = BattleProto.decodeDownstream(pkt.payload);
+                if (!msg) return;
+                if (!mobaGame) return;
+                if (msg.type === 'state') {
+                    if (mobaGame.onStateSnapshot) mobaGame.onStateSnapshot(msg);
+                } else if (msg.type === 'start') {
+                    if (mobaGame.onBattleStart) mobaGame.onBattleStart(msg);
+                } else if (msg.type === 'end') {
+                    if (mobaGame.onBattleEnd) mobaGame.onBattleEnd(msg);
+                }
+            } catch(e) {
+                console.error('decode RT_STATE_SYNC failed', e);
+            }
         }
     };
     if (wsClient.addPacketHandler) {

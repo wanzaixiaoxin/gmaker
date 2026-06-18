@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <vector>
 #include <stdexcept>
 #include "buffer.hpp"
@@ -68,6 +69,13 @@ inline uint32_t ReadU32BE(const uint8_t* p) {
            (static_cast<uint32_t>(p[1]) << 16) |
            (static_cast<uint32_t>(p[2]) << 8)  |
             static_cast<uint32_t>(p[3]);
+}
+// 读取大端 float（与前端 setFloat32(,false) 对齐，避免 reinterpret_cast 的平台字节序依赖）
+inline float ReadF32BE(const uint8_t* p) {
+    uint32_t u = ReadU32BE(p);
+    float f;
+    std::memcpy(&f, &u, sizeof(f));
+    return f;
 }
 inline uint16_t ReadU16BE(const uint8_t* p) {
     return (static_cast<uint16_t>(p[0]) << 8) |
