@@ -378,6 +378,14 @@ if(WIN32)
     target_link_libraries(test-redis ws2_32)
 endif()
 
+# ==================== 确定性地基测试（M0） ====================
+add_executable(test-determinism
+    common/cpp/realtime/test/test_determinism.cpp
+)
+target_include_directories(test-determinism PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp/realtime
+)
+
 # ==================== 网络层正确性与性能测试（服务端 + 客户端分离） ====================
 set(PERF_TEST_SOURCES
     ${CPP_ASYNC_NET_SOURCES}
