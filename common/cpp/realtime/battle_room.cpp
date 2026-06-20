@@ -248,10 +248,43 @@ void BattleRoom::TickFighting(uint32_t frame) {
             ++it;
         }
     }
+
+    // M1b: 计算并存储本帧的确定性哈希（用于回放验证）
+    frame_hashes_.push_back(ComputeFrameHash());
 }
 
 void BattleRoom::TickFinished(uint32_t frame) {
     (void)frame;
+}
+
+// ──────────────────────────────────────────────
+// M1b: 帧哈希（确定性校验）
+// 按 entity_id 排序后哈希所有实体关键字段，保证迭代顺序确定。
+// ──────────────────────────────────────────────
+std::uint64_t BattleRoom::ComputeFrameHash() const {
+    using namespace deterministic;
+
+    // 收集所有实体，按 entity_id 排序（保证确定性）
+    std::vector<const IEntity*> sorted;
+    entity_mgr_.ForEach([&](const IEntity* e) { sorted.push_back(e); });
+    std::sort(sorted.begin(), sorted.end(),
+              [](const IEntity* a, const IEntity* b) { return a->EntityId() < b->EntityId(); });
+
+    FrameHasher h;
+    for (const auto* ent : sorted) {
+        h.update_u64(ent->EntityId());
+        h.update_u64(static_cast<std::uint64_t>(ent->Type()));
+        h.update_u64(static_cast<std::uint64_t>(ent->Team()));
+        // 位置用定点 raw 哈希（确定性，不受 float 精度影响）
+        h.update_i64(fixed::Fixed::from_float(ent->Pos().x).raw());
+        h.update_i64(fixed::Fixed::from_float(ent->Pos().y).raw());
+        h.update_i64(fixed::Fixed::from_float(ent->Pos().z).raw());
+        h.update_i64(fixed::Fixed::from_float(ent->Yaw()).raw());
+        h.update_u64(static_cast<std::uint64_t>(ent->HP()));
+        h.update_u64(static_cast<std::uint64_t>(ent->MaxHP()));
+        h.update_u64(static_cast<std::uint64_t>(ent->State()));
+    }
+    return h.final_hash();
 }
 
 // ──────────────────────────────────────────────

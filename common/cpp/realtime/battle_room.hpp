@@ -6,6 +6,7 @@
 #include "entity.hpp"
 #include "lockstep_engine.hpp"
 #include "checkpoint.hpp"
+#include "deterministic/frame_hash.hpp"
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -84,6 +85,9 @@ private:
     // ── 重连 ──
     void HandleReconnect(uint64_t player_id, uint64_t conn_id);
 
+    // M1b: 帧哈希计算（确定性校验用）
+    std::uint64_t ComputeFrameHash() const;
+
     // ── 辅助 ──
     void AddPlayerToTeam(uint64_t player_id, TeamSide team, const Vec3& spawn_pos);
     void RemovePlayer(uint64_t player_id);
@@ -153,6 +157,9 @@ private:
     // 帧同步历史（用于重连回放）
     static constexpr uint32_t kReplayHistorySize = 600; // ~10s @60fps
     std::deque<FrameInputs> frame_history_;
+
+    // M1b: 帧哈希历史（每战斗帧一条，用于确定性回放验证）
+    std::vector<std::uint64_t> frame_hashes_;
 };
 
 } // namespace realtime
