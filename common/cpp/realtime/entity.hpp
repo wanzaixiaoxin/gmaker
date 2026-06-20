@@ -1,6 +1,8 @@
 #pragma once
 
 #include "battle_types.hpp"
+#include "fixed/fixed.hpp"
+#include "fixed/fixed_vec3.hpp"
 #include <cstdint>
 #include <cmath>
 #include <vector>
@@ -46,6 +48,24 @@ public:
     void TakeDamage(int32_t dmg) { hp_ = (std::max)(0, hp_ - dmg); }
     void Heal(int32_t amount) { hp_ = (std::min)(max_hp_, hp_ + amount); }
     void Kill() { hp_ = 0; state_ = EntityState::Dead; }
+
+    // M2b: 定点数桥接——定点位置内部转 float 存到 pos_（过渡，M3 全切 FixedVec3）
+    void SetPosFixed(const fixed::FixedVec3& p) {
+        pos_.x = p.x.to_float(); pos_.y = p.y.to_float(); pos_.z = p.z.to_float();
+    }
+    void MoveTo(const fixed::FixedVec3& target) {
+        pos_.x = target.x.to_float(); pos_.z = target.z.to_float();
+    }
+    fixed::FixedVec3 PosFixed() const {
+        return {fixed::Fixed::from_float(pos_.x), fixed::Fixed::from_float(pos_.y), fixed::Fixed::from_float(pos_.z)};
+    }
+
+    // 定点数距离（纯定点，确定性）
+    static fixed::Fixed DistanceXZFixed(const fixed::FixedVec3& a, const fixed::FixedVec3& b) {
+        auto dx = a.x - b.x;
+        auto dz = a.z - b.z;
+        return fixed::fixed_sqrt(dx * dx + dz * dz);
+    }
 
 protected:
     uint64_t     entity_id_ = 0;

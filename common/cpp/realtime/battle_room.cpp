@@ -437,31 +437,29 @@ void BattleRoom::ProcessHeroInput(uint64_t player_id, const PlayerInput& input) 
 
     using namespace fixed;
 
-    // 移动（M1a 桥接：Fixed 输入 → float 实体，M1b 整个实体链路切 Fixed 后去掉转换）
+    // 移动（M2b：纯定点数，不掺 float）
     if (input.has_input && (input.move_x != FIXED_ZERO || input.move_z != FIXED_ZERO)) {
-        // 将方向归一化（定点数）
         Fixed mx = input.move_x;
         Fixed mz = input.move_z;
         Fixed len = fixed_sqrt(mx * mx + mz * mz);
         if (len > FIXED_ONE) { mx = mx / len; mz = mz / len; }
 
-        // M1a bridge: Fixed → float
-        float fmx = mx.to_float();
-        float fmz = mz.to_float();
-
-        // 方向 * 每帧步长（M1b 改 Fixed 步长）
-        float speed = 5.0f;
-        float step = speed * (33.0f / 1000.0f); // 固定步长@30fps
-        Vec3 target;
-        target.x = hero->Pos().x + fmx * step;
-        target.z = hero->Pos().z + fmz * step;
-        hero->MoveTo(target);
+        Fixed speed = Fixed::from_int(5);
+        Fixed step = speed / Fixed::from_int(30);
+        FixedVec3 target = {
+            hero->PosFixed().x + mx * step,
+            FIXED_ZERO,
+            hero->PosFixed().z + mz * step
+        };
+        hero->IEntity::MoveTo(target);
     }
 
-    // 技能（M1a bridge：Fixed 坐标 → float）
+    // 技能
     if (input.has_input && input.skill_slot != 0xFF) {
-        Vec3 target_pos = {input.skill_target_x.to_float(), 0, input.skill_target_z.to_float()};
-        if (hero->CastSkill(input.skill_slot, target_pos, input.skill_target_eid)) {
+        FixedVec3 target_pos = {input.skill_target_x, FIXED_ZERO, input.skill_target_z};
+        // M2b bridge: CastSkill 仍接受 float Vec3，转为 float
+        Vec3 cast_target = {target_pos.x.to_float(), 0, target_pos.z.to_float()};
+        if (hero->CastSkill(input.skill_slot, cast_target, input.skill_target_eid)) {
             const auto& skills = hero->Skills();
             if (input.skill_slot < skills.size()) {
                 const auto& skill = skills[input.skill_slot];
@@ -469,7 +467,7 @@ void BattleRoom::ProcessHeroInput(uint64_t player_id, const PlayerInput& input) 
                     auto eid = entity_mgr_.NextEntityId();
                     entity_mgr_.CreateProjectile(
                         eid, hero->Team(),
-                        hero->EntityId(), hero->Pos(), target_pos,
+                        hero->EntityId(), hero->Pos(), cast_target,
                         skill.projectile_speed, skill.damage, skill.radius
                     );
                 } else {
@@ -589,15 +587,14 @@ void BattleRoom::TickCombat(uint32_t delta_ms) {
         if (!tower->IsAlive()) continue;
         if (tower->Grade() == TowerGrade::Crystal) continue; // 水晶不攻击
 
-        // 寻找最近的敌方单位
+        // 寻找最近的敌方单位（M2b：定点距离）
         IEntity* best_target = nullptr;
-        float best_dist = tower->GetAttackRange(); // 使用 TowerEntity 内部 range
+        fixed::Fixed best_dist = fixed::Fixed::from_float(tower->GetAttackRange());
 
-        // 优先攻击小兵，其次英雄
         auto check_target = [&](const std::vector<IEntity*>& candidates) {
             for (auto* cand : candidates) {
                 if (!cand->IsAlive() || cand->Team() == tower->Team()) continue;
-                float dist = DistanceXZ(tower->Pos(), cand->Pos());
+                fixed::Fixed dist = IEntity::DistanceXZFixed(tower->PosFixed(), cand->PosFixed());
                 if (dist < best_dist) {
                     best_dist = dist;
                     best_target = cand;
@@ -627,8 +624,9 @@ void BattleRoom::TickCombat(uint32_t delta_ms) {
             auto check_hit = [&](const std::vector<IEntity*>& candidates) {
                 for (auto* cand : candidates) {
                     if (!cand->IsAlive() || cand->Team() == caster_team) continue;
-                    float dist = DistanceXZ(proj->Pos(), cand->Pos());
-                    if (dist <= proj->Radius() + 0.5f) {
+                    fixed::Fixed dist = IEntity::DistanceXZFixed(proj->PosFixed(), cand->PosFixed());
+                    fixed::Fixed threshold = fixed::Fixed::from_float(proj->Radius() + 0.5f);
+                    if (dist <= threshold) {
                         cand->TakeDamage(proj->Damage());
                         // 击杀统计
                         if (!cand->IsAlive() && caster && caster->Type() == EntityType::Hero) {
