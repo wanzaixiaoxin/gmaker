@@ -585,9 +585,13 @@ void BattleRoom::TickCombat(uint32_t delta_ms) {
     for (auto* ent : towers) {
         auto* tower = static_cast<TowerEntity*>(ent);
         if (!tower->IsAlive()) continue;
-        if (tower->Grade() == TowerGrade::Crystal) continue; // 水晶不攻击
+        if (tower->Grade() == TowerGrade::Crystal) continue;
 
-        // 寻找最近的敌方单位（M2b：定点距离）
+        // M3a: 冷却递减 + 检查
+        tower->TickCooldown(delta_ms);
+        if (!tower->CanAttack()) continue;
+
+        // 寻找最近的敌方单位
         IEntity* best_target = nullptr;
         fixed::Fixed best_dist = fixed::Fixed::from_float(tower->GetAttackRange());
 
@@ -606,8 +610,8 @@ void BattleRoom::TickCombat(uint32_t delta_ms) {
         check_target(heroes);
 
         if (best_target) {
-            // 简化：直接造成伤害（实际应有攻击动画和冷却）
             best_target->TakeDamage(tower->GetAttackDamage());
+            tower->OnAttack();
         }
     }
 

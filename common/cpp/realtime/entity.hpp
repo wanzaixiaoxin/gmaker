@@ -163,6 +163,14 @@ public:
     float      GetAttackRange() const { return attack_range_; }
     uint32_t   GetAttackDamage() const { return attack_damage_; }
 
+    // M3a: 塔攻击冷却
+    bool CanAttack() const { return attack_cooldown_ == 0; }
+    void OnAttack() { attack_cooldown_ = attack_interval_; }
+    void TickCooldown(uint32_t delta_ms) {
+        if (attack_cooldown_ > delta_ms) attack_cooldown_ -= delta_ms;
+        else attack_cooldown_ = 0;
+    }
+
 private:
     TowerGrade   grade_;
     float        attack_range_ = 8.0f;
