@@ -25,7 +25,20 @@ HeroEntity::HeroEntity(uint64_t eid, TeamSide team, uint64_t owner) {
 }
 
 void HeroEntity::Tick(uint32_t delta_ms) {
-    if (!IsAlive()) return;
+    // M3b: 复活倒计时
+    if (!IsAlive()) {
+        if (respawn_timer_ > 0) {
+            respawn_timer_ -= std::min(respawn_timer_, delta_ms);
+            if (respawn_timer_ == 0) {
+                // 复活：满血、回到泉水、清除异常状态
+                hp_ = max_hp_;
+                state_ = EntityState::Idle;
+                pos_ = fountain_pos_;
+                respawn_timer_ = 0;
+            }
+        }
+        return;
+    }
 
     // 技能冷却
     for (int i = 0; i < 4; ++i) {

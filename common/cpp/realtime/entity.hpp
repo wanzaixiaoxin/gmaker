@@ -109,6 +109,11 @@ public:
     void AddAssist() { ++assists_; gold_ += 100; }
     void AddGold(uint32_t g) { gold_ += g; }
 
+    // M3b: 复活
+    void SetRespawnFountain(const Vec3& pos) { fountain_pos_ = pos; }
+    void TriggerRespawn(uint32_t respawn_ms = 10000) { respawn_timer_ = respawn_ms; }
+    bool IsRespawning() const { return respawn_timer_ > 0; }
+
 private:
     uint64_t     owner_player_id_ = 0;
     ControlMode  control_mode_ = ControlMode::Player;
@@ -123,6 +128,10 @@ private:
     uint32_t assists_ = 0;
     uint32_t gold_ = 500;
     uint32_t level_ = 1;
+
+    // M3b: 复活
+    uint32_t respawn_timer_ = 0;
+    Vec3     fountain_pos_;
 };
 
 // ──────────────────────────────────────────────

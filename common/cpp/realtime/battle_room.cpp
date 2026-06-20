@@ -206,6 +206,15 @@ void BattleRoom::TickFighting(uint32_t frame) {
     // 3. 战斗逻辑
     TickCombat(FIXED_STEP_MS);
 
+    // M3b: 检测英雄死亡并触发复活
+    for (const auto& [pid, info] : players_) {
+        auto* hero = GetPlayerHero(pid);
+        if (hero && !hero->IsAlive() && !hero->IsRespawning()) {
+            hero->AddDeath();
+            hero->TriggerRespawn(10000); // 10秒复活
+        }
+    }
+
     // 4. 刷兵
     minion_spawn_timer_ms_ += FIXED_STEP_MS;
     if (minion_spawn_timer_ms_ >= battle_cfg_.minion_spawn_interval_sec * 1000) {
@@ -502,6 +511,10 @@ void BattleRoom::InitBattleScene() {
         hero->SetSkills(std::move(skills));
 
         info.hero_entity_id = eid;
+
+        // M3b: 设置复活泉水位置
+        Vec3 fountain = (info.team == TeamSide::Blue) ? Vec3{10.0f, 0, 10.0f} : Vec3{90.0f, 0, 90.0f};
+        hero->SetRespawnFountain(fountain);
     }
 
     // 创建防御塔
@@ -612,6 +625,11 @@ void BattleRoom::TickCombat(uint32_t delta_ms) {
         if (best_target) {
             best_target->TakeDamage(tower->GetAttackDamage());
             tower->OnAttack();
+            // M3b: 塔击杀也计 kill（之前只有弹道击杀计）
+            if (!best_target->IsAlive() && best_target->Type() == EntityType::Hero) {
+                auto* hero = static_cast<HeroEntity*>(best_target);
+                hero->AddDeath();
+            }
         }
     }
 
