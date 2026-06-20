@@ -104,7 +104,7 @@ public:
     uint32_t Gold() const { return gold_; }
     uint32_t Level() const { return level_; }
 
-    void AddKill()   { ++kills_;  gold_ += 200; }
+    void AddKill()   { ++kills_;  gold_ += 200; AddExp(200); }
     void AddDeath()  { ++deaths_; }
     void AddAssist() { ++assists_; gold_ += 100; }
     void AddGold(uint32_t g) { gold_ += g; }
@@ -113,6 +113,20 @@ public:
     void SetRespawnFountain(const Vec3& pos) { fountain_pos_ = pos; }
     void TriggerRespawn(uint32_t respawn_ms = 10000) { respawn_timer_ = respawn_ms; }
     bool IsRespawning() const { return respawn_timer_ > 0; }
+
+    // M3c: 经验与升级
+    uint32_t Exp() const { return exp_; }
+    void AddExp(uint32_t exp) {
+        exp_ += exp;
+        while (exp_ >= exp_to_next() && level_ < 15) {
+            exp_ -= exp_to_next();
+            ++level_;
+            max_hp_ += 50;
+            hp_ = max_hp_; // 升级满血
+        }
+    }
+private:
+    uint32_t exp_to_next() const { return level_ * 100; }
 
 private:
     uint64_t     owner_player_id_ = 0;
@@ -132,6 +146,9 @@ private:
     // M3b: 复活
     uint32_t respawn_timer_ = 0;
     Vec3     fountain_pos_;
+
+    // M3c: 经验
+    uint32_t exp_ = 0;
 };
 
 // ──────────────────────────────────────────────
