@@ -287,6 +287,15 @@ std::uint64_t BattleRoom::ComputeFrameHash() const {
     return h.final_hash();
 }
 
+// M2a: 聚合所有帧哈希得到一个 session 哈希（快速比对工具）
+std::uint64_t BattleRoom::GetSessionHash() const {
+    deterministic::FrameHasher h;
+    for (auto fh : frame_hashes_) {
+        h.update_u64(fh);
+    }
+    return h.final_hash();
+}
+
 // ──────────────────────────────────────────────
 // 玩家进入
 // ──────────────────────────────────────────────

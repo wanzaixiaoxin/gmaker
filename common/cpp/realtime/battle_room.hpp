@@ -87,6 +87,8 @@ private:
 
     // M1b: 帧哈希计算（确定性校验用）
     std::uint64_t ComputeFrameHash() const;
+    // M2a: 获取整个对局的聚合哈希（所有帧哈希的 FNV-1a），用于快速比对
+    std::uint64_t GetSessionHash() const;
 
     // ── 辅助 ──
     void AddPlayerToTeam(uint64_t player_id, TeamSide team, const Vec3& spawn_pos);

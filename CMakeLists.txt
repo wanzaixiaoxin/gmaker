@@ -381,6 +381,7 @@ endif()
 # ==================== 确定性地基测试（M0） ====================
 add_executable(test-determinism
     common/cpp/realtime/test/test_determinism.cpp
+    common/cpp/realtime/lockstep_engine.cpp
 )
 target_include_directories(test-determinism PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp/realtime

@@ -2,6 +2,7 @@
 #include "../fixed/fixed.hpp"
 #include "../fixed/fixed_math.hpp"
 #include "../fixed/fixed_vec3.hpp"
+#include "../lockstep_engine.hpp"
 #include "../deterministic/prng.hpp"
 #include "../deterministic/frame_hash.hpp"
 #include "../deterministic/replay_recorder.hpp"
@@ -136,7 +137,54 @@ void test_replay_roundtrip() {
     CHECK(rec2.frames()[1].input_bytes == std::vector<std::uint8_t>{0x03}, "Replay frame[1] input");
 }
 
-// 端到端确定性验证:用 PRNG 生成"输入",两次独立计算状态哈希,必须一致
+// LockstepEngine 确定性验证：相同输入序列两次执行，TryAdvance 产出完全一致的帧哈希
+void test_lockstep_determinism() {
+    using namespace deterministic;
+    auto run_session = [](std::uint64_t seed) -> std::uint64_t {
+        LockstepEngine engine;
+        engine.SetTimeoutFrames(12); // ~400ms timeout
+        std::vector<std::uint64_t> players = {1, 2};
+        engine.SetPlayers(players);
+
+        FrameHasher session_hash;
+        Xorshift64 rng(seed);
+
+        // 模拟 100 帧对局，每帧每个玩家提交一个输入
+        for (uint32_t f = 1; f <= 100; ++f) {
+            engine.SetCurrentFrame(f);
+            engine.TickFrameCounter();
+
+            for (auto pid : players) {
+                PlayerInput inp;
+                inp.player_id = pid;
+                inp.input_seq = f;
+                inp.has_input = true;
+                // 用 PRNG 生成确定性输入
+                inp.move_x = fixed::Fixed(rng.next_fixed_raw());
+                inp.move_z = fixed::Fixed(rng.next_fixed_raw());
+                engine.SubmitInput(pid, inp);
+            }
+
+            std::vector<FrameInputs> confirmed;
+            engine.TryAdvance(confirmed);
+            for (const auto& fi : confirmed) {
+                // 哈希每帧确认的输入（多轮应该完全一致）
+                FrameHasher fh;
+                for (const auto& [pid, inp] : fi.player_inputs) {
+                    fh.update_u64(pid);
+                    fh.update_i64(inp.move_x.raw());
+                    fh.update_i64(inp.move_z.raw());
+                }
+                session_hash.update_u64(fh.final_hash());
+            }
+        }
+        return session_hash.final_hash();
+    };
+
+    std::uint64_t h1 = run_session(555);
+    std::uint64_t h2 = run_session(555);
+    CHECK(h1 == h2, "LockstepEngine: 100帧同输入→同hash（确定性帧同步验证）");
+}
 void test_end_to_end_determinism() {
     using namespace fixed;
     using namespace deterministic;
@@ -169,6 +217,7 @@ int main() {
     test_sin_cos();
     test_prng_deterministic();
     test_frame_hash_deterministic();
+    test_lockstep_determinism();
     test_replay_roundtrip();
     test_end_to_end_determinism();
     std::cout << "=== " << (failures == 0 ? "ALL PASSED" : "HAS FAILURES") << " ===" << std::endl;
