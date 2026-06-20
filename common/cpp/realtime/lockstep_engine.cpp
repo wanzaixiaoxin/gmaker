@@ -1,23 +1,16 @@
 #include "lockstep_engine.hpp"
-#include <chrono>
 #include <algorithm>
 
 namespace gs {
 namespace realtime {
 
-static uint64_t NowMs() {
-    return static_cast<uint64_t>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now().time_since_epoch()
-        ).count()
-    );
-}
-
+// ──────────────────────────────────────────────
+// SetCurrentFrame：记录帧开始时的全局帧计数器（确定性，去墙钟）
+// ──────────────────────────────────────────────
 void LockstepEngine::SetCurrentFrame(uint32_t frame) {
     if (frame > current_frame_) {
         current_frame_ = frame;
-        // 记录新帧开始时间
-        frame_start_time_[current_frame_] = NowMs();
+        frame_start_count_[current_frame_] = frame_counter_;
     }
 }
 
@@ -46,63 +39,74 @@ bool LockstepEngine::SubmitInput(uint64_t player_id, const PlayerInput& input) {
     auto& fi = frame_buffer_[current_frame_];
     fi.frame = current_frame_;
     fi.player_inputs[player_id] = input;
-
-    // 缓存最近输入
     last_inputs_[player_id] = input;
-
-    // 检查当前帧是否已就绪
     return IsFrameReady(current_frame_);
 }
 
+// ──────────────────────────────────────────────
+// TryAdvance M1a 重写：循环确认所有已就绪帧（修复单帧退化）
+// 超时改用帧计数器：已等待 frame_counter_ - frame_start_count_[frame] > timeout_frames_
+// ──────────────────────────────────────────────
 void LockstepEngine::TryAdvance(std::vector<FrameInputs>& out_confirmed) {
     out_confirmed.clear();
 
-    // 从当前帧开始检查，确认所有可以确认的帧
-    // 注意：帧必须按顺序确认
-    uint32_t check_frame = current_frame_;
+    // 从 current_frame_ 开始，循环确认所有已就绪帧（必须按顺序）
+    for (uint32_t check_frame = current_frame_;
+         check_frame <= current_frame_ + 32; // 最多追赶 32 帧，防止死循环
+         ++check_frame) {
 
-    auto it = frame_buffer_.find(check_frame);
-    if (it == frame_buffer_.end()) {
-        // 还没有任何输入，创建空帧
-        auto& fi = frame_buffer_[check_frame];
-        fi.frame = check_frame;
-        it = frame_buffer_.find(check_frame);
-    }
+        auto it = frame_buffer_.find(check_frame);
+        if (it == frame_buffer_.end()) {
+            // 还没有任何输入，创建空帧占位
+            auto& fi = frame_buffer_[check_frame];
+            fi.frame = check_frame;
+            it = frame_buffer_.find(check_frame);
+        }
 
-    auto& fi = it->second;
+        auto& fi = it->second;
+        if (fi.confirmed) {
+            // 已确认帧不再处理（正常情况不会出现，防御）
+            continue;
+        }
 
-    if (IsFrameReady(check_frame)) {
-        fi.confirmed = true;
-    } else {
-        // 检查超时
-        auto tit = frame_start_time_.find(check_frame);
-        if (tit != frame_start_time_.end()) {
-            uint64_t elapsed = NowMs() - tit->second;
-            if (elapsed >= timeout_ms_) {
-                // 超时：为未提交的在线玩家填充空输入
-                for (auto pid : active_players_) {
-                    if (fi.player_inputs.find(pid) == fi.player_inputs.end()) {
-                        fi.player_inputs[pid] = MakeEmptyInput(pid);
+        if (IsFrameReady(check_frame)) {
+            fi.confirmed = true;
+        } else {
+            // 帧计数超时：替代原先 wall-clock NowMs() 判断
+            auto tit = frame_start_count_.find(check_frame);
+            if (tit != frame_start_count_.end()) {
+                uint32_t waited = frame_counter_ - tit->second;
+                if (waited >= timeout_frames_) {
+                    // 超时：为未提交的在线玩家填充空输入
+                    for (auto pid : active_players_) {
+                        if (fi.player_inputs.find(pid) == fi.player_inputs.end()) {
+                            fi.player_inputs[pid] = MakeEmptyInput(pid);
+                        }
                     }
+                    fi.confirmed = true;
+                } else {
+                    // 本帧未就绪且未超时，后面的帧也不能确认（必须按顺序）
+                    break;
                 }
-                fi.confirmed = true;
             }
         }
-    }
 
-    if (fi.confirmed) {
-        out_confirmed.push_back(fi);
+        if (fi.confirmed) {
+            out_confirmed.push_back(fi);
 
-        // 清理过旧的帧历史
-        if (check_frame > kHistorySize) {
-            uint32_t old_frame = check_frame - kHistorySize;
-            frame_buffer_.erase(old_frame);
-            frame_start_time_.erase(old_frame);
-        }
+            // 清理过期历史
+            if (check_frame > kHistorySize) {
+                uint32_t old_frame = check_frame - kHistorySize;
+                frame_buffer_.erase(old_frame);
+                frame_start_count_.erase(old_frame);
+            }
 
-        // 通知回调
-        if (on_confirmed_) {
-            on_confirmed_(check_frame, fi);
+            if (on_confirmed_) {
+                on_confirmed_(check_frame, fi);
+            }
+        } else {
+            // 本帧未就绪，停止（按顺序确认）
+            break;
         }
     }
 }
@@ -110,8 +114,6 @@ void LockstepEngine::TryAdvance(std::vector<FrameInputs>& out_confirmed) {
 bool LockstepEngine::IsFrameReady(uint32_t frame) const {
     auto it = frame_buffer_.find(frame);
     if (it == frame_buffer_.end()) return false;
-
-    // 所有在线玩家都已提交输入
     for (auto pid : active_players_) {
         if (it->second.player_inputs.find(pid) == it->second.player_inputs.end()) {
             return false;
@@ -124,7 +126,7 @@ PlayerInput LockstepEngine::MakeEmptyInput(uint64_t player_id) const {
     PlayerInput empty;
     empty.player_id = player_id;
     empty.has_input = false;
-    // 使用上一次输入的方向（如果有），实现"继续之前的操作"
+    // 继承上次输入的方向（如果有），实现"继续之前的操作"
     auto it = last_inputs_.find(player_id);
     if (it != last_inputs_.end()) {
         empty.move_x = it->second.move_x;
@@ -145,11 +147,12 @@ const FrameInputs* LockstepEngine::GetFrameInputs(uint32_t frame) const {
 
 void LockstepEngine::Reset() {
     current_frame_ = 0;
+    frame_counter_ = 0;
     active_players_.clear();
     all_players_.clear();
     frame_buffer_.clear();
     last_inputs_.clear();
-    frame_start_time_.clear();
+    frame_start_count_.clear();
 }
 
 } // namespace realtime

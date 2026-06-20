@@ -40,7 +40,7 @@ BattleRoom::BattleRoom(const BattleRoomConfig& cfg)
     , battle_cfg_(cfg)
     , checkpoint_mgr_(cfg.checkpoint_interval_frames, 10) {
 
-    lockstep_.SetTimeoutMs(cfg.lockstep_timeout_ms);
+    lockstep_.SetTimeoutFrames(cfg.lockstep_timeout_ms / 33);
 }
 
 // ──────────────────────────────────────────────
@@ -104,19 +104,24 @@ void BattleRoom::OnMessage(Message* msg) {
 // ──────────────────────────────────────────────
 // 帧驱动
 // ──────────────────────────────────────────────
+// ──────────────────────────────────────────────
+// 帧驱动（M1a：内部帧计数器驱动，now_ms 保留兼容 Room 接口）
+// ──────────────────────────────────────────────
 void BattleRoom::Tick(uint64_t now_ms) {
-    if (last_tick_ms_ == 0) last_tick_ms_ = now_ms;
-    uint32_t delta_ms = static_cast<uint32_t>(now_ms - last_tick_ms_);
-    if (delta_ms > 100) delta_ms = 100; // 防止跳帧过大
-    last_tick_ms_ = now_ms;
+    // M1a transition: now_ms 仅用于兼容 Room 接口，不再参与确定性逻辑
+    (void)now_ms;
+    uint32_t frame = ++battle_frame_;
+
+    // 驱动帧同步引擎的帧计数器（替代墙钟）
+    lockstep_.TickFrameCounter();
 
     switch (battle_state_) {
-        case BattleState::Waiting:   TickWaiting(now_ms); break;
-        case BattleState::Loading:   TickLoading(now_ms); break;
-        case BattleState::Countdown: TickCountdown(now_ms); break;
-        case BattleState::Fighting:  TickFighting(now_ms); break;
+        case BattleState::Waiting:   TickWaiting(frame); break;
+        case BattleState::Loading:   TickLoading(frame); break;
+        case BattleState::Countdown: TickCountdown(frame); break;
+        case BattleState::Fighting:  TickFighting(frame); break;
         case BattleState::Paused:    break;
-        case BattleState::Finished:  TickFinished(now_ms); break;
+        case BattleState::Finished:  TickFinished(frame); break;
     }
 }
 
@@ -131,17 +136,15 @@ void BattleRoom::ChangeState(BattleState new_state) {
               << " -> " << static_cast<int>(new_state) << std::endl;
 }
 
-void BattleRoom::TickWaiting(uint64_t now_ms) {
-    (void)now_ms;
-    // 检查人数是否够了
+void BattleRoom::TickWaiting(uint32_t frame) {
+    (void)frame;
     if (players_.size() >= battle_cfg_.team_size * 2) {
         ChangeState(BattleState::Loading);
     }
 }
 
-void BattleRoom::TickLoading(uint64_t now_ms) {
-    (void)now_ms;
-    // 检查是否所有人都加载完成
+void BattleRoom::TickLoading(uint32_t frame) {
+    (void)frame;
     bool all_ready = true;
     for (const auto& [pid, info] : players_) {
         if (!info.is_ready && info.is_connected) {
@@ -150,7 +153,6 @@ void BattleRoom::TickLoading(uint64_t now_ms) {
         }
     }
     if (all_ready) {
-        // 初始化战斗场景
         InitBattleScene();
         countdown_remaining_sec_ = 3;
         ChangeState(BattleState::Countdown);
@@ -158,15 +160,13 @@ void BattleRoom::TickLoading(uint64_t now_ms) {
     }
 }
 
-void BattleRoom::TickCountdown(uint64_t now_ms) {
-    (void)now_ms;
-    // 简化：直接开始（实际应按秒倒计时）
+void BattleRoom::TickCountdown(uint32_t frame) {
+    (void)frame;
     if (countdown_remaining_sec_ > 0) {
         --countdown_remaining_sec_;
     }
     if (countdown_remaining_sec_ == 0) {
-        battle_start_time_ms_ = now_ms;
-        battle_duration_ms_ = 0;
+        battle_start_frame_ = frame;
 
         // 设置帧同步玩家列表
         std::vector<uint64_t> player_ids;
@@ -181,15 +181,14 @@ void BattleRoom::TickCountdown(uint64_t now_ms) {
     }
 }
 
-void BattleRoom::TickFighting(uint64_t now_ms) {
-    uint32_t delta_ms = static_cast<uint32_t>(now_ms - last_tick_ms_);
-    battle_duration_ms_ = now_ms - battle_start_time_ms_;
+void BattleRoom::TickFighting(uint32_t frame) {
+    // 固定步长(逻辑帧 @ 30Hz = 约 33ms)。M1a 暂用常量；M1b 整个实体链路切定点。
+    constexpr uint32_t FIXED_STEP_MS = 33;
 
-    // 1. 帧同步推进
-    uint32_t frame = lockstep_.CurrentFrame() + 1;
+    // 1. 确定性帧推进（M1a：去墙钟，帧计数驱动）
+    // 不再手动 frame+1；调用方(BattleRoom::Tick)已按帧计数推进
     lockstep_.SetCurrentFrame(frame);
 
-    // 提交空帧（如果没有收到任何输入，TryAdvance 会处理超时）
     std::vector<FrameInputs> confirmed;
     lockstep_.TryAdvance(confirmed);
 
@@ -201,14 +200,14 @@ void BattleRoom::TickFighting(uint64_t now_ms) {
         }
     }
 
-    // 2. Tick 所有实体
-    entity_mgr_.TickAll(delta_ms);
+    // 2. Tick 实体（M1a 暂用固定步长，M1b 切定点后改 Fixed 步长）
+    entity_mgr_.TickAll(FIXED_STEP_MS);
 
-    // 3. 战斗逻辑（塔攻击、弹道命中）
-    TickCombat(delta_ms);
+    // 3. 战斗逻辑
+    TickCombat(FIXED_STEP_MS);
 
     // 4. 刷兵
-    minion_spawn_timer_ms_ += delta_ms;
+    minion_spawn_timer_ms_ += FIXED_STEP_MS;
     if (minion_spawn_timer_ms_ >= battle_cfg_.minion_spawn_interval_sec * 1000) {
         minion_spawn_timer_ms_ = 0;
         SpawnMinions();
@@ -238,10 +237,11 @@ void BattleRoom::TickFighting(uint64_t now_ms) {
     // 8. 胜负检查
     CheckWinCondition();
 
-    // 9. 掉线超时检查
+    // 9. 掉线超时检查（M1a：改为帧计数超时；M1b 整个 DisconnectInfo 切定点时再统一）
+    // M1a 暂以固定帧计数替代墙钟：每帧 33ms 对应约 1 帧，保持原有秒数语义
+    uint32_t timeout_frames = battle_cfg_.max_reconnect_wait_sec * (1000 / FIXED_STEP_MS);
     for (auto it = disconnected_players_.begin(); it != disconnected_players_.end();) {
-        if (now_ms - it->second.disconnect_time_ms > battle_cfg_.max_reconnect_wait_sec * 1000) {
-            // 超时未重连，移除玩家
+        if (frame - it->second.disconnect_frame > timeout_frames) {
             RemovePlayer(it->first);
             it = disconnected_players_.erase(it);
         } else {
@@ -250,9 +250,8 @@ void BattleRoom::TickFighting(uint64_t now_ms) {
     }
 }
 
-void BattleRoom::TickFinished(uint64_t now_ms) {
-    (void)now_ms;
-    // 战斗结束，等待房间销毁
+void BattleRoom::TickFinished(uint32_t frame) {
+    (void)frame;
 }
 
 // ──────────────────────────────────────────────
@@ -294,7 +293,7 @@ void BattleRoom::OnPlayerLeave(PlayerLeaveMsg* msg) {
         auto it = players_.find(msg->player_id);
         if (it != players_.end()) {
             DisconnectInfo dc;
-            dc.disconnect_time_ms = last_tick_ms_;
+            dc.disconnect_frame = battle_frame_;
             dc.hero_entity_id = it->second.hero_entity_id;
             disconnected_players_[msg->player_id] = dc;
 
@@ -315,8 +314,9 @@ void BattleRoom::OnHeroMoveInput(HeroMoveInputMsg* msg) {
     PlayerInput input;
     input.player_id = msg->player_id;
     input.input_seq = msg->input_seq;
-    input.move_x = msg->move_x;
-    input.move_z = msg->move_z;
+    // M1a bridge: HeroMoveInputMsg 仍含 float（proto→main.cpp 解析），转为 Fixed
+    input.move_x = fixed::Fixed::from_float(msg->move_x);
+    input.move_z = fixed::Fixed::from_float(msg->move_z);
     input.has_input = true;
     lockstep_.SubmitInput(msg->player_id, input);
 }
@@ -331,8 +331,9 @@ void BattleRoom::OnHeroCastSkill(HeroCastSkillMsg* msg) {
     input.player_id = msg->player_id;
     input.input_seq = msg->input_seq;
     input.skill_slot = msg->skill_slot;
-    input.skill_target_x = msg->target_pos.x;
-    input.skill_target_z = msg->target_pos.z;
+    // M1a bridge: target_pos 是 Vec3(float)，转为 Fixed
+    input.skill_target_x = fixed::Fixed::from_float(msg->target_pos.x);
+    input.skill_target_z = fixed::Fixed::from_float(msg->target_pos.z);
     input.skill_target_eid = msg->target_entity_id;
     input.has_input = true;
     lockstep_.SubmitInput(msg->player_id, input);
@@ -358,7 +359,7 @@ void BattleRoom::OnPlayerDisconnect(PlayerDisconnectMsg* msg) {
         lockstep_.PlayerDisconnected(msg->player_id);
 
         DisconnectInfo dc;
-        dc.disconnect_time_ms = last_tick_ms_;
+        dc.disconnect_frame = battle_frame_;
         dc.hero_entity_id = it->second.hero_entity_id;
         disconnected_players_[msg->player_id] = dc;
     }
@@ -392,28 +393,33 @@ void BattleRoom::ProcessHeroInput(uint64_t player_id, const PlayerInput& input) 
     auto* hero = GetPlayerHero(player_id);
     if (!hero || !hero->IsAlive()) return;
 
-    // 移动
-    if (input.has_input && (input.move_x != 0 || input.move_z != 0)) {
-        // 将方向转为世界坐标移动目标
-        float mx = input.move_x;
-        float mz = input.move_z;
-        float len = std::sqrt(mx * mx + mz * mz);
-        if (len > 1.0f) { mx /= len; mz /= len; }
+    using namespace fixed;
 
-        // 简化：方向 * 步长 作为目标位置
-        float speed = 5.0f; // TODO: 从英雄属性读取
-        float step = speed * (1000.0f / 60.0f) / 1000.0f; // 每帧步长
+    // 移动（M1a 桥接：Fixed 输入 → float 实体，M1b 整个实体链路切 Fixed 后去掉转换）
+    if (input.has_input && (input.move_x != FIXED_ZERO || input.move_z != FIXED_ZERO)) {
+        // 将方向归一化（定点数）
+        Fixed mx = input.move_x;
+        Fixed mz = input.move_z;
+        Fixed len = fixed_sqrt(mx * mx + mz * mz);
+        if (len > FIXED_ONE) { mx = mx / len; mz = mz / len; }
+
+        // M1a bridge: Fixed → float
+        float fmx = mx.to_float();
+        float fmz = mz.to_float();
+
+        // 方向 * 每帧步长（M1b 改 Fixed 步长）
+        float speed = 5.0f;
+        float step = speed * (33.0f / 1000.0f); // 固定步长@30fps
         Vec3 target;
-        target.x = hero->Pos().x + mx * step;
-        target.z = hero->Pos().z + mz * step;
+        target.x = hero->Pos().x + fmx * step;
+        target.z = hero->Pos().z + fmz * step;
         hero->MoveTo(target);
     }
 
-    // 技能
+    // 技能（M1a bridge：Fixed 坐标 → float）
     if (input.has_input && input.skill_slot != 0xFF) {
-        Vec3 target_pos = {input.skill_target_x, 0, input.skill_target_z};
+        Vec3 target_pos = {input.skill_target_x.to_float(), 0, input.skill_target_z.to_float()};
         if (hero->CastSkill(input.skill_slot, target_pos, input.skill_target_eid)) {
-            // 创建弹道（如果有）
             const auto& skills = hero->Skills();
             if (input.skill_slot < skills.size()) {
                 const auto& skill = skills[input.skill_slot];
@@ -425,7 +431,6 @@ void BattleRoom::ProcessHeroInput(uint64_t player_id, const PlayerInput& input) 
                         skill.projectile_speed, skill.damage, skill.radius
                     );
                 } else {
-                    // 瞬发技能：直接对目标造成伤害
                     if (input.skill_target_eid != 0) {
                         auto* target = entity_mgr_.FindEntity(input.skill_target_eid);
                         if (target && target->IsAlive()) {
@@ -805,7 +810,7 @@ std::vector<uint8_t> BattleRoom::SerializeBattleEnd(TeamSide winner) const {
     battle::BattleDownstream ds;
     auto* end = ds.mutable_end();
     end->set_winner(ToProtoTeam(winner));
-    end->set_duration_sec(static_cast<uint32_t>(battle_duration_ms_ / 1000));
+    end->set_duration_sec(static_cast<uint32_t>((battle_frame_ - battle_start_frame_) / 30));
 
     uint32_t blue_kills = 0, red_kills = 0;
     auto heroes = entity_mgr_.GetByType(EntityType::Hero);
@@ -866,11 +871,11 @@ std::vector<uint8_t> BattleRoom::SerializeFrameSync(const FrameInputs& inputs) c
     for (const auto& [pid, input] : inputs.player_inputs) {
         AppendU64(buf, pid);
         AppendU8(buf, input.has_input ? 1 : 0);
-        AppendF32(buf, input.move_x);
-        AppendF32(buf, input.move_z);
+        AppendF32(buf, input.move_x.to_float());
+        AppendF32(buf, input.move_z.to_float());
         AppendU8(buf, input.skill_slot);
-        AppendF32(buf, input.skill_target_x);
-        AppendF32(buf, input.skill_target_z);
+        AppendF32(buf, input.skill_target_x.to_float());
+        AppendF32(buf, input.skill_target_z.to_float());
         AppendU64(buf, input.skill_target_eid);
     }
 
@@ -912,11 +917,11 @@ std::vector<uint8_t> BattleRoom::SerializeReconnectAck(const BattleCheckpoint& c
             AppendU32(buf, static_cast<uint32_t>(fi.player_inputs.size()));
             for (const auto& [pid, input] : fi.player_inputs) {
                 AppendU64(buf, pid);
-                AppendF32(buf, input.move_x);
-                AppendF32(buf, input.move_z);
+                AppendF32(buf, input.move_x.to_float());
+                AppendF32(buf, input.move_z.to_float());
                 AppendU8(buf, input.skill_slot);
-                AppendF32(buf, input.skill_target_x);
-                AppendF32(buf, input.skill_target_z);
+                AppendF32(buf, input.skill_target_x.to_float());
+                AppendF32(buf, input.skill_target_z.to_float());
                 AppendU64(buf, input.skill_target_eid);
             }
         }

@@ -31,6 +31,8 @@ public:
 
     constexpr std::int64_t raw() const { return raw_; }
     constexpr std::int32_t to_int() const { return static_cast<std::int32_t>(raw_ >> FRACTION_BITS); }
+    // M1a bridge: 转换为 float（仅转换层用，M1b 实体切定点后移除）
+    constexpr float to_float() const { return static_cast<float>(raw_) / static_cast<float>(ONE); }
 
     // 基本算术(纯整数,确定性)
     constexpr Fixed operator+(Fixed o) const { return Fixed(raw_ + o.raw_); }

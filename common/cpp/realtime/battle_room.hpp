@@ -41,20 +41,20 @@ public:
     // 消息处理入口（由 Compute Thread 调用）
     void OnMessage(Message* msg) override;
 
-    // 帧驱动
+    // 帧驱动（M1a：内部转为帧计数，now_ms 参数保留兼容 Room 接口但不再用于确定性逻辑）
     void Tick(uint64_t now_ms) override;
 
     // 获取战斗状态
     BattleState GetBattleState() const { return battle_state_; }
 
 private:
-    // ── 状态机 ──
+    // ── 状态机（M1a：内部改为帧计数驱动，now_ms 保留兼容但不再用于确定性逻辑）──
     void ChangeState(BattleState new_state);
-    void TickWaiting(uint64_t now_ms);
-    void TickLoading(uint64_t now_ms);
-    void TickCountdown(uint64_t now_ms);
-    void TickFighting(uint64_t now_ms);
-    void TickFinished(uint64_t now_ms);
+    void TickWaiting(uint32_t frame);
+    void TickLoading(uint32_t frame);
+    void TickCountdown(uint32_t frame);
+    void TickFighting(uint32_t frame);
+    void TickFinished(uint32_t frame);
 
     // ── 消息处理 ──
     void OnPlayerEnter(PlayerEnterMsg* msg);
@@ -127,25 +127,25 @@ private:
     // 快照管理器
     CheckpointManager checkpoint_mgr_;
 
-    // 战斗计时
-    uint64_t battle_start_time_ms_ = 0;
-    uint64_t battle_duration_ms_ = 0;
+    // 战斗计时（M1a 帧计数驱动）
+    uint32_t battle_start_frame_ = 0;          // 战斗开始的帧号
     uint32_t countdown_remaining_sec_ = 3;
 
     // 小兵刷新计时
     uint32_t minion_spawn_timer_ms_ = 0;
     uint32_t minion_wave_count_ = 0;
 
-    // 上一次 Tick 时间
+    // 战斗计时（M1a：battle_frame_ 替代墙钟作为确定性时钟源）
+    uint32_t battle_frame_ = 0;               // 当前战斗帧号（每 Tick 递增）
     uint64_t last_tick_ms_ = 0;
 
     // 蓝方/红方玩家列表（用于广播）
     std::vector<uint64_t> blue_players_;
     std::vector<uint64_t> red_players_;
 
-    // 玩家掉线等待重连
+    // 玩家掉线等待重连（M1a：断开时记录帧号，替代墙钟）
     struct DisconnectInfo {
-        uint64_t disconnect_time_ms = 0;
+        uint32_t disconnect_frame = 0;     // 断开时的战斗帧号
         uint64_t hero_entity_id = 0;
     };
     std::unordered_map<uint64_t, DisconnectInfo> disconnected_players_;
